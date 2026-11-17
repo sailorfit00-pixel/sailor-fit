@@ -962,7 +962,7 @@ function anteprimaRicetta(c, nomeRicetta) {
   const ps = porzioneSuMisura(r, targetPastoDiario(c.data, c.pasto));
   const items = ps.items.map(x => ({ nome: x.nome, qta: x.qta }));
   const tmp = { items, ricetta: r.nome, data: c.data, pasto: c.pasto };
-  const mosse = (r._orig || r).porzioni > 1 ? [] : mosseFit(tmp);   // ricette a teglia (banana bread…): niente versione fit
+  const mosse = (r._orig || r).porzioni > 1 ? [] : mosseFit(tmp).slice(0, 1);   // un «Più fit» alla volta (il migliore); niente per le ricette a teglia (banana bread…)
   const fit = items.map((it, k) => { const m = mosse.find(a => a.r.k === k); return !m ? it : m.tipo === "cambia" ? { nome: m.a, qta: it.qta } : { nome: it.nome, qta: m.nuova }; });
   return { r, ps, items, mosse, fit, tot: macroDa(items), totFit: macroDa(fit) };
 }
