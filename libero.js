@@ -845,8 +845,9 @@ function consiglioFurboHTML(c, m) {
   const tutte = e.scelte.map(a => ({ a, r: riga(a) })).filter(x => x.r);
   const altre = tutte.filter(x => x.a.tipo !== "verdura"), verd = tutte.find(x => x.a.tipo === "verdura");
   const posti = verd ? 2 : 3;   // al massimo tre idee in tutto; ↻ mostra le tre successive
-  const da = ((c.furbiGiro || 0) * posti) % Math.max(1, altre.length);
-  const mostra = altre.length ? Array.from({ length: Math.min(posti, altre.length) }, (_, k) => altre[(da + k) % altre.length]).concat(verd ? [verd] : []) : (verd ? [verd] : []);
+  // ↻ mostra le idee a «pagine» senza ripetere quelle appena viste; finite, si ricomincia dalle prime
+  const pagine = Math.max(1, Math.ceil(altre.length / posti)), pg = (c.furbiGiro || 0) % pagine;
+  const mostra = altre.slice(pg * posti, pg * posti + posti).concat(verd ? [verd] : []);
   if (!mostra.length) return "";
   return `<div class="furbi"><h4>🌙 Consigli furbi${altre.length > posti ? `<button class="cosa-altre" data-furbo-altro aria-label="Un'altra idea">${ICONA_ALTRE}</button>` : ""}</h4>${mostra.map(x => x.r.html).join("")}</div>`;
 }

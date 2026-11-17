@@ -1154,9 +1154,10 @@ function cosaAggiungereHTML() {
     if (!mosse.length) return "";
     const giro = cosaGiro[p] || 0;
     const verd = mosse.filter(x => x.verdura), altre = mosse.filter(x => !x.verdura);
-    const scelte = (altre.length ? [0, 1].map(k => altre[(giro * 2 + k) % altre.length]).filter((x, k, a) => a.indexOf(x) === k) : []).concat(verd.slice(0, 1));
+    const pagine = Math.max(1, Math.ceil(altre.length / 2)), pg = giro % pagine;   // ↻: due idee nuove ogni volta, mai quelle appena viste
+    const scelte = altre.slice(pg * 2, pg * 2 + 2).concat(verd.slice(0, 1));
     scelte.forEach(x => { if (x.nome) usate.add(x.nome); });
-    return `<h4 class="cosa-testa"><span>${ICONA_PASTO[p]} ${esc(etichettaMomento(data, p))}</span>${altre.length > 2 ? `<button class="cosa-altre" data-cosa-altre="${p}" aria-label="Altre idee">${ICONA_ALTRE}</button>` : ""}</h4>
+    return `<h4 class="cosa-testa"><span>${ICONA_PASTO[p]} ${esc(etichettaMomento(data, p))}</span>${pagine > 1 ? `<button class="cosa-altre" data-cosa-altre="${p}" aria-label="Altre idee">${ICONA_ALTRE}</button>` : ""}</h4>
       <div class="sugg-ricette">${scelte.map(x => `<button class="var-furbo lib-furbo" data-furbo-k="${esc(x.key)}" data-cosa-mossa="${esc(x.key)}">${x.testa}<em>${numeriMossa(x.d)}</em></button>`).join("")}</div>`;
   }).join("");
   return `<h3 class="modal-title">${esc(mg.testo)}</h3>
