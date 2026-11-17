@@ -763,9 +763,9 @@ input, select, textarea, .qta-input { font-size: 16px !important; }
 
 /* ---- Codice a barre ---- */
 .lib-add .lib-scan { flex: 0 0 auto; width: 52px; min-height: 0; padding: 0; font-size: 20px; margin: 0; }
-.scan-video { position: relative; border-radius: var(--r-m); overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
+.scan-video { position: relative; border-radius: var(--r-m); overflow: hidden; background: #000; aspect-ratio: 1 / 1; }
 .scan-video video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.scan-mirino { position: absolute; left: 12%; right: 12%; top: 38%; height: 24%; border: 2px solid var(--accent); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,.35); }
+.scan-mirino { position: absolute; left: 10%; right: 10%; top: 10%; bottom: 10%; border: 2px solid var(--accent); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,.35); }
 .scan-stato { text-align: center; color: var(--muted); padding: 20px 0; }
 .lib-ignoto .btn-sec.block { margin: 6px 0 4px; }
 
@@ -1658,3 +1658,27 @@ summary { min-height: 40px; display: flex; align-items: center; }
 .pm-sola-lista b { white-space: nowrap; font-weight: 600; }
 .pm-sola-lista small { color: var(--muted); font-weight: 400; margin-left: 4px; }
 .pm-lucchetto.aperto { border-color: rgba(142,160,173,.6); }
+
+/* codice a barre: riquadro quasi quadrato (va bene per codici larghi, stretti e quadrati), tasto per scattare e foto dalla galleria */
+.scan-aiuto { text-align: center; margin: 8px 0 10px; }
+.scan-scatta { margin-bottom: 8px; }
+.scan-foto { text-align: center; margin: 0 0 12px; cursor: pointer; }
+
+/* tabella nutrizionale: due tasti affiancati, scatta con la fotocamera o scegli dalla galleria */
+.foto-due { display: flex; gap: 8px; margin-top: 4px; }
+.foto-due .wiz-foto { flex: 1 1 0; margin: 0; text-align: center; }
+
+/* Campi di testo: tutti con la stessa forma, angoli leggermente arrotondati (10px), stesso bordo e sfondo.
+   appearance: none toglie lo stile di Safari su iPhone (campi data, ricerca e menu a tendina avevano forme diverse). */
+:root { --r-campo: 10px; }
+input:not([type=radio]):not([type=checkbox]):not([type=range]):not([type=file]), textarea, select.qta-input {
+  -webkit-appearance: none; appearance: none; border-radius: var(--r-campo) !important;
+}
+.qta-input:not(.lib-qta) { background-color: var(--card2); border: 1px solid var(--line2); }
+.qta-input.wiz-full, .lib-add .qta-input, #peso-data, .modal .qta-input.wiz-full { min-height: 46px; }
+.lib-add .btn, .lib-add .btn-sec, .lib-add .lib-piu, .lib-add .lib-scan { border-radius: var(--r-campo); min-height: 46px; }
+/* il numero dentro − 12 + resta senza riquadro: il riquadro è quello del contatore */
+.qstep .lib-qta { border-radius: 0 !important; background: transparent; border: 0; }
+/* menu a tendina: senza lo stile di Safari serve la freccetta */
+select.qta-input { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238ea0ad' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+.unita-box select.lib-unita-sel { background-image: none; padding-right: 0; }

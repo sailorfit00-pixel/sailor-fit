@@ -56,7 +56,10 @@ function scansioneHTML(c) {
   const s = c.scansione;
   return `<h3 class="modal-title">📷 Codice a barre</h3>
     ${s.stato === "fotocamera" ? `<div class="scan-video"><video id="scan-video" playsinline muted></video><span class="scan-mirino"></span></div>
-      ` : ""}
+      <p class="hint scan-aiuto">Inquadra il codice nel riquadro: si legge da solo. Se non parte, tocca «Scatta».</p>
+      <button class="btn block scan-scatta" data-lib="scan-scatta">📸 Scatta e leggi</button>` : ""}
+    ${s.stato === "leggo" ? `<p class="scan-stato">Leggo il codice…</p>` : ""}
+    <label class="btn-sec block scan-foto">🥫 Niente codice? Fotografa la tabella nutrizionale<input type="file" accept="image/*" capture="environment" hidden data-scan-tabella></label>
     ${s.stato === "cerco" ? `<p class="scan-stato">Cerco il prodotto ${esc(s.codice)}…</p>` : ""}
     ${s.messaggio ? `<p class="nota">${s.messaggio}</p>` : ""}
     <label class="wiz-l">Oppure scrivi il numero sotto il codice a barre</label>
@@ -64,7 +67,7 @@ function scansioneHTML(c) {
       <input id="scan-manuale" class="qta-input wiz-full" inputmode="numeric" autocomplete="off" placeholder="es. 8001234567890" value="${esc(s.codice || "")}">
       <button class="btn lib-piu" data-lib="scan-cerca" aria-label="Cerca il codice">→</button>
     </div>
-    <div class="wiz-nav"><button class="btn-sec" data-lib="scan-annulla">Annulla</button><button class="btn-sec" data-lib="scan-nuovo">🥫 Nuovo alimento</button></div>`;
+    <div class="wiz-nav"><button class="btn-sec" data-lib="scan-annulla">Annulla</button><button class="btn-sec" data-lib="scan-nuovo">✍️ Scrivo io i valori</button></div>`;
 }
 function caricaZXing() {
   if (window.ZXingBrowser) return Promise.resolve();
@@ -73,6 +76,45 @@ function caricaZXing() {
     s.src = "zxing-browser.min.js"; s.onload = ok; s.onerror = () => ko(new Error("libreria"));
     document.head.appendChild(s);
   });
+}
+// La lettura: prima il lettore del telefono (se c'è), poi ZXing; prova anche l'immagine girata, per i codici in verticale
+const TRY_HARDER = 3;
+function lettoreCodici() { return _lettore = _lettore || new ZXingBrowser.BrowserMultiFormatReader(new Map([[TRY_HARDER, true]])); }
+function ruotaCanvas(src, gradi) {
+  const c = document.createElement("canvas"), dritto = gradi % 180 === 0;
+  c.width = dritto ? src.width : src.height; c.height = dritto ? src.height : src.width;
+  const x = c.getContext("2d"); x.translate(c.width / 2, c.height / 2); x.rotate(gradi * Math.PI / 180); x.drawImage(src, -src.width / 2, -src.height / 2);
+  return c;
+}
+function canvasDa(img, w, h, max = 1600) {   // foto molto grandi: si rimpiccioliscono (più veloce, e ZXing legge meglio)
+  const k = Math.min(1, max / Math.max(w, h)), c = document.createElement("canvas");
+  c.width = Math.round(w * k); c.height = Math.round(h * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+async function leggiCodiceDaCanvas(canvas) {
+  if ("BarcodeDetector" in window) {
+    try { const r = await new BarcodeDetector().detect(canvas); if (r && r[0] && r[0].rawValue) return r[0].rawValue; } catch (e) { /* non supportato: si passa a ZXing */ }
+  }
+  await caricaZXing();
+  const l = lettoreCodici();
+  const prove = [canvas, ruotaCanvas(canvas, 90)];
+  if (Math.max(canvas.width, canvas.height) > 900) prove.push(canvasDa(canvas, canvas.width, canvas.height, 800));   // a volte rimpicciolita si legge meglio
+  for (const c of prove) { try { const r = l.decodeFromCanvas(c); if (r) return r.getText(); } catch (e) { /* niente codice in questa prova */ } }
+  return null;
+}
+function nonLetto(codice) {
+  if (!liberoCtx) return;
+  liberoCtx.scansione = { stato: "manuale", codice, messaggio: "Non riesco a leggere il codice. Riprova con il codice ben a fuoco e illuminato, oppure scrivi il numero qui sotto." };
+  rirenderLibero();
+}
+async function scattaELeggi() {
+  const v = document.getElementById("scan-video");
+  if (!v || !v.videoWidth) return;
+  const canvas = canvasDa(v, v.videoWidth, v.videoHeight, 1920);
+  fermaFotocamera();
+  liberoCtx.scansione = { stato: "leggo" }; rirenderLibero();
+  const cod = await leggiCodiceDaCanvas(canvas);
+  if (cod) cercaCodice(cod); else nonLetto();
 }
 function fermaFotocamera() {
   try { if (_controlli) _controlli.stop(); } catch (e) {}
@@ -87,10 +129,11 @@ async function avviaScansione() {
   try {
     await caricaZXing();
     if (!liberoCtx || !liberoCtx.scansione) return;
-    _lettore = _lettore || new ZXingBrowser.BrowserMultiFormatReader();
-    _controlli = await _lettore.decodeFromVideoDevice(undefined, document.getElementById("scan-video"), (res) => {
-      if (res && liberoCtx && liberoCtx.scansione && liberoCtx.scansione.stato === "fotocamera") { fermaFotocamera(); cercaCodice(res.getText()); }
-    });
+    const l = lettoreCodici(), video = document.getElementById("scan-video");
+    const trovato = (res) => { if (res && liberoCtx && liberoCtx.scansione && liberoCtx.scansione.stato === "fotocamera") { fermaFotocamera(); cercaCodice(res.getText()); } };
+    try {   // fotocamera posteriore ad alta risoluzione: i codici piccoli si leggono meglio
+      _controlli = await l.decodeFromConstraints({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } }, video, trovato);
+    } catch (e) { _controlli = await l.decodeFromVideoDevice(undefined, video, trovato); }
   } catch (e) {
     if (!liberoCtx || !liberoCtx.scansione) return;
     liberoCtx.scansione = { stato: "manuale", messaggio: "Non riesco ad aprire la fotocamera. Controlla il permesso (Impostazioni → Safari → Fotocamera) oppure scrivi il numero qui sotto." };
@@ -164,10 +207,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (a === "scan") { avviaScansione(); return; }   // 📷: si apre subito la fotocamera (da lì si può anche passare a "Nuovo alimento")
     if (a === "scan-nuovo") { fermaFotocamera(); c.scansione = null; c.ignoto = null; c.ignotoCodice = null; c.ignotoNuovo = true; rirenderLibero(); return; }
     if (a === "scan-annulla") { fermaFotocamera(); c.scansione = null; rirenderLibero(); return; }
+    if (a === "scan-scatta") { scattaELeggi(); return; }
     if (a === "scan-cerca") { fermaFotocamera(); cercaCodice((document.getElementById("scan-manuale") || {}).value); return; }
     if (a === "off-cerca") { cercaProdottiOFF(c.ignoto || ""); return; }
     const sc = e.target.closest("[data-off-scegli]");
     if (sc && c.ricercaOFF) { const p = c.ricercaOFF.risultati[+sc.dataset.offScegli]; if (p) usaProdotto(p, null); }
+  });
+  mc.addEventListener("change", (e) => {
+    if (liberoCtx && e.target.matches("[data-scan-tabella]")) {   // nuovo alimento dalla foto della tabella: si apre il modulo e i valori si riempiono da soli
+      const files = [...(e.target.files || [])]; e.target.value = ""; if (!files.length) return;
+      const c = liberoCtx; fermaFotocamera(); c.scansione = null; c.ignoto = null; c.ignotoCodice = null; c.ignotoNuovo = true; rirenderLibero();
+      if (typeof leggiEtichettaDaFile === "function") leggiEtichettaDaFile("etic-libero", files);
+    }
   });
   mc.addEventListener("keydown", (e) => {
     if (liberoCtx && e.key === "Enter" && e.target.id === "scan-manuale") { e.preventDefault(); fermaFotocamera(); cercaCodice(e.target.value); }

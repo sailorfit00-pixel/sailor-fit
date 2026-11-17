@@ -372,7 +372,7 @@ function salvaAlimentoPersonale(nome, base4, extra4, pesoPz) {
 const CAMPI_ETICHETTA = ["kcal", "prot.", "carbo", "grassi", "zuccheri", "fibre", "sale"];
 function campiEtichettaHTML(id, valori) {
   const v = valori || [];
-  return `<label class="btn-sec block wiz-foto">📷 Foto della tabella<input type="file" accept="image/*" hidden data-foto-etic="${id}"></label><div class="foto-stato" id="foto-stato-${id}"></div>
+  return `<p class="wiz-l">Foto della tabella nutrizionale</p><div class="foto-due"><label class="btn-sec wiz-foto">📸 Scatta foto<input type="file" accept="image/*" capture="environment" hidden data-foto-etic="${id}"></label><label class="btn-sec wiz-foto">🖼️ Carica foto<input type="file" accept="image/*" hidden data-foto-etic="${id}"></label></div><div class="foto-stato" id="foto-stato-${id}"></div>
     <div class="etic-per" data-etic-per-for="${id}">
       <span>La tabella è per</span>
       <input type="radio" name="per-${id}" id="per100-${id}" value="100" checked><label for="per100-${id}">100 g</label>

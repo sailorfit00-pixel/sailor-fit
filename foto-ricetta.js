@@ -337,12 +337,16 @@ function valoriDaEtichetta(testo) {
     num(/fibr[ae]\s*(?:alimentar[ei])?\s*[:.]?\s*(\d+(?:\.\d+)?)/, 100),
     num(/sale\s*[:.]?\s*(\d+(?:\.\d+)?)/, 100)];
 }
-document.addEventListener("change", async e => {
+document.addEventListener("change", e => {
   const inp = e.target.closest && e.target.closest("[data-foto-etic]");
   if (!inp) return;
   const id = inp.dataset.fotoEtic, files = [...inp.files];
   inp.value = "";
-  if (!files.length) return;
+  leggiEtichettaDaFile(id, files);
+});
+// Legge la tabella nutrizionale da una foto e riempie i campi dell'alimento (id = il riquadro dei campi)
+async function leggiEtichettaDaFile(id, files) {
+  if (!files || !files.length) return;
   const stato = document.getElementById("foto-stato-" + id);
   const mostra = t => { if (stato) stato.textContent = t; };
   mostra("Apro l'immagine…");
@@ -363,4 +367,4 @@ document.addEventListener("change", async e => {
       ? "Serve internet la prima volta per scaricare il lettore. Riprova quando sei connessa."
       : "Non riesco a leggere questa immagine: prova con una foto più nitida.");
   }
-});
+}
