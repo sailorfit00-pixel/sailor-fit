@@ -1407,6 +1407,7 @@ function closeModal() {
   editCtx = null;
   contestoAgg = null;   // il "dove aggiungere le ricette" non sopravvive alla chiusura del pannello
   if (typeof liberoCtx !== "undefined") liberoCtx = null;
+  if (typeof ribloccaPasti === "function") ribloccaPasti();   // chiuso il pasto, il lucchetto si rimette da solo
 }
 // Pannello di conferma dal basso (titolo, nota grigia, «Annulla» rosso e il tasto verde che esegue): per le azioni che cancellano o sostituiscono dati
 function chiediConferma(titolo, nota, etichettaSi, azione, indietro) {

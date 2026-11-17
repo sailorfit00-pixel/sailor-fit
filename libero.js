@@ -873,10 +873,21 @@ function campoAggiungiHTML(c) {
     </div>
     <div id="lib-autoc" class="lib-autoc"></div>`;
 }
-// Un pasto già passato (l'ora è trascorsa) e registrato è «bloccato»: non si toglie ciò che hai mangiato. Il lucchetto 🔒 lo sblocca (con conferma) finché l'app resta aperta.
+// Un pasto già passato (l'ora è trascorsa) e registrato è «bloccato»: non si toglie ciò che hai mangiato. Il lucchetto 🔒 lo sblocca (con conferma);
+// 🔓 lo richiude, e quando chiudi il pasto si richiude da solo. Anche bloccato le schede si aprono, in sola lettura, per vedere cosa e quanto hai mangiato.
 const pastiSbloccati = new Set();
 const chiavePastoSbl = (c) => c.data + "|" + c.pasto;
 const pastoBloccato = (c) => !!(c && c.vivo && c.items && c.items.length && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto) && !pastiSbloccati.has(chiavePastoSbl(c)));
+function ribloccaPasti() { pastiSbloccati.clear(); }
+// elenco in sola lettura degli ingredienti (pasto bloccato): nome e quantità, niente pulsanti
+function righeSolaLetturaHTML(items) {
+  return `<ul class="pm-sola-lista">${items.map(it => {
+    const u = unitaDi(it), gu = grammiPerUnita(it.nome, u), ug = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
+    const NOMI = { pz: "pz", cucchiaio: "cucc.", cucchiaino: "c.ino" };
+    const q = (it.unita || "g") === "q.b." && !(it.qta > 0) ? "q.b." : gu ? `${fmtQta(it.qta / gu)} ${NOMI[u] || u} <small>≈ ${Math.round(it.qta)} ${ug}</small>` : `${Math.round(it.qta)} ${ug}`;
+    return `<li><span>${esc(it.nome)}</span><b>${q}</b></li>`;
+  }).join("")}</ul>`;
+}
 const pastoPassatoC = (c) => !!(c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto));
 function liberoHTML() {
   const c = liberoCtx;
@@ -926,18 +937,18 @@ function liberoHTML() {
   const frecciaHTML = () => `<span class="pm-freccia"></span>`;   // la freccia gira da sola quando la scheda è aperta (CSS)
   const ricettaHTML = (n, htmlRighe) => {
     const gr = (c.gruppi || []).find(x => x.n === n); if (!gr) return htmlRighe;
-    const aperta = !bloccato && !!(c.gruppiAperti && c.gruppiAperti.has(n));
+    const aperta = !!(c.gruppiAperti && c.gruppiAperti.has(n));
     const rp = gr.intatta && typeof ricettaAPezzi === "function" ? ricettaAPezzi(gr.ricetta) : null;
     const cont = rp ? `<span class="pm-contatore pm-cont-grande"><button class="nav-btn" data-grp-pz="${n}|-1" aria-label="Meno porzioni">−</button><b>${esc(String(etichettaPezzi(rp._orig, gr.nPezzi)))}</b><button class="nav-btn" data-grp-pz="${n}|1" aria-label="Più porzioni">＋</button></span>` : "";
     const m = macroDa(c.items.filter(x => x.grp === n && x.qta > 0));
     const r0 = typeof ricettaDaNome === "function" ? ricettaDaNome(gr.ricetta) : null, o = r0 ? (r0._orig || r0) : null, passi = o && Array.isArray(o.passaggi) ? o.passaggi : [];
     return `<div class="pm-blocco pm-card pm-piatto pm-ricetta${aperta ? " aperto" : ""}" data-grp-box="${n}">
-      <div class="pasto-riga pm-testa${bloccato ? " sola-lettura" : ""}" data-grp-t="${n}"${bloccato ? "" : ` data-grp-toggle="${n}" role="button" tabindex="0" aria-expanded="${aperta}"`}>
+      <div class="pasto-riga pm-testa${bloccato ? " sola-lettura" : ""}" data-grp-t="${n}" data-grp-toggle="${n}" role="button" tabindex="0" aria-expanded="${aperta}">
         <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(gr.nome)}</b>${macroStileHTML(m, { senzaKcal: true })}</span>
-        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${bloccato ? "" : frecciaHTML(aperta)}
+        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${frecciaHTML(aperta)}
         <button class="lib-grp-del" data-grp-del="${n}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>
-      ${aperta ? `<div class="pm-dett">${cont}${htmlRighe}${passi.length ? `<ol class="pm-passi">${passi.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}</div>` : ""}
+      ${aperta ? `<div class="pm-dett">${bloccato ? righeSolaLetturaHTML(c.items.filter(x => x.grp === n)) : cont + htmlRighe}${passi.length ? `<ol class="pm-passi">${passi.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}</div>` : ""}
     </div>`;
   };
   const voceHTML = (k) => {   // ingrediente singolo = scheda come la ricetta: ✓ nome, − N porzione +, P/C/G, kcal
@@ -958,13 +969,13 @@ function liberoHTML() {
     const scegli = opz.length > 1 ? `<span class="pm-unita">${opz.map(x => `<button class="pm-u${(gu ? u : ug) === x ? " on" : ""}" data-lib-unita-set="${k}|${x}" aria-pressed="${(gu ? u : ug) === x}">${ABBR[x] === "cucchiai" ? "cucc." : ABBR[x] === "cucchiaini" ? "c.ino" : x}</button>`).join("")}</span>` : "";
     const avv = pre && troppiGrassiPre(it.nome, it.qta);
     const alt2 = avv && c.avvAperto === k ? alternativePre(c, it.nome, it.qta, k) : [];
-    const aperta = !bloccato && !!(c.vociAperte && c.vociAperte.has(it.nome));
+    const aperta = !!(c.vociAperte && c.vociAperte.has(it.nome));
     return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
-      <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura" : ""}"${bloccato ? "" : ` data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}"`}>
+      <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura" : ""}" data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}">
         <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${macroStileHTML(m, { senzaKcal: true })}</span>
-        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${bloccato ? "" : frecciaHTML()}
+        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
-      </div>${aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
+      </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
     </div>`;
   };
   const parti = [];
@@ -977,7 +988,7 @@ function liberoHTML() {
     ? x.ks.forEach(k => schede.push({ t: quando(k), k, html: voceHTML(k) }))
     : schede.push({ t: Math.min(...x.ks.map(quando)), k: Math.min(...x.ks), html: ricettaHTML(x.grp, x.html) }));
   schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
-  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
+  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
 
   const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto">
       ${c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Prodotto <b>${esc(c.ignotoCodice)}</b> nuovo: valori per 100 g</p>`
@@ -1253,6 +1264,7 @@ document.addEventListener("DOMContentLoaded", () => {
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
       return;
     }
+    if (e.target.closest("[data-lib-riblocca]")) { pastiSbloccati.delete(c.data + "|" + c.pasto); rirenderLibero(); return; }
     const ub = e.target.closest("[data-lib-unita-set]");
     if (ub) { const [kk, uu] = ub.dataset.libUnitaSet.split("|"), it = c.items[+kk]; if (it) { it.unita = uu; salvaUnitaPreferita(it.nome, uu); rirenderLibero(); } return; }   // pz ⇄ g: la quantità resta, cambia come la leggi
     const st = e.target.closest("[data-lib-step]");

@@ -1650,5 +1650,11 @@ summary { min-height: 40px; display: flex; align-items: center; }
 /* la pallina davanti ai nomi, grigia nel pasto bloccato */
 .pm-sezione.bloccato .pm-card .pm-ck, .pm-sezione.bloccato .pm-card .pr-check { background: rgba(142,160,173,.55) !important; color: rgba(142,160,173,.55) !important; }
 
-/* pasto bloccato: solo riepilogo, le schede non si aprono */
-.pm-card .pm-testa.sola-lettura, .pm-ricetta:has(.sola-lettura) { cursor: default; }
+/* pasto bloccato: le schede si aprono in sola lettura (nome e quantità, niente pulsanti) */
+.pm-card .pm-testa.sola-lettura { cursor: pointer; }
+.pm-sola-lista { list-style: none; margin: 6px 0 2px; padding: 0; }
+.pm-sola-lista li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line2); font-size: 14px; }
+.pm-sola-lista li:first-child { border-top: 0; }
+.pm-sola-lista b { white-space: nowrap; font-weight: 600; }
+.pm-sola-lista small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.pm-lucchetto.aperto { border-color: rgba(142,160,173,.6); }
