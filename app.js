@@ -355,7 +355,7 @@ function extraDa(ingredienti) {
 // Riferimenti giornalieri (OMS/EFSA): zuccheri aggiunti max 40 g (ideale 20), fibre almeno 25 g, sale max 5 g
 const LIMITI_EXTRA = { aggiunti: 40, aggiuntiIdeale: 20, fibre: 25, sale: 5 };
 // alimenti personali: si salvano con i valori extra se disponibili
-function salvaAlimentoPersonale(nome, base4, extra4, pesoPz) {
+function salvaAlimentoPersonale(nome, base4, extra4, pesoPz, correzione) {
   let custom = {};
   try { custom = JSON.parse(localStorage.getItem("mp_alimenti_custom")) || {}; } catch (e) {}
   custom[nome] = extra4 ? base4.concat(extra4) : base4;
@@ -366,8 +366,108 @@ function salvaAlimentoPersonale(nome, base4, extra4, pesoPz) {
     let pz = {}; try { pz = JSON.parse(localStorage.getItem("mp_alimenti_pz")) || {}; } catch (e) {}
     pz[nome] = Math.round(pesoPz * 10) / 10; localStorage.setItem("mp_alimenti_pz", JSON.stringify(pz));
     if (window.PESO_PZ) window.PESO_PZ[nome] = pz[nome];
+  } else if (correzione) {   // correggendo un alimento da «per pezzo» a «per 100 g» il peso del pezzo non vale più
+    let pz = {}; try { pz = JSON.parse(localStorage.getItem("mp_alimenti_pz")) || {}; } catch (e) {}
+    if (pz[nome]) { delete pz[nome]; localStorage.setItem("mp_alimenti_pz", JSON.stringify(pz)); }
+    if (window.PESO_PZ) delete window.PESO_PZ[nome];
   }
 }
+// peso del pezzo salvato per un alimento tuo (la sua tabella era «per pezzo»), 0 se era per 100 g
+function pesoPzTuo(nome) { try { return +(JSON.parse(localStorage.getItem("mp_alimenti_pz")) || {})[nome] || 0; } catch (e) { return 0; } }
+
+// ===== I miei alimenti: quelli aggiunti da te (a mano, dalla foto della tabella o dal codice a barre), da rivedere e correggere =====
+function alimentiTuoi() { try { return JSON.parse(localStorage.getItem("mp_alimenti_custom")) || {}; } catch (e) { return {}; } }
+function apriMieiAlimenti() {
+  editCtx = null;
+  const tutti = Object.entries(alimentiTuoi()).sort((a, b) => a[0].localeCompare(b[0], "it"));
+  const f = (x) => String(Math.round(x * 10) / 10).replace(".", ",");
+  openModal(`<button class="btn-link modal-indietro" data-mio-menu>‹ Altro</button>
+    <h3 class="modal-title">I miei alimenti</h3>
+    ${tutti.length ? `<p class="hint">Gli alimenti che hai aggiunto tu. Toccane uno per correggere nome e valori.</p>
+    <div class="mio-lista">${tutti.map(([n, v]) => { const pz = pesoPzTuo(n);
+      return `<button class="mio-riga" data-mio-apri="${esc(n)}"><span class="mio-nome">${esc(n)}</span>
+        <span class="mio-val">${Math.round(v[0])} kcal · P ${f(v[1])} · C ${f(v[2])} · G ${f(v[3])} <i>per 100 g${pz ? ` · 1 pezzo = ${f(pz)} g` : ""}</i></span><span class="mv-freccia">›</span></button>`; }).join("")}</div>`
+    : `<p class="hint">Non hai ancora aggiunto alimenti. Quando ne aggiungi uno (dal codice a barre o dalla foto della tabella) lo trovi qui.</p>`}`);
+}
+function apriMioAlimento(nome) {
+  const v = valoriAlimento(nome); if (!v) return apriMieiAlimenti();
+  openModal(`<button class="btn-link modal-indietro" data-mio-lista>‹ I miei alimenti</button>
+    <h3 class="modal-title">Modifica alimento</h3>
+    <div class="lib-ignoto pagina">${fotoEtichettaHTML("etic-mio")}
+      <p class="et-sez">Nome</p>
+      <input id="mio-nome" class="qta-input wiz-full" autocomplete="off" value="${esc(nome)}" data-orig="${esc(nome)}">
+      <div class="etic-box">${campiEtichettaHTML("etic-mio", v, { senzaFoto: true, pesoPz: pesoPzTuo(nome) })}</div>
+      <div class="wiz-nav"><button class="btn-sec" data-mio-lista>Annulla</button><button class="btn" data-mio-salva>✓ Salva alimento</button></div>
+    </div>`);
+}
+// rinominare un alimento: cambia dappertutto (pasti del diario, codici a barre, pezzi), così nulla resta «orfano»
+function rinominaAlimentoTuo(vecchio, nuovo) {
+  const sposta = (chiave) => { try { const o = JSON.parse(localStorage.getItem(chiave)) || {}; if (vecchio in o) { o[nuovo] = o[vecchio]; delete o[vecchio]; localStorage.setItem(chiave, JSON.stringify(o)); } } catch (e) {} };
+  sposta("mp_alimenti_custom"); sposta("mp_alimenti_pz");
+  try { const c = JSON.parse(localStorage.getItem("mp_codici")) || {}; Object.keys(c).forEach(k => { if (c[k] === vecchio) c[k] = nuovo; }); localStorage.setItem("mp_codici", JSON.stringify(c)); } catch (e) {}
+  try { const d = JSON.parse(localStorage.getItem("mp_diario")) || {};
+    Object.values(d).forEach(g => (g.pasti || []).forEach(p => { if (p.nome === vecchio) p.nome = nuovo; (p.ingredienti || []).forEach(i => { if (i.nome === vecchio) i.nome = nuovo; if (i.cercato === vecchio) i.cercato = nuovo; }); }));
+    localStorage.setItem("mp_diario", JSON.stringify(d)); } catch (e) {}
+  if (window.ALIMENTI[vecchio]) { window.ALIMENTI[nuovo] = window.ALIMENTI[vecchio]; delete window.ALIMENTI[vecchio]; }
+  if (window.NUTRIENTI_EXTRA && window.NUTRIENTI_EXTRA[vecchio]) { window.NUTRIENTI_EXTRA[nuovo] = window.NUTRIENTI_EXTRA[vecchio]; delete window.NUTRIENTI_EXTRA[vecchio]; }
+  if (window.PESO_PZ && window.PESO_PZ[vecchio]) { window.PESO_PZ[nuovo] = window.PESO_PZ[vecchio]; delete window.PESO_PZ[vecchio]; }
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest || !e.target.closest("#modal-content")) return;
+  if (e.target.closest("[data-mio-menu]")) { apriMenu(); return; }
+  if (e.target.closest("[data-mio-lista]")) { apriMieiAlimenti(); return; }
+  const ap = e.target.closest("[data-mio-apri]"); if (ap) { apriMioAlimento(ap.dataset.mioApri); return; }
+  const sv = e.target.closest("[data-mio-salva]"); if (!sv) return;
+  const et = leggiCampiEtichetta("etic-mio");
+  if (et && et.errore) { avviso(et.errore); return; }
+  if (!et || !et.base4[0]) { avviso("Inserisci almeno le kcal."); return; }
+  const inp = document.getElementById("mio-nome"), vecchio = inp.dataset.orig;
+  let nome = inp.value.trim(); if (!nome) { avviso("Scrivi il nome dell'alimento."); return; }
+  nome = nome.charAt(0).toUpperCase() + nome.slice(1);
+  if (nome !== vecchio && (window.ALIMENTI || {})[nome]) { avviso("Esiste già un alimento con questo nome."); return; }
+  if (!verificaEtichetta("etic-mio", sv, et)) return;
+  if (nome !== vecchio) rinominaAlimentoTuo(vecchio, nome);
+  salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz, true);
+  if (typeof renderOggi === "function") renderOggi();
+  apriMieiAlimenti(); avviso("✓ Alimento aggiornato");
+});
+
+// Prima di salvare: i numeri della tabella tornano? (valori portati a 100 g). Restituisce gli avvisi con il campo da evidenziare.
+function controlliEtichetta(et) {
+  const [kcal, p, c, g] = et.base4, f = (x) => String(Math.round(x * 10) / 10).replace(".", ",");
+  const zuc = et.extra4 ? et.extra4[0] : 0, a = [];
+  const per = et.pesoPz ? ` (riportati a 100 g, con 1 pezzo = ${f(et.pesoPz)} g)` : "";
+  [[1, "Le proteine", p], [2, "I carboidrati", c], [3, "I grassi", g]].forEach(([k, n, v]) => { if (v > 100) a.push({ k, t: `${n} sono ${f(v)} g su 100 g${per}: non è possibile.` }); });
+  if (!a.length && p + c + g > 102) a.push({ k: [1, 2, 3], t: `Proteine, carboidrati e grassi insieme fanno ${f(p + c + g)} g su 100 g${per}: non è possibile.` });
+  if (kcal > 900) a.push({ k: 0, t: `${f(kcal)} kcal su 100 g${per}: non è possibile (al massimo circa 900).` });
+  const attese = 4 * p + 4 * c + 9 * g;
+  if (!a.length && kcal > 0 && attese > 0 && Math.abs(kcal - attese) > Math.max(25, attese * 0.2)) a.push({ k: [0, 1, 2, 3], t: `Le kcal (${f(kcal)}) non tornano con proteine, carboidrati e grassi (fanno circa ${Math.round(attese)} kcal). Controlla che non ci sia una cifra letta male.` });
+  if (zuc > c + 0.5) a.push({ k: 4, t: `Gli zuccheri (${f(zuc)} g) sono più dei carboidrati (${f(c)} g): di solito sono una parte dei carboidrati.` });
+  return a;
+}
+// Mostra gli avvisi sopra i tasti e trasforma «Salva» in «Salva comunque». true = si può salvare.
+function verificaEtichetta(id, bottone, et) {
+  if (bottone && bottone.dataset.forza === "1") return true;
+  const avv = controlliEtichetta(et);
+  if (!avv.length) return true;
+  const box = document.getElementById(id), nav = bottone && bottone.closest(".wiz-nav");
+  document.querySelectorAll(".et-avvisi").forEach(x => x.remove());
+  avv.forEach(x => [].concat(x.k).forEach(k => { const el = box && box.querySelector(`[data-etic="${k}"]`); if (el) el.classList.add("et-errore"); }));
+  const div = document.createElement("div"); div.className = "et-avvisi";
+  div.innerHTML = `<b>⚠️ Controlla i valori</b>${avv.map(x => `<p>${esc(x.t)}</p>`).join("")}<p class="et-avv-nota">Correggi i campi in rosso, oppure salva comunque.</p>`;
+  const prima = nav || bottone; if (prima) prima.parentNode.insertBefore(div, prima);
+  if (bottone) { bottone.dataset.testo = bottone.innerHTML; bottone.dataset.forza = "1"; bottone.innerHTML = "Salva comunque"; bottone.classList.add("et-forza"); }
+  div.scrollIntoView({ block: "center", behavior: "smooth" });
+  return false;
+}
+// appena cambi un valore, l'avviso sparisce e il tasto torna «Salva»
+document.addEventListener("input", (e) => {
+  if (!e.target.closest || !e.target.closest(".lib-nuovo, .etic-per")) return;
+  document.querySelectorAll(".et-avvisi").forEach(x => x.remove());
+  document.querySelectorAll(".et-errore").forEach(x => x.classList.remove("et-errore"));
+  document.querySelectorAll("[data-forza='1']").forEach(b => { b.innerHTML = b.dataset.testo || b.innerHTML; delete b.dataset.forza; b.classList.remove("et-forza"); });
+});
+document.addEventListener("change", (e) => { if (e.target.matches && e.target.matches(".et-seg input")) e.target.dispatchEvent(new Event("input", { bubbles: true })); });
 // Campi dell'etichetta (per 100 g) per un alimento nuovo: i primi 4 servono, gli altri sono facoltativi
 const CAMPI_ETICHETTA = ["Kcal", "Proteine", "Carboidrati", "Grassi", "Zuccheri", "Fibre", "Sale"];
 // La foto della tabella: due tasti normali (non colorati: nessuno dei due è «scelto»), e sotto lo stato della lettura
@@ -378,16 +478,17 @@ function fotoEtichettaHTML(id) {
 }
 // Campi dell'etichetta per un alimento nuovo: tutta la tabella in due righe (kcal, proteine, carboidrati, grassi · zuccheri, fibre, sale); servono i primi 4
 function campiEtichettaHTML(id, valori, opz = {}) {
-  const v = valori || [];
+  const pz = opz.pesoPz > 0 ? opz.pesoPz : 0, r = (x) => Math.round(x * 100) / 100;
+  const v = (valori || []).map(x => (x === null || x === undefined) ? x : pz ? r(x * pz / 100) : x);   // per pezzo: si mostrano i numeri della tabella com'era (per 1 pezzo)
   const campo = (k) => `<label class="et-campo"><span>${CAMPI_ETICHETTA[k]}</span><input class="qta-input" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${k ? "g" : "kcal"}" data-etic="${k}"${v[k] !== undefined && v[k] !== null && !(k >= 4 && !v.length) ? ` value="${v[k]}"` : ""}></label>`;
   return `${opz.senzaFoto ? "" : fotoEtichettaHTML(id)}
     <p class="et-sez">Valori nutrizionali</p>
     <div class="etic-per" data-etic-per-for="${id}">
       <div class="et-seg">
-        <input type="radio" name="per-${id}" id="per100-${id}" value="100" checked><label for="per100-${id}">Per 100 g</label>
-        <input type="radio" name="per-${id}" id="perpz-${id}" value="pz"><label for="perpz-${id}">Per 1 pezzo</label>
+        <input type="radio" name="per-${id}" id="per100-${id}" value="100"${pz ? "" : " checked"}><label for="per100-${id}">Per 100 g</label>
+        <input type="radio" name="per-${id}" id="perpz-${id}" value="pz"${pz ? " checked" : ""}><label for="perpz-${id}">Per 1 pezzo</label>
       </div>
-      <label class="etic-pzg"><span>Peso di 1 pezzo</span><input class="qta-input" type="number" inputmode="decimal" min="1" step="0.1" data-etic-pzg placeholder="es. 35" aria-label="Grammi di un pezzo o porzione"><span>g</span></label>
+      <label class="etic-pzg"><span>Peso di 1 pezzo</span><input class="qta-input" type="number" inputmode="decimal" min="1" step="0.1" data-etic-pzg placeholder="es. 35"${pz ? ` value="${pz}"` : ""} aria-label="Grammi di un pezzo o porzione"><span>g</span></label>
     </div>
     <div class="lib-nuovo" id="${id}">
       <div class="et-griglia">${[0, 1, 2, 3].map(campo).join("")}</div>
@@ -1731,6 +1832,7 @@ function azioneWizard(a, idx, k) {
     const et = leggiCampiEtichetta(`etic-ing-${idx}`);
     if (et && et.errore) { avviso(et.errore); return; }
     if (!et || !et.base4[0]) { avviso("Inserisci almeno le kcal."); return; }
+    if (!verificaEtichetta(`etic-ing-${idx}`, document.querySelector(`[data-wiz="nuovo-al"][data-idx="${idx}"]`), et)) return;
     const nome = ing.cercato.charAt(0).toUpperCase() + ing.cercato.slice(1);
     salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz);
     ing.nome = nome;
@@ -1814,6 +1916,7 @@ function apriMenu() {
     <div class="menu-lista">
       ${voce("vai-spesa", "🛒", "Lista della spesa", "")}
       ${voce("vai-ricette", "📖", "Ricette", `${contaRicetteUniche()}`)}
+      ${voce("miei-alimenti", "🥫", "I miei alimenti", `${Object.keys(alimentiTuoi()).length || ""}`)}
       ${voce("profilo", "👤", "Profilo", "")}
       ${voce("backup", "💾", "Backup", "")}
     </div>
@@ -2240,6 +2343,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "reset") chiediConferma("Ripristinare il ricettario?", "Tornano le ricette di partenza", "Ripristina", () => ricaricaRicettario());
       else if (az.dataset.azione === "nuova") apriWizard();
       else if (az.dataset.azione === "profilo") apriProfilo();
+      else if (az.dataset.azione === "miei-alimenti") apriMieiAlimenti();
       else if (az.dataset.azione === "spesa-aggiungi") aggiungiVoceSpesa();
       else if (az.dataset.azione === "spesa-nuova") { salvaPresi(new Set()); renderSpesa(); }
       else if (az.dataset.azione === "vai-spesa") apriSpesa();

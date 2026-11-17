@@ -1002,7 +1002,7 @@ function liberoHTML() {
       ${fotoEtichettaHTML("etic-libero")}
       <p class="et-sez">Nome</p>
       <input id="ignoto-nome" class="qta-input wiz-full" autocomplete="off" placeholder="${(c.ignotoNuovo && !c.ignoto) || c.ignotoCodice ? "es. Budino proteico Lidl" : ""}" value="${esc(c.modificaAl || (c.ignotoCodice ? (c.nomeArchivio || "") : (c.ignoto || "").charAt(0).toUpperCase() + (c.ignoto || "").slice(1)))}"${c.modificaAl ? " readonly" : ""}>
-      <div class="etic-box">${campiEtichettaHTML("etic-libero", c.modificaAl ? valoriAlimento(c.modificaAl) : null, { senzaFoto: true })}</div>
+      <div class="etic-box">${campiEtichettaHTML("etic-libero", c.modificaAl ? valoriAlimento(c.modificaAl) : null, { senzaFoto: true, pesoPz: c.modificaAl ? pesoPzTuo(c.modificaAl) : 0 })}</div>
       <div class="wiz-nav"><button class="btn-sec" data-lib="ignoto-annulla">Annulla</button><button class="btn" data-lib="ignoto-salva">✓ Salva alimento</button></div>
     </div>` : "";
 
@@ -1254,9 +1254,10 @@ document.addEventListener("DOMContentLoaded", () => {
         let nome = ((document.getElementById("ignoto-nome") || {}).value || c.ignoto || "").trim();
         if (!nome) { avviso("Scrivi il nome dell'alimento."); return; }
         nome = nome.charAt(0).toUpperCase() + nome.slice(1);
-        salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz);
-        if (c.ignotoCodice && typeof salvaCodice === "function") salvaCodice(c.ignotoCodice, nome);
+        if (!verificaEtichetta("etic-libero", b, et)) return;   // numeri che non tornano: avviso e «Salva comunque»
         const modifica = !!c.modificaAl;
+        salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz, modifica);
+        if (c.ignotoCodice && typeof salvaCodice === "function") salvaCodice(c.ignotoCodice, nome);
         c.ignotoNuovo = false; c.ignoto = null; c.ignotoCodice = null; c.ricercaOFF = null; c.modificaAl = null;
         if (!modifica) c.items.push(et.pesoPz ? { nome, cercato: nome, qta: et.pesoPz, lock: true, unita: "pz" } : { nome, qta: 0, lock: false });   // a pezzi: ne metti 1 subito
         ricalcolaLibero(); rirenderLibero();
