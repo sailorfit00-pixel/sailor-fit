@@ -399,36 +399,107 @@ function apriMioAlimento(nome) {
       <input id="mio-nome" class="qta-input wiz-full" autocomplete="off" value="${esc(nome)}" data-orig="${esc(nome)}">
       <div class="etic-box">${campiEtichettaHTML("etic-mio", v, { senzaFoto: true, pesoPz: pesoPzTuo(nome) })}</div>
       <div class="wiz-nav"><button class="btn-sec" data-mio-lista>Annulla</button><button class="btn" data-mio-salva>✓ Salva alimento</button></div>
+      <button class="btn-link mio-elimina" data-mio-elimina>${ICONA_CESTINO} Elimina alimento</button>
     </div>`);
 }
-// rinominare un alimento: cambia dappertutto (pasti del diario, codici a barre, pezzi), così nulla resta «orfano»
+// Modificando un alimento già salvato: i campi che non hai toccato tengono il valore salvato (niente arrotondamenti
+// per pezzo ⇄ per 100 g, es. sale 0,3 → 0,31) e gli zuccheri aggiunti (che il modulo non mostra) restano quelli di prima.
+// Se hai cambiato «per 100 g / per pezzo» o il peso del pezzo, valgono i numeri scritti (tranne gli zuccheri aggiunti).
+function conservaValoriAlimento(id, nome, et) {
+  const orig = alimentiTuoi()[nome]; if (!orig || !et || et.errore) return et;
+  const box = document.getElementById(id), per = document.querySelector(`[data-etic-per-for="${id}"]`);
+  const stessoModo = !!per && (+per.dataset.pz0 || 0) === (et.pesoPz || 0);
+  const intatto = (k) => { const el = box && box.querySelector(`[data-etic="${k}"]`); return stessoModo && !!el && el.dataset.v !== undefined && String(el.value).trim() === el.dataset.v; };
+  const conExtra = orig.length >= 8;
+  const base4 = [0, 1, 2, 3].map(k => intatto(k) ? orig[k] : et.base4[k]);
+  let extra4 = et.extra4;
+  if (extra4) extra4 = [intatto(4) && conExtra ? orig[4] : extra4[0], conExtra ? orig[5] : 0, intatto(5) && conExtra ? orig[6] : extra4[2], intatto(6) && conExtra ? orig[7] : extra4[3]];
+  return Object.assign({}, et, { base4, extra4 });
+}
+// Corretti i valori di un alimento: tutti i pasti del diario che lo contengono (di tutti i giorni) si ricalcolano
+function ricalcolaPastiCon(nome) {
+  if (typeof leggiDiario !== "function") return 0;
+  const d = leggiDiario(); let n = 0;
+  Object.values(d).forEach(g => (g && g.pasti || []).forEach(p => {
+    if (p && Array.isArray(p.ingredienti) && p.ingredienti.some(i => i && i.nome === nome)) { aggiornaMacro(p); n++; }
+  }));
+  if (n) salvaDiario(d);
+  return n;
+}
+// rinominare un alimento: cambia dappertutto (pasti del diario, ricette tue, piano, codici a barre, pezzi, unità, spesa, in casa), così nulla resta «orfano»
 function rinominaAlimentoTuo(vecchio, nuovo) {
+  const leggi = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) || def; } catch (e) { return def; } };
   const sposta = (chiave) => { try { const o = JSON.parse(localStorage.getItem(chiave)) || {}; if (vecchio in o) { o[nuovo] = o[vecchio]; delete o[vecchio]; localStorage.setItem(chiave, JSON.stringify(o)); } } catch (e) {} };
   sposta("mp_alimenti_custom"); sposta("mp_alimenti_pz");
+  sposta("mp_unita"); sposta("mp_incasa"); sposta("mp_incasa_q");   // { nome: unità preferita / data in cui l'hai preso / grammi della scorta }
   try { const c = JSON.parse(localStorage.getItem("mp_codici")) || {}; Object.keys(c).forEach(k => { if (c[k] === vecchio) c[k] = nuovo; }); localStorage.setItem("mp_codici", JSON.stringify(c)); } catch (e) {}
   try { const d = JSON.parse(localStorage.getItem("mp_diario")) || {};
     Object.values(d).forEach(g => (g.pasti || []).forEach(p => { if (p.nome === vecchio) p.nome = nuovo; (p.ingredienti || []).forEach(i => { if (i.nome === vecchio) i.nome = nuovo; if (i.cercato === vecchio) i.cercato = nuovo; }); }));
     localStorage.setItem("mp_diario", JSON.stringify(d)); } catch (e) {}
+  // ricette tue, ricettario importato e piano: si cambiano gli ingredienti (in qualsiasi «ingredienti» dentro, anche le versioni originali _orig)
+  const rinominaIngr = (x) => {
+    if (Array.isArray(x)) { x.forEach(rinominaIngr); return; }
+    if (!x || typeof x !== "object") return;
+    Object.keys(x).forEach(k => {
+      if (k === "ingredienti" && Array.isArray(x[k])) x[k].forEach(i => { if (i && i.nome === vecchio) i.nome = nuovo; if (i && i.cercato === vecchio) i.cercato = nuovo; });
+      else rinominaIngr(x[k]);
+    });
+  };
+  ["mp_ricette_custom", "mp_ricette", "mp_piano"].forEach(k => { const v = leggi(k, null); if (!v) return; const prima = JSON.stringify(v); rinominaIngr(v); if (JSON.stringify(v) !== prima) localStorage.setItem(k, JSON.stringify(v)); });
+  if (Array.isArray(settimana)) rinominaIngr(settimana);   // il piano già in memoria
+  // varianti scelte nelle ricette { ricetta: { indice: alimento } }, voci aggiunte a mano e spuntate nella spesa
+  try { const v = leggi("mp_varianti", {}); let ok = false; Object.values(v).forEach(m => Object.keys(m || {}).forEach(i => { if (m[i] === vecchio) { m[i] = nuovo; ok = true; } })); if (ok) salvaVarianti(v); } catch (e) {}
+  ["mp_spesa_extra", "mp_spesa_presi"].forEach(k => { const a = leggi(k, []); if (Array.isArray(a) && a.includes(vecchio)) localStorage.setItem(k, JSON.stringify([...new Set(a.map(x => x === vecchio ? nuovo : x))])); });
   if (window.ALIMENTI[vecchio]) { window.ALIMENTI[nuovo] = window.ALIMENTI[vecchio]; delete window.ALIMENTI[vecchio]; }
   if (window.NUTRIENTI_EXTRA && window.NUTRIENTI_EXTRA[vecchio]) { window.NUTRIENTI_EXTRA[nuovo] = window.NUTRIENTI_EXTRA[vecchio]; delete window.NUTRIENTI_EXTRA[vecchio]; }
   if (window.PESO_PZ && window.PESO_PZ[vecchio]) { window.PESO_PZ[nuovo] = window.PESO_PZ[vecchio]; delete window.PESO_PZ[vecchio]; }
+  try { caricaRicette(); } catch (e) {}   // l'elenco delle ricette in memoria si ricostruisce con il nome nuovo
+}
+// Eliminare un alimento tuo: sparisce dagli alimenti, dai pezzi e dai codici a barre; i pasti già registrati tengono le kcal salvate (non si ricalcolano)
+function eliminaAlimentoTuo(nome) {
+  const leggi = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const custom = leggi("mp_alimenti_custom"), pz = leggi("mp_alimenti_pz"), cod = leggi("mp_codici");
+  const prima = { v: custom[nome], pz: pz[nome], codici: Object.keys(cod).filter(k => cod[k] === nome) };
+  delete custom[nome]; localStorage.setItem("mp_alimenti_custom", JSON.stringify(custom));
+  if (nome in pz) { delete pz[nome]; localStorage.setItem("mp_alimenti_pz", JSON.stringify(pz)); }
+  if (prima.codici.length) { prima.codici.forEach(k => delete cod[k]); localStorage.setItem("mp_codici", JSON.stringify(cod)); }
+  if (window.ALIMENTI) delete window.ALIMENTI[nome];
+  if (window.NUTRIENTI_EXTRA) delete window.NUTRIENTI_EXTRA[nome];
+  if (window.PESO_PZ) delete window.PESO_PZ[nome];
+  return prima;
+}
+function ripristinaAlimentoTuo(nome, prima) {
+  if (!prima || !prima.v) return;
+  salvaAlimentoPersonale(nome, prima.v.slice(0, 4), prima.v.length >= 8 ? prima.v.slice(4, 8) : null, prima.pz || 0);
+  if (prima.codici.length) { let cod = {}; try { cod = JSON.parse(localStorage.getItem("mp_codici")) || {}; } catch (e) {} prima.codici.forEach(k => { cod[k] = nome; }); localStorage.setItem("mp_codici", JSON.stringify(cod)); }
 }
 document.addEventListener("click", (e) => {
   if (!e.target.closest || !e.target.closest("#modal-content")) return;
   if (e.target.closest("[data-mio-menu]")) { apriMenu(); return; }
   if (e.target.closest("[data-mio-lista]")) { apriMieiAlimenti(); return; }
   const ap = e.target.closest("[data-mio-apri]"); if (ap) { apriMioAlimento(ap.dataset.mioApri); return; }
+  if (e.target.closest("[data-mio-elimina]")) {
+    const n = (document.getElementById("mio-nome") || {}).dataset.orig; if (!n) return;
+    chiediConferma(`Eliminare «${n}»?`, "Sparisce dai tuoi alimenti. I pasti già registrati tengono le loro calorie.", "Elimina", () => {
+      const prima = eliminaAlimentoTuo(n);
+      apriMieiAlimenti();
+      avviso(`Eliminato: ${n}`, "Annulla", () => { ripristinaAlimentoTuo(n, prima); if (document.querySelector("#modal-content .mio-lista, #modal-content [data-mio-menu]")) apriMieiAlimenti(); });
+    }, () => apriMioAlimento(n));
+    return;
+  }
   const sv = e.target.closest("[data-mio-salva]"); if (!sv) return;
-  const et = leggiCampiEtichetta("etic-mio");
+  const inp = document.getElementById("mio-nome"), vecchio = inp.dataset.orig;
+  let et = leggiCampiEtichetta("etic-mio");
   if (et && et.errore) { avviso(et.errore); return; }
   if (!et || !et.base4[0]) { avviso("Inserisci almeno le kcal."); return; }
-  const inp = document.getElementById("mio-nome"), vecchio = inp.dataset.orig;
+  et = conservaValoriAlimento("etic-mio", vecchio, et);   // i campi non toccati restano come erano salvati
   let nome = inp.value.trim(); if (!nome) { avviso("Scrivi il nome dell'alimento."); return; }
   nome = nome.charAt(0).toUpperCase() + nome.slice(1);
   if (nome !== vecchio && (window.ALIMENTI || {})[nome]) { avviso("Esiste già un alimento con questo nome."); return; }
   if (!verificaEtichetta("etic-mio", sv, et)) return;
   if (nome !== vecchio) rinominaAlimentoTuo(vecchio, nome);
   salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz, true);
+  ricalcolaPastiCon(nome);   // i pasti già registrati con questo alimento prendono i valori corretti
   if (typeof renderOggi === "function") renderOggi();
   apriMieiAlimenti(); avviso("✓ Alimento aggiornato");
 });
@@ -481,10 +552,10 @@ function fotoEtichettaHTML(id) {
 function campiEtichettaHTML(id, valori, opz = {}) {
   const pz = opz.pesoPz > 0 ? opz.pesoPz : 0, r = (x) => Math.round(x * 100) / 100;
   const v = (valori || []).map(x => (x === null || x === undefined) ? x : pz ? r(x * pz / 100) : x);   // per pezzo: si mostrano i numeri della tabella com'era (per 1 pezzo)
-  const campo = (k) => `<label class="et-campo"><span>${CAMPI_ETICHETTA[k]}</span><input class="qta-input" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${k ? "g" : "kcal"}" data-etic="${k}"${v[k] !== undefined && v[k] !== null && !(k >= 4 && !v.length) ? ` value="${v[k]}"` : ""}></label>`;
+  const campo = (k) => `<label class="et-campo"><span>${CAMPI_ETICHETTA[k]}</span><input class="qta-input" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${k ? "g" : "kcal"}" data-etic="${k}"${v[k] !== undefined && v[k] !== null && !(k >= 4 && !v.length) ? ` value="${v[k]}" data-v="${v[k]}"` : ""}></label>`;   // data-v: il valore mostrato, per capire poi quali campi hai cambiato
   return `${opz.senzaFoto ? "" : fotoEtichettaHTML(id)}
     <p class="et-sez">Valori nutrizionali</p>
-    <div class="etic-per" data-etic-per-for="${id}">
+    <div class="etic-per" data-etic-per-for="${id}" data-pz0="${pz}">
       <div class="et-seg">
         <input type="radio" name="per-${id}" id="per100-${id}" value="100"${pz ? "" : " checked"}><label for="per100-${id}">Per 100 g</label>
         <input type="radio" name="per-${id}" id="perpz-${id}" value="pz"${pz ? " checked" : ""}><label for="perpz-${id}">Per 1 pezzo</label>

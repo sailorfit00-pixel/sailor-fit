@@ -1249,7 +1249,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (a === "al-modifica") { c.modificaAl = b.dataset.nome; c.ignotoNuovo = true; c.ignoto = null; c.ignotoCodice = null; rirenderLibero(); }
       else if (a === "ignoto-annulla") { c.modificaAl = null; c.ignotoNuovo = false; c.ignoto = null; c.ignotoCodice = null; c.ricercaOFF = null; rirenderLibero(); }
       else if (a === "ignoto-salva") {
-        const et = leggiCampiEtichetta("etic-libero");
+        let et = leggiCampiEtichetta("etic-libero");
         if (et && et.errore) { avviso(et.errore); return; }
         if (!et || !et.base4[0]) { avviso("Inserisci almeno le kcal."); return; }
         let nome = ((document.getElementById("ignoto-nome") || {}).value || c.ignoto || "").trim();
@@ -1257,7 +1257,9 @@ document.addEventListener("DOMContentLoaded", () => {
         nome = nome.charAt(0).toUpperCase() + nome.slice(1);
         if (!verificaEtichetta("etic-libero", b, et)) return;   // numeri che non tornano: avviso e «Salva comunque»
         const modifica = !!c.modificaAl;
+        if (modifica && typeof conservaValoriAlimento === "function") et = conservaValoriAlimento("etic-libero", c.modificaAl, et);   // i campi non toccati (e gli zuccheri aggiunti) restano come erano salvati
         salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz, modifica);
+        if (modifica && typeof ricalcolaPastiCon === "function") ricalcolaPastiCon(nome);   // i pasti già registrati con questo alimento si ricalcolano
         if (c.ignotoCodice && typeof salvaCodice === "function") salvaCodice(c.ignotoCodice, nome);
         c.ignotoNuovo = false; c.ignoto = null; c.ignotoCodice = null; c.ricercaOFF = null; c.modificaAl = null;
         if (!modifica) c.items.push(et.pesoPz ? { nome, cercato: nome, qta: et.pesoPz, lock: true, unita: "pz" } : { nome, qta: 0, lock: false });   // a pezzi: ne metti 1 subito

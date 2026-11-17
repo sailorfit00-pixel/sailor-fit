@@ -1799,3 +1799,6 @@ input[type=number] { -moz-appearance: textfield; }
 .bmr-ris small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 .bmr-calc .wiz-nav { margin-top: 6px; }
 .bmr-calc .btn[disabled] { opacity: .45; }
+
+/* I miei alimenti: «Elimina alimento» in fondo, rosso e poco in vista (non è un tasto verde) */
+.btn-link.mio-elimina { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin: 14px 0 0; padding: 10px 0; color: var(--bad); font-weight: 600; }
