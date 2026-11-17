@@ -996,7 +996,11 @@ function applicaPiuFit(c, quando) {
   const a = anteprimaRicetta(c, c.anteprima); c.confermaFit = false;
   if (!a || !a.mosse.length) { rirenderLibero(); return; }
   c.fitDescr = a.mosse.map(descrMossaFit).join(" · ");
-  if (quando === "ora") { c.fitApplicato = "ora"; c.fitMosse = a.mosse; rirenderLibero(); return; }
+  if (quando === "ora") {
+    c.fitApplicato = "ora"; c.fitMosse = a.mosse; rirenderLibero();
+    avviso("✓ Più fit applicato a questo piatto", "Annulla", () => { if (liberoCtx === c && c.anteprima) { c.fitApplicato = null; c.fitMosse = null; rirenderLibero(); } });
+    return;
+  }
   const nome = a.r.nome;
   const annulla = rendiRicettaFit(nome, a.mosse.map(m => m.tipo === "cambia" ? { tipo: "cambia", nome: m.r.nome, a: m.a } : { tipo: "porta", nome: m.r.nome, fattore: m.nuova / Math.max(1, m.r.qta) }));
   c.fitApplicato = "sempre"; c.fitMosse = null; rirenderLibero();
