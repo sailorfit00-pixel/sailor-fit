@@ -1066,6 +1066,13 @@ function rigeneraGiorno(data, momento, tutti) {   // momento: solo quel pasto; s
   const vecchi = JSON.stringify(tolti0.map(p => p.ricetta || p.nome));
   tolti0.forEach(p => { esc.nomi.add(p.ricetta || ""); (p.ingredienti || []).forEach(i => esc.nomi.add(i.nome)); });
   const ripristina = () => { const d = leggiDiario(); if (orig === "null") delete d[data]; else d[data] = JSON.parse(orig); salvaDiario(d); };
+  // escludendo piatti e ingredienti del menu di prima, un pasto può restare senza alternative (es. uno spuntino di solo «fiocchi di latte»):
+  // in quel caso si riempie comunque, anche con piatti già visti, invece di lasciarlo vuoto
+  const slotPrima = new Set(tolti0.map(p => p.pasto));
+  const riempiVuoti = () => {
+    const vuoti = [...slotPrima].filter(s => !giornoDiario(data).pasti.some(p => p.pasto === s));
+    vuoti.forEach((s, k) => pianificaSettimana(data, data, { seme: esc.seme + 101 + k, soloSlot: s }));
+  };
   // si prova con altre scelte finché il giorno non peggiora (mai più grassi o carboidrati del giusto) e il pasto è davvero diverso
   for (let prova = 0; prova < 8; prova++) {
     ripristina();
@@ -1074,7 +1081,9 @@ function rigeneraGiorno(data, momento, tutti) {   // momento: solo quel pasto; s
     if (prova === 4) esc.nomi.clear();   // finite le alternative nuove: si riconsiderano anche quelle già viste
     const r = pianificaSettimana(data, data, { seme: esc.seme + prova, escludi: prova < 4 ? esc.nomi : undefined, soloSlot: momento, stretto: prova >= 3 });
     const nuovi = JSON.stringify(giornoDiario(data).pasti.filter(p => momento ? p.pasto === momento : p.auto).map(p => p.ricetta || p.nome));
-    if (r.messe && sopra() <= sopraPrima + 0.01 && (nuovi !== vecchi || prova >= 7)) return { prima: { [data]: orig }, messe: r.messe };
+    if (r.messe) riempiVuoti();
+    const restaVuoto = [...slotPrima].some(s => !giornoDiario(data).pasti.some(p => p.pasto === s));
+    if (r.messe && !restaVuoto && sopra() <= sopraPrima + 0.01 && (nuovi !== vecchi || prova >= 7)) return { prima: { [data]: orig }, messe: r.messe };   // un menu che lascia un pasto vuoto si scarta
   }
   ripristina();   // nessuna alternativa che stia nei valori del giorno: resta il pasto di prima
   return { prima: { [data]: orig }, messe: 0 };
