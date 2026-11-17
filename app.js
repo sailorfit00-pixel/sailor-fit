@@ -354,7 +354,11 @@ function nomeConNumero(nome, quanti, maiuscola) {
 }
 // Nome di una ricetta con il contatore: prima la quantità, col pezzo della ricetta. "2 fette di Banana bread", "3 pancake di Pancake proteici", "1 porzione di Chili"
 function nomeRicettaConPezzi(r, k) {
-  return `${etichettaPezzi(r && (r._orig || r), k)} di ${r.nome}`;
+  const et = etichettaPezzi(r && (r._orig || r), k);
+  // «3 pancake di Pancake proteici» → «3 Pancake proteici»: se il nome dice già cos'è il pezzo, basta il numero
+  const m = String(et).match(/^([\d½¼¾⅓⅔,.\s]+)\s+(\S.*)$/);
+  if (m && m[2].length >= 4 && String(r.nome).toLowerCase().includes(m[2].toLowerCase().slice(0, 5))) return `${m[1].trim()} ${r.nome}`;
+  return `${et} di ${r.nome}`;
 }
 const nomeConPezzi = (r) => r.porzionabile && r._orig ? nomeRicettaConPezzi(r, r.nPezzi) : r.nome;
 // Zuccheri (totali e aggiunti), fibre e sale di un elenco di ingredienti, in grammi
