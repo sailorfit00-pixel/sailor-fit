@@ -817,7 +817,7 @@ function consigliFitHTML(c) {
     return `<button class="var-furbo lib-furbo" ${attr}>${testa}</button>`;
   }).join("")}</div>`;
 }
-function consiglioFurboHTML(c, m) {
+function consiglioFurboHTML(c, m, giaFit) {
   if (c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto)) return "";   // sui pasti passati niente consigli: solo su quelli ancora da venire
   const e = elencoConsigli(c, m);
   if (!e) return "";
@@ -839,6 +839,7 @@ function consiglioFurboHTML(c, m) {
       attr = `data-lib-add="${esc(a.n)}" data-lib-g="${a.g}" data-lib-fisso="1"`;
     }
     if (furbiScartati.has(testa)) return null;
+    if (giaFit && ((a.tipo === "cambia" && giaFit.has(`cambia|${a.r.nome}|${a.a}`)) || (a.tipo === "porta" && giaFit.has(`porta|${a.r.nome}|${a.nuova}`)))) return null;   // già proposto in «Più fit»
     return { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}>${testa}</button>` };   // solo la mossa: il box si tocca per applicarla
   };
   // fino a tre idee (con ↻ per altre); nei pasti principali in più la verdura, se manca
@@ -927,7 +928,7 @@ const pastoPassatoC = (c) => !!(c && c.vivo && typeof pastoPassato === "function
 const firmaPasto = (c) => JSON.stringify((c.items || []).map(it => [it.nome, Math.round((+it.qta || 0) * 10) / 10, it.unita || ""]));
 function pastoModificato(c) {
   if (!c || !c.vivo || c.bozza) return false;
-  if (c._firma0 === undefined) { c._firma0 = firmaPasto(c); return false; }   // com'era quando l'hai aperto
+  if (c._firma0 === undefined || c._firma0 === "[]") { c._firma0 = firmaPasto(c); return false; }   // com'era quando l'hai aperto (un pasto vuoto appena riempito non conta come modifica)
   return firmaPasto(c) !== c._firma0;
 }
 // «Altre idee» per un pasto già scritto (es. compilato dall'app): fino a 3 ricette simili che stanno nelle calorie e nei macro
@@ -957,6 +958,46 @@ function sostituisciPastoCon(c, nomeRicetta) {
   apriPastoDiario(dataP, null, pastoP);
   avviso("✓ Pasto cambiato", "Annulla", () => { annullaPianificazione({ [dataP]: prima }); renderOggi(); if (liberoCtx && liberoCtx.data === dataP && liberoCtx.pasto === pastoP) apriPastoDiario(dataP, null, pastoP); });
 }
+// Anteprima di una ricetta scelta dalle idee: il piatto con la porzione giusta e, se si può, la sua versione più fit (prima di aggiungerla)
+function anteprimaRicetta(c, nomeRicetta) {
+  const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === (c.pasto === "mattina" ? "spuntino" : c.pasto)) || ricette.find(x => x.nome === nomeRicetta);
+  if (!r) return null;
+  const ps = porzioneSuMisura(r, targetPastoDiario(c.data, c.pasto));
+  const items = ps.items.map(x => ({ nome: x.nome, qta: x.qta }));
+  const tmp = { items, ricetta: r.nome, data: c.data, pasto: c.pasto };
+  const mosse = (r._orig || r).porzioni > 1 ? [] : mosseFit(tmp);   // ricette a teglia (banana bread…): niente versione fit
+  const fit = items.map((it, k) => { const m = mosse.find(a => a.r.k === k); return !m ? it : m.tipo === "cambia" ? { nome: m.a, qta: it.qta } : { nome: it.nome, qta: m.nuova }; });
+  return { r, ps, items, mosse, fit, tot: macroDa(items), totFit: macroDa(fit) };
+}
+function anteprimaHTML(c) {
+  const a = anteprimaRicetta(c, c.anteprima); if (!a) { c.anteprima = null; return ""; }
+  const riga = (it) => `<li><span>${esc(it.nome)}</span><b>${Math.round(it.qta)} g</b></li>`;
+  const fit = a.mosse.length ? `<div class="ant-fit"><p class="ant-fit-t">🥗 Versione più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></p>
+      <ul class="ant-mosse">${a.mosse.map(m => `<li>${m.tipo === "cambia" ? `${esc(m.r.nome)} → <b>${esc(m.a)}</b>` : `${esc(m.r.nome)}: ${Math.round(m.r.qta)} → <b>${m.nuova} g</b>`}</li>`).join("")}</ul>
+      ${macroStileHTML(a.totFit)}</div>` : `<p class="hint">È già una scelta fit: niente da alleggerire.</p>`;
+  return `<button class="btn-link modal-indietro" data-ant-chiudi>‹ Torna al pasto</button>
+    <h3 class="modal-title">${esc(a.ps.nome || a.r.nome)}</h3>
+    <div class="ant-box">${macroStileHTML(a.tot)}<ul class="pm-sola-lista">${a.items.map(riga).join("")}</ul></div>
+    ${fit}
+    <div class="wiz-nav">${a.mosse.length ? `<button class="btn-sec" data-ant-aggiungi="normale">Aggiungi questa</button><button class="btn" data-ant-aggiungi="fit">✓ Aggiungi più fit</button>` : `<button class="btn-sec" data-ant-chiudi>Indietro</button><button class="btn" data-ant-aggiungi="normale">✓ Aggiungi</button>`}</div>`;
+}
+// aggiunge la ricetta dell'anteprima (normale o più fit) al pasto e torna al pasto
+function aggiungiDaAnteprima(c, versione) {
+  const a = anteprimaRicetta(c, c.anteprima); c.anteprima = null;
+  if (!a) { rirenderLibero(); return; }
+  if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
+  const i = aggiungiRicettaIn(c.data, c.pasto, a.r.nome); if (i < 0) { rirenderLibero(); return; }
+  if (versione === "fit" && a.mosse.length) {
+    const g = giornoDiario(c.data), p = g.pasti[i];
+    a.mosse.forEach(m => { const ing = p.ingredienti[m.r.k]; if (!ing) return; if (m.tipo === "cambia") { ing.nome = m.a; ing.cercato = m.a; } else ing.qta = m.nuova; });
+    aggiornaMacro(p); scriviGiorno(c.data, g);
+  }
+  if (typeof renderOggi === "function") renderOggi();
+  c._firma0 = undefined;   // appena aggiunto: non è una modifica da salvare
+  ricaricaViva(c);
+  const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
+  avviso(versione === "fit" ? "✓ Aggiunta la versione più fit" : "✓ Aggiunta");
+}
 function liberoHTML() {
   const c = liberoCtx;
   if (!c) return "";
@@ -966,7 +1007,8 @@ function liberoHTML() {
   const T = c.target();
   const m = c.items.length ? macroDa(c.items) : null;
   const diff = m ? { kcal: T.kcal - m.kcal, proteine: T.proteine - m.proteine, carboidrati: T.carboidrati - m.carboidrati, grassi: T.grassi - m.grassi } : null;
-  const furboBlocco = m ? consiglioFurboHTML(c, m) : "";      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
+  const giaFit = new Set((c.items && c.items.length && !ricettaATeglia(c) ? mosseFit(c) : []).map(a => a.tipo === "cambia" ? `cambia|${a.r.nome}|${a.a}` : `porta|${a.r.nome}|${a.nuova}`));
+  const furboBlocco = m ? consiglioFurboHTML(c, m, giaFit) : "";      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
 
   const { pre, post } = contestoAllenamento(c);
   const righeK = c.items.map((it, k) => {
@@ -1086,6 +1128,7 @@ function liberoHTML() {
   const ingrLive = `<div class="lib-righe">${c.bozza ? righeBozza : righe}</div>
       ${avvPre.length ? `<div class="lib-legenda-avv" role="note">${avvPre.map(it => `<p><span aria-hidden="true">⚠</span> <b>${esc(it.nome)}</b>: ${fmtG(grassiAlimento(it.nome, it.qta))} g di grassi. Prima di allenarti meglio senza grassi: rallentano la digestione.</p>`).join("")}</div>` : ""}`;
   // inserendo un alimento nuovo si vede solo quello: niente idee né consigli; salvato o annullato, si torna al pasto
+  if (c.anteprima) { const h = anteprimaHTML(c); if (h) return h; }
   if (ignoto) return `<button class="btn-link modal-indietro" data-lib="ignoto-annulla">‹ Torna al pasto</button>
     <h3 class="modal-title">${c.modificaAl ? "Modifica alimento" : "Nuovo alimento"}</h3>${ignoto}`;
   return `
@@ -1103,8 +1146,8 @@ function liberoHTML() {
           const arr = Math.round(m.kcal * Math.max(0.25, Math.min(2.5, T.kcal / m.kcal)));   // le quantità cambiano al massimo di 2,5 volte: la scheda promette solo quello che ottiene
           const su = arr > m.kcal; return Math.abs(arr - m.kcal) / m.kcal > 0.08 ? `<button class="var-furbo lib-furbo lib-bil-furbo" data-lib="bilancia">⚖️ <b>${su ? "Aumenta" : "Riduci"} tutte le quantità</b><em>${Math.round(m.kcal)} → ${arr} kcal · ${su ? "+" : "−"}${Math.abs(arr - Math.round(m.kcal))}</em></button>` : ""; })()}
       </div>
+      ${pastoPassatoC(c) ? "" : consigliFitHTML(c) + furboBlocco}
       ${bloccato ? "" : altreIdeeHTML(c)}
-      ${pastoPassatoC(c) ? "" : (furboBlocco || consigliFitHTML(c))}
     ` : c.idee()}
     ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button>` : bloccato ? "" : `${pastoModificato(c) ? `<button class="btn block lib-conferma" data-lib="salva-modifiche">✓ Salva modifiche</button>` : ""}<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
   `;
@@ -1305,6 +1348,8 @@ document.addEventListener("DOMContentLoaded", () => {
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
       return;
     }
+    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; rirenderLibero(); return; }
+    const antA = e.target.closest("[data-ant-aggiungi]"); if (antA) { aggiungiDaAnteprima(c, antA.dataset.antAggiungi); return; }
     const sost = e.target.closest("[data-lib-sostituisci]");
     if (sost) { sostituisciPastoCon(c, sost.dataset.libSostituisci); return; }
     if (e.target.closest("[data-altre-idee]")) { c.altreGiro = (c.altreGiro || 0) + 1; rirenderLibero(); return; }

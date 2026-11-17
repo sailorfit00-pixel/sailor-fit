@@ -1592,7 +1592,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!liberoCtx) return;
     if (e.target.closest("[data-idee-altre]") && liberoCtx) { liberoCtx.ideeGiro = (liberoCtx.ideeGiro || 0) + 1; rirenderLibero(); return; }
     const ric = e.target.closest("[data-oggi-ricetta]");
-    if (ric) { usaRicettaNellEditor(ric.dataset.oggiRicetta); return; }
+    if (ric) {   // ＋ = aggiungi subito; tocco sulla ricetta = anteprima con la versione più fit
+      if (e.target.closest(".rr-piu")) { usaRicettaNellEditor(ric.dataset.oggiRicetta); return; }
+      liberoCtx.anteprima = ric.dataset.oggiRicetta; rirenderLibero(); return;
+    }
     const pz = e.target.closest("[data-pezzi]");
     if (pz) { cambiaPezzi(+pz.dataset.pezzi); return; }
     const rec = e.target.closest("[data-oggi-recente]");
