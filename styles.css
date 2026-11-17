@@ -1848,3 +1848,6 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 .ant-conf { font-size: 17px; margin: 8px 0 6px; }
 .ant-meno { color: var(--accent); margin-left: 6px; }
 .ant-fit.fatto .ant-mosse, button.ant-fit .ant-mosse { padding-left: 0; }
+
+/* più fit già applicato: solo una riga lilla, niente riquadro */
+.ant-fatto { color: var(--lilla); font-weight: 700; margin: 2px 0 14px; }

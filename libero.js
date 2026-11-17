@@ -978,7 +978,7 @@ function anteprimaHTML(c) {
   const ora = c.fitApplicato === "ora";
   const items = ora ? a.fit : a.items, tot = ora ? a.totFit : a.tot;
   const riga = (it) => `<li><span>${esc(it.nome)}</span><b>${Math.round(it.qta)} g</b></li>`;
-  const fit = c.fitApplicato ? `<div class="ant-fit fatto"><span class="ant-fit-t">✓ Più fit applicato</span><span class="ant-mosse">${c.fitDescr || ""}</span><span class="ant-fit-nota">${ora ? "Solo per questa volta" : "Anche nella ricetta"}</span></div>`
+  const fit = c.fitApplicato ? `<p class="ant-fatto">✓ Più fit applicato ${ora ? "solo questa volta" : "sempre"}</p>`
     : a.mosse.length ? `<button class="ant-fit" data-ant-fit>
       <span class="ant-fit-t">🥗 Più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></span>
       <span class="ant-mosse">${descr}</span>
