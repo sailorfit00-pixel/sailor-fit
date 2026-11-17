@@ -787,7 +787,7 @@ function mosseFit(c) {
   });
   return out.sort((a, b) => b.v - a.v).slice(0, 4);
 }
-// Un'unica sezione «Consigli furbi»: prima quelli che rendono il piatto più fit (etichetta «più fit»), poi quelli che fanno tornare i numeri
+// «Consigli furbi» di un pasto: cosa cambiare per stare nelle kcal e nei macro (fitMosse: eventuali consigli «più fit» da mettere in testa)
 function consiglioFurboHTML(c, m, fitMosse = []) {
   if (c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto)) return "";   // sui pasti passati niente consigli: solo su quelli ancora da venire
   const e = elencoConsigli(c, m);
@@ -1013,7 +1013,7 @@ function liberoHTML() {
   const T = c.target();
   const m = c.items.length ? macroDa(c.items) : null;
   const diff = m ? { kcal: T.kcal - m.kcal, proteine: T.proteine - m.proteine, carboidrati: T.carboidrati - m.carboidrati, grassi: T.grassi - m.grassi } : null;
-  const furboBlocco = m ? consiglioFurboHTML(c, m) : "";   // (niente più «aumenta / riduci tutte le quantità»: bastano i consigli furbi, o lo fai a mano)   // dopo l'aggiunta: solo consigli per stare nei valori («Più fit» si sceglie prima, nell'anteprima della ricetta)      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
+  const furboBlocco = m ? consiglioFurboHTML(c, m) : "";   // dopo l'aggiunta: solo consigli per stare nei valori («Più fit» si sceglie prima, nell'anteprima della ricetta)
 
   const { pre, post } = contestoAllenamento(c);
   const righeK = c.items.map((it, k) => {
