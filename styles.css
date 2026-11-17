@@ -1751,3 +1751,10 @@ select.qta-input { padding-right: 30px; background-image: url("data:image/svg+xm
 /* il nuovo alimento è una pagina a sé: senza il riquadro attorno */
 .lib-ignoto.pagina { background: none; border: 0; padding: 0; margin: 0; }
 .lib-ignoto.pagina > .hint:first-child { margin-top: 0; }
+
+/* tabella nutrizionale compatta: 4 valori nella prima riga, 3 nella seconda */
+.et-griglia { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.et-griglia.et-tre { grid-template-columns: repeat(4, 1fr); margin-top: 8px; }
+.et-campo { font-size: 11.5px; gap: 3px; min-width: 0; }
+.et-campo span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.et-campo .qta-input { min-height: 40px; padding: 6px 4px; text-align: center; }

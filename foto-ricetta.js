@@ -378,7 +378,6 @@ async function leggiEtichettaDaFile(id, files) {
     }
     if (stato) stato.classList.add("ok");
     mostra("✓ Valori letti dalla foto: controllali qui sotto");
-    const altri = box.querySelector(".et-altri"); if (altri && v.slice(4).some(x => x)) altri.open = true;
   } catch (err) {
     mostra(navigator.onLine === false || String(err.message) === "libreria"
       ? "Serve internet la prima volta per scaricare il lettore. Riprova quando sei connessa."
