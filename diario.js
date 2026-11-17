@@ -1263,7 +1263,7 @@ function sceltaAllenHTML() {
   const info = TIPI_GIORNATA[chiaveTipo([...c.sel])];
   return `<h3 class="modal-title">${esc(c.titolo)}</h3>
     <div class="sport-griglia">
-      ${leggiSport().map(sp => `<button class="sport-btn ${c.sel.has(sp.id) ? "on" : ""}" data-allen-sport="${sp.id}">
+      ${leggiProfilo().sport.filter(sp => !sp.nascosto || c.sel.has(sp.id)).map(sp => `<button class="sport-btn ${c.sel.has(sp.id) ? "on" : ""}" data-allen-sport="${sp.id}">
         <span class="sb-ico">${sp.icona}</span><b>${esc(sp.nome)}</b><small>~${kcalSport(sp)} kcal</small></button>`).join("")}
       <button class="sport-btn ${c.sel.size ? "" : "on"}" data-allen-riposo><span class="sb-ico">😴</span><b>Riposo</b><small>niente sport</small></button>
     </div>

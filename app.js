@@ -61,7 +61,8 @@ function leggiProfilo() {
   return pf;
 }
 function salvaProfilo(p) { localStorage.setItem("mp_profilo", JSON.stringify(p)); calcolaTarget(); }
-const leggiSport = () => leggiProfilo().sport;
+// gli sport tra cui scegliere: quelli «tolti» restano salvati (nascosto: true) perché i giorni passati li usano ancora
+const leggiSport = () => leggiProfilo().sport.filter(sp => !sp.nascosto);
 
 // -------- Tipo di giornata = gli sport che fai quel giorno --------
 // La chiave è l'elenco degli sport separati da "+", con la durata di quel giorno:
@@ -80,7 +81,7 @@ function durateDelTipo(chiave) {
 }
 const kmDelTipo = (chiave) => durateDelTipo(chiave).corsa ?? null;
 function chiaveTipo(ids, durate = {}) {
-  const ordine = leggiSport().map(sp => sp.id);
+  const ordine = leggiProfilo().sport.map(sp => sp.id);   // anche i nascosti: l'ordine di un giorno passato non cambia
   const v = [...new Set(ids)].sort((a, b) => ordine.indexOf(a) - ordine.indexOf(b));
   return v.length ? v.map(id => durate[id] ? `${id}:${durate[id]}` : id).join("+") : "riposo";
 }
@@ -1978,7 +1979,7 @@ const ICONE_SPORT = ["🏃‍♀️", "🚴‍♀️", "🏊‍♀️", "🧘‍
 const CAMPI_PROFILO = [
   ["peso", "Peso (kg)", 0.1], ["bmr", "Basale (kcal)", 10],
   ["deficit", "Deficit (%)", 1],
-  ["recupero", "Allenamento reintegrato (%)", 5, "Calorie bruciate che rimangi (100% = tutte)"],
+  ["recupero", "Allenamento reintegrato (%)", 5, "% delle calorie dell'allenamento che puoi mangiare (100% = tutte)"],
   ["protKg", "Proteine (g/kg)", 0.1], ["grassiKg", "Grassi (g/kg)", 0.1],
 ];
 // Perdita di peso attesa a settimana con la settimana tipo attuale (7700 kcal ≈ 1 kg)
@@ -1986,11 +1987,20 @@ function perditaSettimanale() {
   const deficit = leggiTipi().reduce((s, t) => s + TIPI_GIORNATA[t].fabbisogno - TIPI_GIORNATA[t].target.kcal, 0);
   return deficit / 7700;
 }
+// Riassunto degli obiettivi: una riga (media della settimana tipo e kg a settimana) e una tabellina
+// con i soli tipi di giornata della settimana tipo (+ Riposo), non una scheda per ogni sport
 function anteprimaProfiloHTML() {
-  return `<ul class="tipi">${Object.entries(TIPI_GIORNATA).map(([id, tg]) => { const t = tg.target; return `<li class="tipo-card">
-    <div class="tipo-riga"><span class="dot ${id}"></span><span class="tipo-nome">${tg.label}</span><strong>${t.kcal} kcal</strong></div>
-    <div class="tipo-macro">P ${t.proteine}g · C ${t.carboidrati}g · G ${t.grassi}g</div>${barraMacroHTML(t)}</li>`; }).join("")}</ul>
-    <p class="hint">−${perditaSettimanale().toFixed(2).replace(".", ",")} kg/sett</p>`;
+  const tipi = leggiTipi().map(t => VECCHI_TIPI[t] || t || "riposo");
+  const media = Math.round(tipi.reduce((s, t) => s + TIPI_GIORNATA[t].target.kcal, 0) / tipi.length / 10) * 10;
+  const kg = perditaSettimanale(), kgTxt = `${kg >= 0 ? "−" : "+"}${Math.abs(kg).toFixed(2).replace(".", ",")} kg a settimana`;
+  const chiavi = [...new Set(tipi)]; if (!chiavi.includes("riposo")) chiavi.push("riposo");
+  const quanti = (k) => tipi.filter(t => t === k).length;
+  return `<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno · <b>${kgTxt}</b></p>
+    <table class="pf-tabella"><thead><tr><th>Giornata</th><th>kcal</th><th>P</th><th>C</th><th>G</th></tr></thead><tbody>
+    ${chiavi.map(k => { const tg = TIPI_GIORNATA[k], t = tg.target, n = quanti(k);
+      return `<tr><td><span class="pf-ico">${tg.icone}</span> ${esc(tg.label)}${n ? ` <em>×${n}</em>` : ""}</td><td><b>${t.kcal}</b></td><td>${t.proteine}</td><td>${t.carboidrati}</td><td>${t.grassi}</td></tr>`; }).join("")}
+    </tbody></table>
+    <p class="hint">P, C, G in grammi · ×N = quante volte a settimana nella settimana tipo</p>`;
 }
 function apriProfilo() {
   editCtx = null;
@@ -1999,10 +2009,11 @@ function apriProfilo() {
     <h3 class="modal-title">👤 Profilo</h3>
     <div id="form-profilo">
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
-        <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" data-profilo="${k}" value="${pf[k]}">`).join("")}
+        <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" data-profilo="${k}" value="${pf[k]}">${k === "bmr" ? `
+        <button class="btn-link bmr-link" data-bmr-apri>Non lo sai? Calcolalo ›</button><div id="bmr-calc" hidden></div>` : ""}`).join("")}
     </div>
     <h4>I tuoi sport</h4>
-    <div class="sport-lista">${pf.sport.map(sp => `<div class="sport-riga">
+    <div class="sport-lista">${pf.sport.filter(sp => !sp.nascosto).map(sp => `<div class="sport-riga">
         <span class="sr-ico">${sp.icona}</span><span class="sr-nome">${esc(sp.nome)}</span>
         <input class="qta-input sr-dur" type="text" inputmode="decimal" autocomplete="off" data-sport-dur="${sp.id}" value="${sp.perKm ? fmtKm(sp.km || 5) : (sp.min || 60)}"><em>${sp.perKm ? "km" : "min"}</em><em class="sr-kcal">≈ ${kcalSport(sp, 0, pf)} kcal</em>
         <button class="lib-del" data-sport-del="${sp.id}" aria-label="Togli ${esc(sp.nome)}">${ICONA_CESTINO}</button></div>`).join("")}
@@ -2020,8 +2031,10 @@ function apriProfilo() {
 `);
 }
 // ridisegna il profilo restando allo stesso punto della pagina
-function riapriProfilo() {
-  const sheet = document.querySelector(".modal-sheet"), sc = sheet ? sheet.scrollTop : 0;
+// (sc: la posizione da ritrovare, se il profilo era già stato chiuso, es. da una richiesta di conferma)
+function riapriProfilo(sc) {
+  const sheet = document.querySelector(".modal-sheet");
+  if (typeof sc !== "number") sc = sheet ? sheet.scrollTop : 0;
   apriProfilo();
   const s2 = document.querySelector(".modal-sheet"); if (s2) s2.scrollTop = sc;
 }
@@ -2029,7 +2042,8 @@ function leggiFormProfilo() {
   const pf = leggiProfilo();
   document.querySelectorAll("[data-profilo]").forEach(inp => {
     const v = parseFloat(String(inp.value).replace(",", "."));
-    if (!isNaN(v) && v > 0) pf[inp.dataset.profilo] = v;
+    const k = inp.dataset.profilo, puoZero = k === "deficit" || k === "recupero";   // deficit e reintegro possono essere 0 (mantenimento, niente kcal dall'allenamento); mai negativi
+    if (!isNaN(v) && (v > 0 || (puoZero && v === 0))) pf[k] = v;
   });
   return pf;
 }
@@ -2047,6 +2061,82 @@ function salvaProfiloForm() {
 
   if (typeof renderOggi === "function") renderOggi();
 }
+
+// ===== Calcolo del basale (Mifflin-St Jeor) dal Profilo: sesso, età, altezza e il peso del campo Peso =====
+// donna: 10·kg + 6,25·cm − 5·età − 161 · uomo: stessa formula + 5. Sesso, età e altezza si ricordano nel profilo.
+function pesoDelForm() {
+  const inp = document.querySelector('[data-profilo="peso"]'), v = inp ? parseFloat(String(inp.value).replace(",", ".")) : NaN;
+  return v > 0 ? v : leggiProfilo().peso;
+}
+function basaleCalcolato() {
+  const box = document.getElementById("bmr-calc"); if (!box) return null;
+  const uomo = !!box.querySelector('input[value="uomo"]:checked');
+  const num = (k) => parseFloat(String((box.querySelector(`[data-bmr="${k}"]`) || {}).value || "").replace(",", "."));
+  const eta = num("eta"), cm = num("altezza"), kg = pesoDelForm();
+  if (!(eta >= 10 && eta <= 100 && cm >= 100 && cm <= 230 && kg > 0)) return { uomo, eta, cm, kg, kcal: 0 };
+  return { uomo, eta, cm, kg, kcal: Math.round((10 * kg + 6.25 * cm - 5 * eta + (uomo ? 5 : -161)) / 10) * 10 };
+}
+function bmrCalcHTML() {
+  const pf = leggiProfilo(), uomo = pf.sesso === "uomo";
+  return `<div class="bmr-calc">
+    <div class="et-seg">
+      <input type="radio" name="bmr-sesso" id="bmr-donna" value="donna"${uomo ? "" : " checked"}><label for="bmr-donna">Donna</label>
+      <input type="radio" name="bmr-sesso" id="bmr-uomo" value="uomo"${uomo ? " checked" : ""}><label for="bmr-uomo">Uomo</label>
+    </div>
+    <div class="bmr-griglia">
+      <label class="et-campo"><span>Età (anni)</span><input class="qta-input" type="number" inputmode="numeric" min="10" max="100" step="1" data-bmr="eta" placeholder="es. 30"${pf.eta ? ` value="${pf.eta}"` : ""}></label>
+      <label class="et-campo"><span>Altezza (cm)</span><input class="qta-input" type="number" inputmode="numeric" min="100" max="230" step="1" data-bmr="altezza" placeholder="es. 165"${pf.altezza ? ` value="${pf.altezza}"` : ""}></label>
+    </div>
+    <p class="bmr-ris" id="bmr-ris"></p>
+    <div class="wiz-nav"><button class="btn-sec" data-bmr-chiudi>Annulla</button><button class="btn" data-bmr-usa>Usa questo valore</button></div>
+  </div>`;
+}
+function aggiornaBasaleCalcolato() {
+  const r = basaleCalcolato(), out = document.getElementById("bmr-ris"), usa = document.querySelector("[data-bmr-usa]");
+  if (!r || !out) return;
+  const fk = String(Math.round(r.kg * 10) / 10).replace(".", ",");
+  out.innerHTML = r.kcal ? `Il tuo basale è circa <b>${r.kcal} kcal</b><small>con il peso del Profilo: ${fk} kg</small>` : `<small>Scrivi età e altezza: il peso è quello del Profilo (${fk} kg).</small>`;
+  if (usa) usa.disabled = !r.kcal;
+}
+function ricordaDatiBasale(r) {
+  const pf = leggiProfilo();
+  pf.sesso = r.uomo ? "uomo" : "donna";
+  if (r.eta >= 10 && r.eta <= 100) pf.eta = Math.round(r.eta);
+  if (r.cm >= 100 && r.cm <= 230) pf.altezza = Math.round(r.cm);
+  salvaProfilo(pf);
+}
+function chiudiCalcoloBasale() {
+  const box = document.getElementById("bmr-calc"), link = document.querySelector("[data-bmr-apri]");
+  if (box) { box.hidden = true; box.innerHTML = ""; }
+  if (link) link.hidden = false;
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest || !e.target.closest("#modal-content")) return;
+  if (e.target.closest("[data-bmr-apri]")) {
+    const box = document.getElementById("bmr-calc"); if (!box) return;
+    box.innerHTML = bmrCalcHTML(); box.hidden = false; e.target.closest("[data-bmr-apri]").hidden = true;
+    aggiornaBasaleCalcolato();
+    const vuoto = box.querySelector('[data-bmr="eta"]:placeholder-shown') || box.querySelector('[data-bmr="altezza"]:placeholder-shown'); if (vuoto) vuoto.focus();
+    return;
+  }
+  if (e.target.closest("[data-bmr-chiudi]")) { chiudiCalcoloBasale(); return; }
+  if (e.target.closest("[data-bmr-usa]")) {
+    const r = basaleCalcolato(); if (!r || !r.kcal) return;
+    ricordaDatiBasale(r);
+    const inp = document.querySelector('[data-profilo="bmr"]');
+    if (inp) { inp.value = r.kcal; inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new Event("change", { bubbles: true })); }   // come se l'avessi scritto: si salva e l'anteprima si aggiorna
+    chiudiCalcoloBasale();
+    avviso(`Basale: ${r.kcal} kcal`);
+  }
+});
+document.addEventListener("input", (e) => {
+  if (!e.target.closest || !e.target.closest("#bmr-calc")) {
+    if (e.target.matches && e.target.matches('[data-profilo="peso"]') && document.getElementById("bmr-ris")) aggiornaBasaleCalcolato();   // cambia il peso: il calcolo segue
+    return;
+  }
+  aggiornaBasaleCalcolato();
+  const r = basaleCalcolato(); if (r) ricordaDatiBasale(r);
+});
 
 // ================== Diario del peso ==================
 function leggiPesi() { try { return JSON.parse(localStorage.getItem("mp_pesi")) || []; } catch (e) { return []; } }
@@ -2103,26 +2193,47 @@ function graficoPesoSVG(pesi) {
   </svg>
   <div class="macro-pct"><span><i class="leg-pt"></i>pesate</span><span><i class="leg-line"></i>media 7 giorni</span></div>`;
 }
+// Il peso del Profilo segue la media degli ultimi 7 giorni (per le proteine in g/kg); senza pesate resta com'è
+function aggiornaPesoProfilo() {
+  const mm = mediaMobile(leggiPesi());
+  if (!mm.length) return;
+  const pf = leggiProfilo();
+  pf.peso = Math.round(mm[mm.length - 1].kg * 10) / 10;
+  salvaProfilo(pf);
+  if (typeof renderOggi === "function") renderOggi();
+}
 function salvaPesata() {
   const data = document.getElementById("peso-data").value || oggiISO();
   const kg = parseFloat(String(document.getElementById("peso-kg").value).replace(",", "."));
   if (isNaN(kg) || kg < 30 || kg > 200) { avviso("Inserisci un peso valido in kg."); return; }
-  const pesi = leggiPesi().filter(p => p.data !== data); // una pesata per giorno
-  pesi.push({ data, kg: Math.round(kg * 10) / 10 });
-  salvaPesi(pesi);
-  // Il profilo segue la media degli ultimi 7 giorni (per le proteine in g/kg)
-  const mm = mediaMobile(leggiPesi());
-  const pf = leggiProfilo();
-  pf.peso = Math.round(mm[mm.length - 1].kg * 10) / 10;
-  salvaProfilo(pf);
-  rirenderAndamento();
-  avviso(`Peso salvato: ${fmtKg(kg)} kg`);
+  const kg1 = Math.round(kg * 10) / 10;
+  const registra = () => {
+    const pesi = leggiPesi().filter(p => p.data !== data); // una pesata per giorno
+    pesi.push({ data, kg: kg1 });
+    salvaPesi(pesi);
+    aggiornaPesoProfilo();
+    rirenderAndamento();
+    avviso(`Peso salvato: ${fmtKg(kg1)} kg`);
+  };
+  // più di 3 kg di differenza dall'ultima pesata: quasi sempre una cifra sbagliata, si chiede prima di salvare
+  const altre = leggiPesi().filter(p => p.data !== data), ultima = altre[altre.length - 1];
+  const diff = ultima ? Math.round((kg1 - ultima.kg) * 10) / 10 : 0;
+  if (Math.abs(diff) > 3) {
+    const sheet = document.querySelector(".modal-sheet"), sc = sheet ? sheet.scrollTop : 0;
+    const torna = () => { apriAndamento(); const s2 = document.querySelector(".modal-sheet"); if (s2) s2.scrollTop = sc; };
+    const f = (x) => String(x).replace(".", ",");
+    chiediConferma(`${f(kg1)} kg: ${diff > 0 ? "+" : "−"}${f(Math.abs(diff))} kg dall'ultima pesata. È giusto?`, `L'ultima pesata (${fmtData(ultima.data)}) era ${fmtKg(ultima.kg)} kg.`, "Sì, salva",
+      () => { torna(); registra(); }, torna);
+    return;
+  }
+  registra();
 }
 function eliminaPesata(data) {
   const prima = leggiPesi();
   salvaPesi(prima.filter(p => p.data !== data));
+  aggiornaPesoProfilo();   // il peso del Profilo si ricalcola dalle pesate rimaste
   rirenderAndamento();
-  avviso(`Pesata del ${fmtData(data)} eliminata`, "Annulla", () => { salvaPesi(prima); rirenderAndamento(); });
+  avviso(`Pesata del ${fmtData(data)} eliminata`, "Annulla", () => { salvaPesi(prima); aggiornaPesoProfilo(); rirenderAndamento(); });
 }
 
 // ================== Backup ==================
@@ -2358,10 +2469,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (wiz) { azioneWizard(wiz.dataset.wiz, wiz.dataset.idx, wiz.dataset.k); return; }
     const sdel = e.target.closest("[data-sport-del]");
     if (sdel) {
+      // lo sport non si cancella: diventa «nascosto» (sparisce dalle scelte), così i giorni passati tengono obiettivi e statistiche
       const idSport = sdel.dataset.sportDel, nomeSport = (leggiProfilo().sport.find(x => x.id === idSport) || {}).nome || "lo sport";
-      chiediConferma(`Togliere ${nomeSport}?`, "", "Togli", () => {
-        const pf = leggiProfilo(); pf.sport = pf.sport.filter(x => x.id !== idSport); pf.sportTolti = [...new Set((pf.sportTolti || (pf.corsaTolta ? ["corsa"] : [])).concat(idSport))]; salvaProfilo(pf); apriProfilo(); if (typeof renderOggi === "function") renderOggi();
-      }, () => apriProfilo());
+      const sheet = document.querySelector(".modal-sheet"), sc = sheet ? sheet.scrollTop : 0;
+      const tipi = leggiTipi(), senza = (t) => { const parti = String(VECCHI_TIPI[t] || t).split("+").filter(x => x && x.split(":")[0] !== idSport); return parti.length ? parti.join("+") : "riposo"; };
+      const giorniUsa = tipi.map((t, i) => sportDelTipo(t).includes(idSport) ? i : -1).filter(i => i >= 0);
+      // nella settimana tipo quei giorni diventano riposo (se c'era anche un altro sport, resta quello)
+      const cosaDiventa = giorniUsa.map(i => { const k = senza(tipi[i]); return `${GIORNI[i].toLowerCase()} ${k === "riposo" ? "diventa riposo" : `resta ${TIPI_GIORNATA[k].label}`}`; });
+      const nota = (giorniUsa.length ? `Nella settimana tipo: ${cosaDiventa.join(", ")}. ` : "") + "I giorni passati non cambiano.";
+      chiediConferma(`Togliere ${nomeSport}?`, nota, "Togli", () => {
+        const pf = leggiProfilo(), sp = pf.sport.find(x => x.id === idSport); if (sp) sp.nascosto = true;
+        if (giorniUsa.length) {
+          // i giorni passati senza tipo salvato seguivano la settimana tipo: si fissano com'erano prima di cambiarla
+          const oggi = oggiISO(), d = leggiDiario(); let cambiato = false;
+          Object.keys(d).forEach(data => { if (data < oggi && d[data] && !d[data].tipo && giorniUsa.includes(indiceSettimana(data))) { d[data].tipo = tipi[indiceSettimana(data)]; cambiato = true; } });
+          if (cambiato) salvaDiario(d);
+          salvaTipi(tipi.map((t, i) => giorniUsa.includes(i) ? senza(t) : t));
+        }
+        salvaProfilo(pf); riapriProfilo(sc); if (typeof renderOggi === "function") renderOggi();
+      }, () => riapriProfilo(sc));
       return;
     }
     const sd = e.target.closest("[data-spesa-del]");
@@ -2391,7 +2517,9 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "sport-aggiungi") {
         const nome = (document.getElementById("nuovo-sport-nome").value || "").trim();
         if (!nome) { avviso("Scrivi il nome dello sport."); return; }
-        const pf = leggiProfilo();
+        const pf = leggiProfilo(), uguale = pf.sport.find(x => String(x.nome).trim().toLowerCase() === nome.toLowerCase());
+        if (uguale && !uguale.nascosto) { avviso("C'è già uno sport con questo nome"); return; }
+        if (uguale) { delete uguale.nascosto; salvaProfilo(pf); riapriProfilo(); avviso(`${uguale.nome} è di nuovo tra i tuoi sport`); return; }   // era stato tolto: torna com'era (stesso id, i giorni passati restano collegati)
         let id = slug(nome) || "sport"; while (pf.sport.some(x => x.id === id)) id += "2";
         pf.sport.push({ id, nome: nome.charAt(0).toUpperCase() + nome.slice(1), icona: document.getElementById("nuovo-sport-icona").value, kMin: +document.getElementById("nuovo-sport-intensita").value || 0.075, min: 60 });
         salvaProfilo(pf); riapriProfilo();

@@ -1776,3 +1776,26 @@ select.qta-input { padding-right: 30px; background-image: url("data:image/svg+xm
 /* niente freccette su/giù nei campi numerici */
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; }
+
+/* Profilo: riassunto degli obiettivi (una riga + tabellina dei tipi di giornata della settimana tipo) */
+.pf-riassunto { margin: 4px 0 10px; font-size: 15px; line-height: 1.45; }
+.pf-riassunto b { color: var(--accent); white-space: nowrap; }
+.pf-tabella { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.pf-tabella th { text-align: right; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 4px 4px 6px; border-bottom: 1px solid var(--line2); }
+.pf-tabella th:first-child, .pf-tabella td:first-child { text-align: left; }
+.pf-tabella td { text-align: right; padding: 7px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.pf-tabella td:first-child { white-space: normal; overflow-wrap: anywhere; }
+.pf-tabella td em { font-style: normal; color: var(--muted); font-size: 12px; }
+.pf-tabella .pf-ico { margin-right: 2px; }
+
+/* Profilo: «Non lo sai? Calcolalo» sotto il basale e il mini-calcolo */
+.bmr-link { display: block; margin: 4px 0 0; padding: 4px 0; font-size: 13.5px; }
+.bmr-link[hidden], #bmr-calc[hidden] { display: none; }
+.bmr-calc { margin-top: 8px; padding: 12px; background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r-campo); }
+.bmr-griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.bmr-griglia .et-campo .qta-input { text-align: left; }
+.bmr-ris { margin: 10px 0 8px; font-size: 15px; }
+.bmr-ris b { color: var(--accent); }
+.bmr-ris small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.bmr-calc .wiz-nav { margin-top: 6px; }
+.bmr-calc .btn[disabled] { opacity: .45; }
