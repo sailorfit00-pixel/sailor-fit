@@ -36,7 +36,8 @@ function giornoDiario(data) {
   const d = leggiDiario()[data] || {};
   return { tipo: d.tipo || tipoDefault(data), pasti: d.pasti || [], ...(d.orario ? { orario: d.orario } : {}) };
 }
-function scriviGiorno(data, g) { const d = leggiDiario(); d[data] = g; salvaDiario(d); }
+function scriviGiorno(data, g) { const ora = Date.now(); (g.pasti || []).forEach(p => { if (!p.ts) p.ts = ora; });   // quando è stato aggiunto: serve a mostrare per primo l'ultimo arrivato
+  const d = leggiDiario(); d[data] = g; salvaDiario(d); }
 // Lunedì = 0 … Domenica = 6 (come la settimana del piano)
 const indiceSettimana = (data) => (new Date(data + "T12:00").getDay() + 6) % 7;
 function tipoDefault(data) { return leggiTipi()[indiceSettimana(data)] || "riposo"; }
@@ -160,6 +161,36 @@ function adattaDatiRipristinati() {
     if (cambiato) salvaDiario(dati);
   } catch (e) {}
 }
+// «Non gradisco i peperoni»: nei dati già salvati (pasti, ricette tue, piano, varianti) diventano zucchine. Si può rifare a ogni avvio: se non c'è più niente da cambiare non fa nulla.
+const NO_ALIMENTO = { da: "Peperoni", a: "Zucchine" };
+function migraNoPeperoni() {
+  const testoVecchio = /Manzo saltato con peperoni e riso/g, nomeNuovo = "Manzo saltato con zucchine e riso";
+  // 1) testi salvati (ricette tue, piano, varianti, in casa): si sostituisce il nome dell'alimento e della ricetta
+  ["mp_ricette_custom", "mp_piano", "mp_varianti", "mp_incasa", "mp_incasa_q", "mp_ricette"].forEach(k => {
+    try {
+      const t = localStorage.getItem(k); if (!t) return;
+      const n = t.replace(/"Peperoni"/g, '"Zucchine"').replace(testoVecchio, nomeNuovo);
+      if (n !== t) localStorage.setItem(k, n);
+    } catch (e) {}
+  });
+  // 2) diario: gli ingredienti «Peperoni» diventano «Zucchine» (se ci sono già si sommano), i macro si ricalcolano, i nomi si aggiornano
+  try {
+    const dati = leggiDiario(); let cambiato = false;
+    Object.values(dati).forEach(g => (g && g.pasti || []).forEach(p => {
+      if (!p || !Array.isArray(p.ingredienti) || !p.ingredienti.some(i => i && i.nome === NO_ALIMENTO.da)) { if (p && p.nome && p.nome.includes("Manzo saltato con peperoni e riso")) { p.nome = p.nome.replace(testoVecchio, nomeNuovo); cambiato = true; } return; }
+      p.ingredienti.forEach(i => { if (i.nome === NO_ALIMENTO.da) { i.nome = NO_ALIMENTO.a; if (i.cercato) i.cercato = NO_ALIMENTO.a; } });
+      const unite = [];
+      p.ingredienti.forEach(i => { const e = unite.find(x => x.nome === i.nome && (x.unita || "g") === (i.unita || "g")); if (e) e.qta = (+e.qta || 0) + (+i.qta || 0); else unite.push(i); });
+      p.ingredienti = unite;
+      if (p.ricetta === "Manzo saltato con peperoni e riso") p.ricetta = nomeNuovo;
+      if (p.nome) p.nome = p.nome.replace(testoVecchio, nomeNuovo);
+      aggiornaMacro(p);
+      if (!p.ricetta && typeof rinominaLibero === "function") rinominaLibero(p);   // i pasti scritti da te: il nome segue gli ingredienti
+      cambiato = true;
+    }));
+    if (cambiato) salvaDiario(dati);
+  } catch (e) {}
+}
 function migraNomiRicette() {
   const A = window.ALIAS_RICETTE || {}; if (!Object.keys(A).length) return;
   let cambiato = false;
@@ -206,7 +237,7 @@ function ideeBloccoHTML(c, titolo, escludiIdx = null) {
 function caricaItemiVivi(data, momento) {
   const g = giornoDiario(data), items = [], gruppi = [];
   const mappa = (p, grp) => (p.ingredienti || []).filter(x => (window.ALIMENTI || {})[x.nome] && grammiIng(x) > 0)
-    .map(x => Object.assign({ nome: x.nome, qta: Math.round(grammiIng(x) * 10) / 10, lock: true, cercato: x.cercato, grp }, x.vis ? { unita: x.vis } : {}));
+    .map(x => Object.assign({ nome: x.nome, qta: Math.round(grammiIng(x) * 10) / 10, lock: true, cercato: x.cercato, grp, t: +x.t || +p.ts || 0 }, x.vis ? { unita: x.vis } : {}));
   const lib = g.pasti.find(p => p.pasto === momento && !p.ricetta);
   if (lib) items.push(...mappa(lib, null));
   let n = 0;
@@ -233,9 +264,11 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
     // ogni modifica alle righe va subito nel diario: il piatto libero e ogni ricetta del momento; senza righe un piatto sparisce
     commit: (c) => {
       const gg = giornoDiario(data), A = window.ALIMENTI || {};
-      const riga = (x) => Object.assign({ nome: x.nome, qta: Math.round(x.qta * 10) / 10, unita: "g", lock: true, cercato: x.cercato || x.nome }, x.unita && x.unita !== "g" ? { vis: x.unita } : {});   // vis = l'unità con cui l'hai scritto (pz, cucchiaio…)
+      const riga = (x) => Object.assign({ nome: x.nome, qta: Math.round(x.qta * 10) / 10, unita: "g", lock: true, cercato: x.cercato || x.nome }, x.unita && x.unita !== "g" ? { vis: x.unita } : {}, x.t ? { t: x.t } : {});   // vis = l'unità con cui l'hai scritto (pz, cucchiaio…)
+      const senzaT = ({ t, ...r }) => r;   // l'ora non conta per capire se una riga è cambiata
       const norm = (p) => JSON.stringify((p.ingredienti || []).filter(i => A[i.nome] && grammiIng(i) > 0).map(i => Object.assign({ nome: i.nome, qta: Math.round(grammiIng(i) * 10) / 10, unita: "g", lock: true, cercato: i.cercato || i.nome }, i.vis ? { vis: i.vis } : {})));
       let cambiato = false, struttura = false;
+      const oraAgg = Date.now(); c.items.forEach(x => { if (x.t == null) x.t = oraAgg; });   // le righe appena aggiunte portano l'ora: in "Già mangiato" l'ultima va in cima
       // piatto libero
       const righeLib = c.items.filter(x => x.grp == null && +x.qta > 0 && A[x.nome]).map(riga);
       const k = gg.pasti.findIndex(p => p.pasto === c.pasto && !p.ricetta);
@@ -243,14 +276,14 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
       else {
         let p = k >= 0 ? gg.pasti[k] : null;
         if (!p) { p = { nome: "", pasto: c.pasto, passaggi: [], ingredienti: righeLib }; gg.pasti.push(p); rinominaLibero(p); cambiato = true; struttura = true; }
-        else if (norm(p) !== JSON.stringify(righeLib)) { p.ingredienti = righeLib; rinominaLibero(p); cambiato = true; }
+        else if (norm(p) !== JSON.stringify(righeLib.map(senzaT))) { p.ingredienti = righeLib; rinominaLibero(p); cambiato = true; }
       }
       // ricette: i gruppi si riconoscono dall'ordine tra i piatti-ricetta del momento
       const ric = gg.pasti.filter(p => p.pasto === c.pasto && p.ricetta);
       ric.forEach((p, n) => {
         const righe = c.items.filter(x => x.grp === n && +x.qta > 0 && A[x.nome]).map(riga);
         if (!righe.length) { gg.pasti.splice(gg.pasti.indexOf(p), 1); cambiato = true; struttura = true; return; }
-        if (norm(p) === JSON.stringify(righe)) return;
+        if (norm(p) === JSON.stringify(righe.map(senzaT))) return;
         const rimasti = (p.ingredienti || []).filter(i => !A[i.nome] || grammiIng(i) <= 0);   // q.b. e simili restano com'erano
         p.ingredienti = righe.concat(rimasti);
         const ricettaPrima = p.ricetta, nPrima = p.nPezzi;
@@ -289,7 +322,7 @@ function cambiaPezziViva(n, delta) {
   const g = giornoDiario(c.data), p = g.pasti.filter(x => x.pasto === c.pasto && x.ricetta)[n], r = p && pastoRicettaIntatta(p);
   if (!r) return;
   const passo = passoPezzi(r._orig), singola = !(r._orig.porzioni > 1);
-  const nuovo = Math.max(passo, p.nPezzi + delta * passo);
+  const nuovo = prossimoPasso(p.nPezzi, delta, passo);   // anche i pasti vecchi con ¼ tornano su multipli di mezza porzione
   if (nuovo === p.nPezzi) return;
   if (singola) {
     const f = nuovo / p.nPezzi;
@@ -374,13 +407,13 @@ function cambiaPezzi(delta) {
   const c = liberoCtx, r = c && ricettaAPezzi(c.ricetta);
   if (!r || !c.nPezzi) return;
   const passo = passoPezzi(r._orig);
-  if (!(r._orig.porzioni > 1)) {   // ricetta singola: da 1 porzione adattata si scende o sale di ¼ (senza limite), scalando le quantità di ora
-    const k2 = Math.max(0.25, c.nPezzi + delta * 0.25);
+  if (!(r._orig.porzioni > 1)) {   // ricetta singola: da 1 porzione adattata si scende o sale di ½ (senza limite), scalando le quantità di ora
+    const k2 = prossimoPasso(c.nPezzi, delta, passo);   // sempre su multipli di mezza porzione
     if (k2 === c.nPezzi) return;
     c.items = scalaSingola(c, r, k2); c.nPezzi = k2; c.nome = nomeRicettaConPezzi(r, k2);
     rirenderLibero(); return;
   }
-  const k = Math.max(passo, c.nPezzi + delta * passo);
+  const k = prossimoPasso(c.nPezzi, delta, passo);
   const m = versioneAPezzi(r._orig, k);
   const nomiRicetta = new Set(r._orig.ingredienti.map(i => i.nome));
   const extra = c.items.filter(x => !nomiRicetta.has(x.nome)); // es. mirtilli aggiunti ai pancake
@@ -403,15 +436,16 @@ function usaRicettaNellEditor(nomeRicetta) {
 
 // Avviso temporaneo in basso, con un'azione facoltativa (es. Annulla)
 let _toastTimer = null;
-function mostraToast(testo, etichetta, azione, tutto) {
+function mostraToast(testo, etichetta, azione, tutto, extra) {   // extra: un secondo tasto (rosso) che chiude e basta, es. «Annulla» accanto a «Cambia»
   let t = document.getElementById("toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; document.body.appendChild(t); }
-  t.innerHTML = `<span>${esc(testo)}</span>${etichetta ? `<button>${esc(etichetta)}</button>` : ""}`;
+  t.innerHTML = `<span>${esc(testo)}</span>${etichetta ? `<button${etichetta === "Annulla" ? ' class="t-rosso"' : ""}>${esc(etichetta)}</button>` : ""}${extra ? `<button class="t-rosso" data-t-extra>${esc(extra)}</button>` : ""}`;
   t.classList.add("on");
   const chiudi = () => { t.classList.remove("on"); clearTimeout(_toastTimer); };
   t.onclick = null; t.classList.toggle("tocca", !!(tutto && azione));
   if (tutto && azione) t.onclick = () => { chiudi(); azione(); };           // tutto il banner è un tasto
   else if (etichetta) t.querySelector("button").onclick = () => { chiudi(); azione && azione(); };
+  const ex = t.querySelector("[data-t-extra]"); if (ex) ex.onclick = () => chiudi();
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(chiudi, 5000);
 }
@@ -793,7 +827,7 @@ const PIATTI_COMPOSTI = {
     { P: "Merluzzo", C: "Quinoa cotta", F: "Olio EVO", V: ["Broccoli", 200] },
     { P: "Nasello", C: "Couscous cotto", F: "Avocado", V: ["Insalata", 100] },
     { P: "Gamberi", C: "Riso basmati cotto", F: "Olio EVO", V: ["Fagiolini", 200] },
-    { P: "Tofu", C: "Quinoa cotta", F: "Olio EVO", V: ["Peperoni", 200] },
+    { P: "Tofu", C: "Quinoa cotta", F: "Olio EVO", V: ["Zucchine", 200] },
     { P: "Petto di pollo", C: "Patate lesse", F: "Avocado", V: ["Insalata", 100] },
     { P: "Merluzzo", C: "Riso basmati cotto", F: "Olio EVO", V: ["Pomodoro", 150] },
   ],
@@ -1289,11 +1323,11 @@ function renderOggi() {
     if (inseriti.length) {
       const kcal = inseriti.reduce((a, x) => a + (x.p.kcal || 0), 0);
       const nomi = inseriti.map(x => nomeVisibile(x.p)).join(", ");
-      return `<div class="pasto-gruppo ${data >= oggiISO() && !pastoPassato(data, momento) ? "auto" : ""}" data-momento="${momento}">
+      return `<div class="pasto-gruppo ${data >= oggiISO() && !pastoPassato(data, momento) ? "auto" : ""}${pastoPassato(data, momento) ? " passato" : ""}" data-momento="${momento}">
         <button class="pasto-riga fatto" data-oggi-momento="${momento}">
         <span class="pr-icona">${ICONA_PASTO[momento]}</span>
         <span class="pr-testo"><small>${etichettaMomento(data, momento)}</small><b class="pr-nomi">${esc(nomi)}</b></span>
-        <span class="pr-kcal">${Math.round(kcal)}<small> kcal</small></span><span class="pr-check" aria-label="registrato">✓</span></button>
+        <span class="pr-kcal">${Math.round(kcal)}<small> kcal</small></span><span class="pr-check" aria-label="registrato"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M6.2 11.4l3.3 3.3 6.3-6.9" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
       </div>`;
     }
     const next = momento === prox;
@@ -1328,7 +1362,8 @@ function renderOggi() {
           if (data < oggiISO()) return "";
           const vuoto = momentiGiorno(data).some(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s));
           if (vuoto) return `<button class="btn-link" data-compila-giorno>✨ Compila i pasti ${data === oggiISO() ? "di oggi" : "del giorno"}</button>`;
-          return g.pasti.some(x => !pastoPassato(data, x.pasto)) ? `<button class="btn-link" data-rigenera-giorno>✨ Cambia menu del giorno</button>` : "";
+          if (!g.pasti.some(x => !pastoPassato(data, x.pasto))) return "";
+          return `<button class="btn-link btn-cambia" data-rigenera-giorno>♺︎ Cambia menu del giorno</button>`;
         })()}
       </div>
     </div>
@@ -1420,6 +1455,7 @@ const vistaCorrente = () => "oggi";
 
 document.addEventListener("DOMContentLoaded", () => {
   adattaDatiRipristinati();
+  try { migraNoPeperoni(); } catch (e) {}
   try { migraNomiRicette(); } catch (e) {}
   mostraVista("oggi");
   document.querySelectorAll("[data-vista]").forEach(b => b.addEventListener("click", () => mostraVista(b.dataset.vista)));
@@ -1457,10 +1493,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const mom = e.target.closest("[data-oggi-momento]");
     if (mom) { apriPastoDiario(dataDiario, null, mom.dataset.oggiMomento); return; }
     if (e.target.closest("[data-rigenera-giorno]")) {
-      const r = rigeneraGiorno(dataDiario);
-      renderOggi();
-      if (!r.messe) { avviso("Nessuna alternativa che stia nei tuoi valori", "", () => {}); return; }
-      avviso("✓ Pasti cambiati", "Annulla", () => { annullaPianificazione(r.prima); renderOggi(); });
+      // sostituisce tutti i pasti non ancora passati (anche quelli scritti da te): spunta un pannello dal basso con «Annulla» / «Cambia», perché ci si finisce per sbaglio subito dopo «Compila i pasti»
+      const giorno = dataDiario;
+      chiediConferma("Cambiare il menu?", "Sostituisce i pasti non ancora passati", "Cambia", () => {
+        if (dataDiario !== giorno) return;
+        const r = rigeneraGiorno(dataDiario);
+        renderOggi();
+        if (!r.messe) { avviso("Nessuna alternativa che stia nei tuoi valori", "", () => {}); return; }
+        avviso("✓ Pasti cambiati", "Annulla", () => { annullaPianificazione(r.prima); renderOggi(); });
+      });
       return;
     }
     if (e.target.closest("[data-compila-giorno]")) {
@@ -1494,6 +1535,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const gd = e.target.closest("[data-grp-del]");
     if (gd) { togliRicettaViva(+gd.dataset.grpDel); return; }
     const vt = e.target.closest("[data-voce-toggle]");
+    if (vt && e.target.closest("[data-lib-avv],[data-lib-del]")) return;   // il ⚠ ha il suo comando: non apre la scheda
     if (vt && liberoCtx && liberoCtx.vociAperte) { const nm = vt.dataset.voceToggle, A = liberoCtx.vociAperte; A.has(nm) ? A.delete(nm) : A.add(nm); rirenderLibero(); return; }
     const gt = e.target.closest("[data-grp-toggle]");
     if (gt && liberoCtx && liberoCtx.gruppiAperti) { const n = +gt.dataset.grpToggle, A = liberoCtx.gruppiAperti; A.has(n) ? A.delete(n) : A.add(n); rirenderLibero(); return; }   // un tocco sul riquadro: apre o chiude gli ingredienti

@@ -12,9 +12,9 @@ const SWIPE_RIGHE = [
   [".wiz-ing", via(".lib-del")],
   [".wiz-step", via(".lib-del")],
   [".lista-pesi li", via("[data-peso-del]")],
-  [".pm-ricetta > .pm-testa", via("[data-grp-del]")],   // la scheda di una ricetta nel pasto: swipe a sinistra = toglie tutto il piatto (con Annulla)
-  [".lib-voce-testa", via("[data-lib-del]")],   // la scheda di un ingrediente scritto a mano: swipe a sinistra = lo toglie (con Annulla)
-  [".pasto-riga.fatto", (r) => () => eliminaPastoMomento(r.dataset.oggiMomento)],   // il riquadro del pasto in Oggi: solo il cestino
+  [".pm-sezione:not(.bloccato) .pm-ricetta:not(.aperto)", via("[data-grp-del]")],   // la scheda di una ricetta nel pasto, da chiusa (tutto il riquadro): swipe a sinistra = toglie tutto il piatto (con Annulla). Aperta ha già i cestini degli ingredienti
+  [".pm-sezione:not(.bloccato) .lib-voce:not(.aperta)", via("[data-lib-del]")],   // la scheda di un ingrediente scritto a mano, da chiusa (tutto il riquadro): swipe a sinistra = lo toglie (con Annulla). Aperta ha il suo cestino
+  [".pasto-gruppo:not(.passato) .pasto-riga.fatto", (r) => () => eliminaPastoMomento(r.dataset.oggiMomento)],   // il riquadro del pasto in Oggi: solo il cestino (un pasto passato non si toglie da qui)
   [".lib-furbo[data-furbo-k]", (r) => () => scartaSuggerimento(r.dataset.furboK)],   // un suggerimento che non ti va: swipe a sinistra e ne arriva un altro
   ["#lista-ricette .riga-ricetta", (r) => r.dataset.nome ? () => eliminaRicetta(r.dataset.nome) : null],
 ];

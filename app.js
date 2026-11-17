@@ -126,6 +126,8 @@ function tipoInfo(chiave) {
     range: `${kcal - 50}–${kcal + 50}`,
   });
 }
+// Il tipo di giornata come rettangoli: uno per sport (icona + nome), affiancati, e un ＋ per aggiungerne; senza sport, «Riposo»
+const tipoSportHTML = (t) => `<span class="tipo-sport">${t.sport && t.sport.length ? t.sport.map(sp => `<span class="tipo-chip">${sp.icona} ${esc(sp.nome)}</span>`).join("") : `<span class="tipo-chip">${t.icone} ${esc(t.label)}</span>`}<span class="tipo-chip tipo-piu" aria-label="Aggiungi o cambia sport">＋</span></span>`;
 // Compatibilità: TIPI_GIORNATA[chiave] restituisce le info di qualsiasi combinazione di sport;
 // l'elenco (Object.entries) contiene riposo, ogni sport da solo e le combinazioni della settimana tipo.
 const TIPI_GIORNATA = new Proxy({}, {
@@ -211,7 +213,7 @@ function leggiRigaIngrediente(riga) {
     .replace(/^(\d+(?:[.,]\d+)?)?\s*fett[ae]\s+(?:di\s+)?(pane.*)$/, (m, n, c) => `${Math.round(nn(n) * 30)} g ${c}`)
     .replace(/^(\d+(?:[.,]\d+)?)?\s*(?:foglie|foglia|rametti|rametto|ciuff[io]|mazzett[io])\s+(?:di\s+)?(.+)$/, (m, n, c) => `${c} q.b.`);
   let qta = null, unita = null;
-  const numRe = "(\\d+(?:[.,]\\d+)?|\\d+\\/\\d+|[½¼¾])";
+  const numRe = "(\\d+\\/\\d+|\\d+(?:[.,]\\d+)?|[½¼¾])";   // la frazione prima del numero semplice: «1/2» non deve leggersi «1»
   const unitaDa = (u) => { const s = SINONIMI_UNITA.find(([re]) => re.test(u)); return s ? s : null; };
   // numero (+ unità) all'inizio: "120 farina", "100gr albume", "1 cucchiaio di yogurt"
   let m = t.match(new RegExp("^" + numRe + "\\s*([a-zà-ù.]+)?\\s*(.*)$"));
@@ -261,8 +263,10 @@ function ingredientiPerPezzi(orig, k) {
     return { nome: i.nome, qta: Math.round(grammiIng(i) / n * k), unita: i.unita === "ml" ? "ml" : "g" };
   });
 }
-// Di quanto cambia il contatore: pezzi con nome (fetta, pancake…) di 1; teglia senza nome del pezzo di ½; ricetta singola ("1 porzione") di ¼
-function passoPezzi(orig) { return orig.pezzo && orig.pezzo !== "porzione" ? 1 : (orig.porzioni > 1 ? 0.5 : 0.25); }
+// Di quanto cambia il contatore: pezzi con nome (fetta, pancake…) di 1; teglia senza nome del pezzo di ½; ricetta singola ("1 porzione") di ½
+function passoPezzi(orig) { return orig.pezzo && orig.pezzo !== "porzione" ? 1 : 0.5; }   // mezze porzioni: i quarti erano troppo fini
+// il prossimo multiplo del passo, in su o in giù (un vecchio ¼ passa al ½ più vicino)
+const prossimoPasso = (cur, delta, passo) => Math.max(passo, (delta > 0 ? Math.floor(cur / passo + 1e-9) + 1 : Math.ceil(cur / passo - 1e-9) - 1) * passo);
 function kcalPerPezzo(orig) { return calcolaMacro({ ingredienti: ingredientiPerPezzi(orig, 1) }).kcal || 1; }
 // Quanti pezzi per avvicinarsi a `kcal` (interi, o mezze porzioni se è una "porzione")
 function pezziPer(orig, kcal) {
@@ -1404,6 +1408,13 @@ function closeModal() {
   contestoAgg = null;   // il "dove aggiungere le ricette" non sopravvive alla chiusura del pannello
   if (typeof liberoCtx !== "undefined") liberoCtx = null;
 }
+// Pannello di conferma dal basso (titolo, nota grigia, «Annulla» rosso e il tasto verde che esegue): per le azioni che cancellano o sostituiscono dati
+function chiediConferma(titolo, nota, etichettaSi, azione, indietro) {
+  openModal(`<h3 class="modal-title">${esc(titolo)}</h3>${nota ? `<p class="hint">${esc(nota)}</p>` : ""}
+    <div class="wiz-nav"><button class="btn-sec danger" data-cf-no>Annulla</button><button class="btn" data-cf-si>${esc(etichettaSi)}</button></div>`);
+  document.querySelector("[data-cf-no]").onclick = () => { if (indietro) indietro(); else closeModal(); };
+  document.querySelector("[data-cf-si]").onclick = () => { closeModal(); azione(); };
+}
 
 // Apre una ricetta in sola lettura (dall'elenco "Tutte le ricette")
 function apriRicetta(nomeOrSlug, daLista) {
@@ -1790,9 +1801,16 @@ function apriMenu() {
       ${voce("vai-spesa", "🛒", "Lista della spesa", "")}
       ${voce("vai-ricette", "📖", "Ricette", `${contaRicetteUniche()}`)}
       ${voce("profilo", "👤", "Profilo", "")}
-      ${voce("esporta", "💾", "Salva backup", "", true)}
-      ${voce("ripristina", "↺", "Ripristina backup", "", true)}
+      ${voce("backup", "💾", "Backup", "")}
     </div>
+  `);
+}
+function apriBackup() {
+  editCtx = null;
+  openModal(`
+    <h3 class="modal-title">💾 Backup</h3>
+    <button class="btn block" data-azione="esporta">💾 Salva</button>
+    <button class="btn-sec block" data-azione="ripristina">↺ Ripristina</button>
   `);
 }
 
@@ -1802,7 +1820,7 @@ const ICONE_SPORT = ["🏃‍♀️", "🚴‍♀️", "🏊‍♀️", "🧘‍
 const CAMPI_PROFILO = [
   ["peso", "Peso (kg)", 0.1], ["bmr", "Basale (kcal)", 10],
   ["deficit", "Deficit (%)", 1],
-  ["recupero", "Allenamento reintegrato (%)", 5],
+  ["recupero", "Allenamento reintegrato (%)", 5, "Calorie bruciate che rimangi (100% = tutte)"],
   ["protKg", "Proteine (g/kg)", 0.1], ["grassiKg", "Grassi (g/kg)", 0.1],
 ];
 // Perdita di peso attesa a settimana con la settimana tipo attuale (7700 kcal ≈ 1 kg)
@@ -1822,7 +1840,7 @@ function apriProfilo() {
   openModal(`
     <h3 class="modal-title">👤 Profilo</h3>
     <div id="form-profilo">
-      ${CAMPI_PROFILO.map(([k, l, st]) => `<label class="wiz-l">${l}</label>
+      ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
         <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" data-profilo="${k}" value="${pf[k]}">`).join("")}
     </div>
     <h4>I tuoi sport</h4>
@@ -1838,10 +1856,9 @@ function apriProfilo() {
     </div>
     <h4>La tua settimana tipo</h4>
     <div class="sett-tipo">${["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"].map((n, i) => { const t = TIPI_GIORNATA[leggiTipi()[i]]; return `<div class="st-riga"><span>${n}</span>
-      <button class="tipo-btn" data-scegli-allen-sett="${i}">${t.icone} ${esc(t.label)} <span class="caret">▾</span></button></div>`; }).join("")}</div>
+      <button class="tipo-btn" data-scegli-allen-sett="${i}">${tipoSportHTML(t)} <span class="caret">▾</span></button></div>`; }).join("")}</div>
     <h4>Obiettivi che ne risultano</h4>
     <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
-    <button class="btn-link" data-azione="profilo-default" aria-label="Torna ai valori iniziali">↺</button>
 `);
 }
 // ridisegna il profilo restando allo stesso punto della pagina
@@ -1968,12 +1985,13 @@ function ripristinaBackup(testo) {
   let b;
   try { b = JSON.parse(testo); } catch (e) { avviso("File non valido."); return; }
   if (!b || b.app !== "piano-pasti" || typeof b.dati !== "object") { avviso("Questo file non è un backup di Sailor Fit."); return; }
-  const quando = b.creato ? new Date(b.creato).toLocaleString("it-IT") : "data sconosciuta";
-  if (!confirm(`Ripristinare il backup del ${quando}?\nI dati attuali sull'app verranno sostituiti.`)) return;
-  Object.keys(localStorage).filter(k => k.startsWith("mp_")).forEach(k => localStorage.removeItem(k));
-  Object.entries(b.dati).forEach(([k, v]) => { if (k.startsWith("mp_") && k !== "mp_adatta" && k !== "mp_storico") localStorage.setItem(k, v); });
-  localStorage.setItem("mp_adatta", "1");   // al riavvio i dati vecchi si adattano alla versione nuova
-  location.reload();
+  const quando = b.creato ? new Date(b.creato).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "data sconosciuta";
+  chiediConferma("Ripristinare il backup?", `Del ${quando}: i dati attuali verranno sostituiti`, "Ripristina", () => {
+    Object.keys(localStorage).filter(k => k.startsWith("mp_")).forEach(k => localStorage.removeItem(k));
+    Object.entries(b.dati).forEach(([k, v]) => { if (k.startsWith("mp_") && k !== "mp_adatta" && k !== "mp_storico") localStorage.setItem(k, v); });
+    localStorage.setItem("mp_adatta", "1");   // al riavvio i dati vecchi si adattano alla versione nuova
+    location.reload();
+  });
 }
 
 // Ripristina il ricettario di partenza
@@ -2181,9 +2199,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const wiz = e.target.closest("[data-wiz]");
     if (wiz) { azioneWizard(wiz.dataset.wiz, wiz.dataset.idx, wiz.dataset.k); return; }
     const sdel = e.target.closest("[data-sport-del]");
-    if (sdel) { const pf = leggiProfilo(); pf.sport = pf.sport.filter(x => x.id !== sdel.dataset.sportDel); pf.sportTolti = [...new Set((pf.sportTolti || (pf.corsaTolta ? ["corsa"] : [])).concat(sdel.dataset.sportDel))]; salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi(); return; }
+    if (sdel) {
+      const idSport = sdel.dataset.sportDel, nomeSport = (leggiProfilo().sport.find(x => x.id === idSport) || {}).nome || "lo sport";
+      chiediConferma(`Togliere ${nomeSport}?`, "", "Togli", () => {
+        const pf = leggiProfilo(); pf.sport = pf.sport.filter(x => x.id !== idSport); pf.sportTolti = [...new Set((pf.sportTolti || (pf.corsaTolta ? ["corsa"] : [])).concat(idSport))]; salvaProfilo(pf); apriProfilo(); if (typeof renderOggi === "function") renderOggi();
+      }, () => apriProfilo());
+      return;
+    }
     const sd = e.target.closest("[data-spesa-del]");
-    if (sd) { salvaExtraSpesa(leggiExtraSpesa().filter(x => x !== sd.dataset.spesaDel)); renderSpesa(); return; }
+    if (sd) {
+      const nomeVoce = sd.dataset.spesaDel, prima = leggiExtraSpesa();
+      salvaExtraSpesa(prima.filter(x => x !== nomeVoce)); renderSpesa();
+      avviso(`Tolto: ${nomeVoce.toLowerCase()}`, "Annulla", () => { salvaExtraSpesa(prima); renderSpesa(); });   // si rimedia con un tocco, come per pasti e ingredienti
+      return;
+    }
     const elim = e.target.closest("[data-elimina]");
     if (elim) { eliminaRicetta(elim.dataset.elimina); return; }
     const mod = e.target.closest("[data-modifica]");
@@ -2194,7 +2223,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (az) {
       if (az.dataset.azione === "scarica") scaricaRicettario();
       else if (az.dataset.azione === "importa") { const f = document.getElementById("file-csv"); f.value = ""; f.click(); closeModal(); }
-      else if (az.dataset.azione === "reset") { ricaricaRicettario(); closeModal(); }
+      else if (az.dataset.azione === "reset") chiediConferma("Ripristinare il ricettario?", "Tornano le ricette di partenza", "Ripristina", () => ricaricaRicettario());
       else if (az.dataset.azione === "nuova") apriWizard();
       else if (az.dataset.azione === "profilo") apriProfilo();
       else if (az.dataset.azione === "spesa-aggiungi") aggiungiVoceSpesa();
@@ -2216,6 +2245,7 @@ document.addEventListener("DOMContentLoaded", () => {
         aggiornaAnteprimaProfilo();
       }
       else if (az.dataset.azione === "peso-salva") salvaPesata();
+      else if (az.dataset.azione === "backup") apriBackup();
       else if (az.dataset.azione === "esporta") esportaBackup();
       else if (az.dataset.azione === "ripristina") { const f = document.getElementById("file-backup"); f.value = ""; f.click(); closeModal(); } // prima si apre la scelta del file, poi si chiude il pannello
       return;

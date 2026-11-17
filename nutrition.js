@@ -680,6 +680,7 @@ const ALIMENTI_ELABORATI = {
   "Yogurt proteico": [65, 10, 4, 0.5, 4, 0, 0, 0.1],
   "Budino proteico": [75, 10, 6, 1.5, 5, 3, 0.5, 0.2],
   "Latte proteico": [50, 6, 5, 0.5, 5, 0, 0, 0.1],
+  "Latte proteico Lidl": [53, 8, 5, 0.1, 5, 0, 0, 0.1],   // scremato UHT senza lattosio arricchito con proteine (etichetta, per 100 ml)
   "Barretta proteica": [370, 30, 30, 12, 6, 4, 6, 0.8],
   "Gelato proteico": [90, 7, 12, 2, 6, 3, 2, 0.2],
   "Soia texturizzata": [330, 50, 30, 1, 8, 0, 13, 0.1],

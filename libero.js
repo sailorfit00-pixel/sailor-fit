@@ -167,7 +167,7 @@ function passoQuantita(it) {
 }
 // Unità di misura di un ingrediente: g (o ml), pezzi (se si contano), cucchiaio, cucchiaino.
 // La scelta si ricorda per ogni alimento (es. burro di arachidi a cucchiai).
-const UNITA_LIQUIDI = /^(latte|bevanda|kefir da bere|gin|spritz|mojito|negroni|vino|prosecco|birra|vodka|rum|tonica|coca cola|succo|spremuta|panna|aceto|salsa di soia|brodo|tè)(?![a-zà-ù])/i; // solo se il nome INIZIA così: "Fiocchi di latte", "Cioccolato al latte", "Rucola" non sono liquidi
+const UNITA_LIQUIDI = /^(latte|bevanda|kefir da bere|gin|spritz|mojito|negroni|vino|prosecco|birra|vodka|rum|tonica|coca cola|succo|spremuta|panna|aceto|salsa di soia|brodo|tè|cappuccino|caffè|cioccolata calda|energy drink|frullato|limonata)(?![a-zà-ù])/i; // solo se il nome INIZIA così: "Fiocchi di latte", "Cioccolato al latte", "Rucola" non sono liquidi
 function unitaPreferita(nome) {
   try { const u = (JSON.parse(localStorage.getItem("mp_unita")) || {})[nome]; if (u) return u; } catch (e) {}
   return window.pzPredefinito && window.pzPredefinito(nome) ? "pz" : UNITA_LIQUIDI.test(nome) ? "ml" : "g";
@@ -478,7 +478,7 @@ const POOL_SOSTITUZIONE = [
   ["Pane integrale", "Pane bianco", "Pane di segale", "Pancarrè", "Gallette di riso", "Gallette di mais", "Gallette di quinoa", "Gallette di grano saraceno", "Fette biscottate integrali", "Crackers integrali"],
   ["Latte intero", "Latte parzialmente scremato", "Latte scremato", "Bevanda di soia", "Bevanda di avena", "Bevanda di mandorla"],
 ];
-const VERDURE_CONSIGLI = ["Zucchine", "Spinaci", "Broccoli", "Insalata", "Pomodoro", "Carote", "Finocchi", "Peperoni", "Cetriolo", "Rucola", "Asparagi", "Fagiolini"];
+const VERDURE_CONSIGLI = ["Zucchine", "Spinaci", "Broccoli", "Insalata", "Pomodoro", "Carote", "Finocchi", "Cetriolo", "Rucola", "Asparagi", "Fagiolini"];
 const GRAMMI_MAX_FONTI = { "Proteine in polvere": 30, "Albume": 200, "Yogurt greco 0%": 250, "Yogurt greco intero": 200, "Fiocchi di latte": 200, "Quark magro": 250, "Ricotta": 150, "Petto di pollo": 220, "Fesa di tacchino": 200, "Merluzzo": 250, "Nasello": 250, "Branzino": 200, "Orata": 200, "Tofu": 200, "Ceci cotti": 200, "Lenticchie cotte": 200, "Uova": 220, "Salmone fresco": 180 };
 const FONTI_PROTEINE = {
   leggero: ["Yogurt greco 0%", "Fiocchi di latte", "Quark magro"],      // colazione e spuntini: latticini magri
@@ -816,6 +816,7 @@ function consigliFitHTML(c) {
   }).join("")}</div>`;
 }
 function consiglioFurboHTML(c, m) {
+  if (c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto)) return "";   // sui pasti passati niente consigli: solo su quelli ancora da venire
   const e = elencoConsigli(c, m);
   if (!e) return "";
   const riga = (a) => {
@@ -872,9 +873,15 @@ function campoAggiungiHTML(c) {
     </div>
     <div id="lib-autoc" class="lib-autoc"></div>`;
 }
+// Un pasto già passato (l'ora è trascorsa) e registrato è «bloccato»: non si toglie ciò che hai mangiato. Il lucchetto 🔒 lo sblocca (con conferma) finché l'app resta aperta.
+const pastiSbloccati = new Set();
+const chiavePastoSbl = (c) => c.data + "|" + c.pasto;
+const pastoBloccato = (c) => !!(c && c.vivo && c.items && c.items.length && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto) && !pastiSbloccati.has(chiavePastoSbl(c)));
+const pastoPassatoC = (c) => !!(c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto));
 function liberoHTML() {
   const c = liberoCtx;
   if (!c) return "";
+  const bloccato = pastoBloccato(c);   // pasto passato e registrato: solo riepilogo, niente modifiche finché non si sblocca
   if (c._ult === undefined) registraStoria(c);   // la versione di partenza del pasto, per poterci tornare
   if (c.scansione && typeof scansioneHTML === "function") return scansioneHTML(c); // fotocamera / codice a barre
   const T = c.target();
@@ -919,39 +926,58 @@ function liberoHTML() {
   const frecciaHTML = () => `<span class="pm-freccia"></span>`;   // la freccia gira da sola quando la scheda è aperta (CSS)
   const ricettaHTML = (n, htmlRighe) => {
     const gr = (c.gruppi || []).find(x => x.n === n); if (!gr) return htmlRighe;
-    const aperta = !!(c.gruppiAperti && c.gruppiAperti.has(n));
+    const aperta = !bloccato && !!(c.gruppiAperti && c.gruppiAperti.has(n));
     const rp = gr.intatta && typeof ricettaAPezzi === "function" ? ricettaAPezzi(gr.ricetta) : null;
-    const cont = rp ? `<span class="pm-contatore"><button class="nav-btn" data-grp-pz="${n}|-1" aria-label="Meno porzioni">−</button><b>${esc(String(etichettaPezzi(rp._orig, gr.nPezzi)).replace(/\s*porzion[ei]$/i, ""))}</b><button class="nav-btn" data-grp-pz="${n}|1" aria-label="Più porzioni">＋</button></span>` : "";
+    const cont = rp ? `<span class="pm-contatore pm-cont-grande"><button class="nav-btn" data-grp-pz="${n}|-1" aria-label="Meno porzioni">−</button><b>${esc(String(etichettaPezzi(rp._orig, gr.nPezzi)))}</b><button class="nav-btn" data-grp-pz="${n}|1" aria-label="Più porzioni">＋</button></span>` : "";
     const m = macroDa(c.items.filter(x => x.grp === n && x.qta > 0));
     const r0 = typeof ricettaDaNome === "function" ? ricettaDaNome(gr.ricetta) : null, o = r0 ? (r0._orig || r0) : null, passi = o && Array.isArray(o.passaggi) ? o.passaggi : [];
     return `<div class="pm-blocco pm-card pm-piatto pm-ricetta${aperta ? " aperto" : ""}" data-grp-box="${n}">
-      <div class="pasto-riga pm-testa" data-grp-t="${n}" data-grp-toggle="${n}" role="button" tabindex="0" aria-expanded="${aperta}">
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(gr.nome)}</b>${cont}${macroStileHTML(m, { senzaKcal: true })}</span>
-        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${frecciaHTML(aperta)}
+      <div class="pasto-riga pm-testa${bloccato ? " sola-lettura" : ""}" data-grp-t="${n}"${bloccato ? "" : ` data-grp-toggle="${n}" role="button" tabindex="0" aria-expanded="${aperta}"`}>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(gr.nome)}</b>${macroStileHTML(m, { senzaKcal: true })}</span>
+        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${bloccato ? "" : frecciaHTML(aperta)}
         <button class="lib-grp-del" data-grp-del="${n}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>
-      ${aperta ? `<div class="pm-dett">${htmlRighe}${passi.length ? `<ol class="pm-passi">${passi.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}${o && o.tempo ? `<div class="pm-dett-az"><span class="pm-tempo">⏱ ${o.tempo} min</span></div>` : ""}</div>` : ""}
+      ${aperta ? `<div class="pm-dett">${cont}${htmlRighe}${passi.length ? `<ol class="pm-passi">${passi.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}</div>` : ""}
     </div>`;
   };
   const voceHTML = (k) => {   // ingrediente singolo = scheda come la ricetta: ✓ nome, − N porzione +, P/C/G, kcal
     const it = c.items[k], m = macroDa([it]);
     const u = unitaDi(it), gu = grammiPerUnita(it.nome, u), conta = gu ? it.qta / gu : 0;
-    const f1 = (n) => String(Math.round(n * 10) / 10).replace(".", ",");
-    const etic = gu ? (u === "pz" ? f1(conta) : `${f1(conta)} ${u}`) : `${Math.round(it.qta)} ${UNITA_LIQUIDI.test(it.nome) ? "ml" : "g"}`;
+    const liq = UNITA_LIQUIDI.test(it.nome), ug = liq ? "ml" : "g", nm = /.[A-ZÀ-Ý]/.test(it.nome) ? it.nome.charAt(0).toLowerCase() + it.nome.slice(1) : it.nome.toLowerCase();   // le marche (Lidl) restano con la maiuscola
+    // plurale semplice per i frutti e simili in una sola parola che finisce in -a: pesca → pesche, banana → banane
+    const pl = (conta > 1 && /^[a-zà-ù]+a$/.test(nm) && nm !== "uova") ? nm.replace(/cia$/, "ce").replace(/gia$/, "ge").replace(/ca$/, "che").replace(/ga$/, "ghe").replace(/a$/, "e") : nm;   // «uova» è già plurale; arancia → arance
+    // riepilogo: «1 pesca», «150 g di yogurt greco», «2 cucchiai di burro di arachidi»; dentro la scheda c'è il contatore
+    const riepilogo = !gu ? `${Math.round(it.qta)} ${ug} di ${nm}`
+      : u === "pz" ? `${fmtQta(conta)} ${pl}`
+      : `${fmtQta(conta)} ${u === "cucchiaio" ? (conta > 1 ? "cucchiai" : "cucchiaio") : (conta > 1 ? "cucchiaini" : "cucchiaino")} di ${nm}`;
+    const ABBR = { pz: "pz", g: "g", ml: "ml", cucchiaio: "cucchiai", cucchiaino: "cucchiaini" };
+    const etic = !gu ? `${Math.round(it.qta)} ${ug}` : `${fmtQta(conta)} ${ABBR[u] || u}`;
+    const pzG = (window.PESO_PZ || {})[it.nome];
+    const opz = [...(pzG ? ["pz"] : []), ug, ...(!liq && puoUsareCucchiai(it.nome) ? ["cucchiaio", "cucchiaino"] : [])];   // una bevanda non si misura a cucchiai
+    const equiv = gu ? `≈ ${Math.round(it.qta)} ${ug}` : (pzG ? `≈ ${fmtQta(it.qta / pzG)} pz` : "");   // quanto pesa quel pezzo / quanti pezzi sono quei grammi
+    const scegli = opz.length > 1 ? `<span class="pm-unita">${opz.map(x => `<button class="pm-u${(gu ? u : ug) === x ? " on" : ""}" data-lib-unita-set="${k}|${x}" aria-pressed="${(gu ? u : ug) === x}">${ABBR[x] === "cucchiai" ? "cucc." : ABBR[x] === "cucchiaini" ? "c.ino" : x}</button>`).join("")}</span>` : "";
     const avv = pre && troppiGrassiPre(it.nome, it.qta);
     const alt2 = avv && c.avvAperto === k ? alternativePre(c, it.nome, it.qta, k) : [];
-    return `<div class="pm-blocco pm-card pm-piatto lib-voce" data-voce="${esc(it.nome)}">
-      <div class="pasto-riga pm-testa pm-ing lib-voce-testa">
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(it.nome)}</b><span class="pm-contatore"><button class="nav-btn" data-lib-step="${k}" data-d="-1" aria-label="Meno">−</button><b>${esc(etic)}</b><button class="nav-btn" data-lib-step="${k}" data-d="1" aria-label="Più">＋</button></span>${macroStileHTML(m, { senzaKcal: true })}</span>
-        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}
+    const aperta = !bloccato && !!(c.vociAperte && c.vociAperte.has(it.nome));
+    return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
+      <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura" : ""}"${bloccato ? "" : ` data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}"`}>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${macroStileHTML(m, { senzaKcal: true })}</span>
+        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${bloccato ? "" : frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
-      </div>${avv && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
+      </div>${aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
     </div>`;
   };
   const parti = [];
   ordine.forEach(k => { const gp = c.items[k].grp == null ? null : c.items[k].grp; const ult = parti[parti.length - 1]; if (!ult || ult.grp !== gp) parti.push({ grp: gp, html: "", ks: [] }); const u = parti[parti.length - 1]; u.html += righeK[k]; u.ks.push(k); });
   const kcalTot = Math.round(macroDa(c.items.filter(x => x.qta > 0)).kcal);
-  const righe = `<div class="pm-sezione"><p class="pm-tot"><span>Già mangiato</span><b>${kcalTot} kcal</b></p>${parti.map(x => x.grp === null ? x.ks.map(voceHTML).join("") : ricettaHTML(x.grp, x.html)).join("")}</div>`;
+  // un riquadro per ogni cosa mangiata, dall'ultima aggiunta alla prima (la riga appena aggiunta non ha ancora l'ora: è la più nuova)
+  const quando = (k) => c.items[k].t == null ? Infinity : c.items[k].t;
+  const schede = [];
+  parti.forEach(x => x.grp === null
+    ? x.ks.forEach(k => schede.push({ t: quando(k), k, html: voceHTML(k) }))
+    : schede.push({ t: Math.min(...x.ks.map(quando)), k: Math.min(...x.ks), html: ricettaHTML(x.grp, x.html) }));
+  schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
+  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
 
   const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto">
       ${c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Prodotto <b>${esc(c.ignotoCodice)}</b> nuovo: valori per 100 g</p>`
@@ -973,22 +999,22 @@ function liberoHTML() {
       ${avvPre.length ? `<div class="lib-legenda-avv" role="note">${avvPre.map(it => `<p><span aria-hidden="true">⚠</span> <b>${esc(it.nome)}</b>: ${fmtG(grassiAlimento(it.nome, it.qta))} g di grassi. Prima di allenarti meglio senza grassi: rallentano la digestione.</p>`).join("")}</div>` : ""}`;
   return `
     <h3 class="modal-title"><span class="mt-testo">${c.titolo()}</span></h3>
-    <div class="lib-box">
+    ${bloccato ? "" : `<div class="lib-box">
     ${c.intestazione()}
     ${campoAggiungiHTML(c)}
-    </div>
+    </div>`}
     ${ignoto}
     ${c.items.length ? `
       ${ingrLive}
       <div class="lib-risultato">
         <div class="r-macro">${macroHaObiettivoHTML(m, T)}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
-        ${(() => { if (!(c.items.length && T.kcal > 0 && m.kcal > 0 && Math.abs(m.kcal - T.kcal) / T.kcal > 0.08)) return "";
+        ${(() => { if (bloccato || !(c.items.length && T.kcal > 0 && m.kcal > 0 && Math.abs(m.kcal - T.kcal) / T.kcal > 0.08)) return "";
           const arr = Math.round(m.kcal * Math.max(0.25, Math.min(2.5, T.kcal / m.kcal)));   // le quantità cambiano al massimo di 2,5 volte: la scheda promette solo quello che ottiene
           const su = arr > m.kcal; return Math.abs(arr - m.kcal) / m.kcal > 0.08 ? `<button class="var-furbo lib-furbo lib-bil-furbo" data-lib="bilancia">⚖️ <b>${su ? "Aumenta" : "Riduci"} tutte le quantità</b><em>${Math.round(m.kcal)} → ${arr} kcal · ${su ? "+" : "−"}${Math.abs(arr - Math.round(m.kcal))}</em></button>` : ""; })()}
       </div>
-      ${furboBlocco || consigliFitHTML(c)}
+      ${pastoPassatoC(c) ? "" : (furboBlocco || consigliFitHTML(c))}
     ` : c.idee()}
-    ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Aggiungi</button>` : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
+    ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Aggiungi</button>` : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
   `;
 }
 // Nome automatico con le parole che hai scritto (es. "Pollo, zucca, riso")
@@ -1222,6 +1248,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const lock = e.target.closest("[data-lib-lock]");
     if (lock) { const it = c.items[+lock.dataset.libLock]; it.lock = !it.lock; ricalcolaLibero(); rirenderLibero(); return; }
+    if (e.target.closest("[data-lib-sblocca]")) {
+      const dataP = c.data, pastoP = c.pasto;
+      chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
+      return;
+    }
+    const ub = e.target.closest("[data-lib-unita-set]");
+    if (ub) { const [kk, uu] = ub.dataset.libUnitaSet.split("|"), it = c.items[+kk]; if (it) { it.unita = uu; salvaUnitaPreferita(it.nome, uu); rirenderLibero(); } return; }   // pz ⇄ g: la quantità resta, cambia come la leggi
     const st = e.target.closest("[data-lib-step]");
     if (st) {
       const it = c.items[+st.dataset.libStep], d = +st.dataset.d, { gu, passo } = passoQuantita(it);

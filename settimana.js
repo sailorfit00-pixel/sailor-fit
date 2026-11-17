@@ -174,7 +174,7 @@ function giorniSettimanaHTML(dataRif) {
           <button class="nav-btn" data-sett-passo="1" data-giorno="${d}" ${p.target[i] >= hi ? "disabled" : ""} aria-label="100 kcal in più">＋</button>
         </div>
       </div>
-      <button class="tipo-btn gs-tipo" data-scegli-allen-data="${d}">${TIPI_GIORNATA[giornoDiario(d).tipo].icone} ${esc(TIPI_GIORNATA[giornoDiario(d).tipo].label)} <span class="caret">▾</span></button>
+      <button class="tipo-btn gs-tipo" data-scegli-allen-data="${d}">${tipoSportHTML(TIPI_GIORNATA[giornoDiario(d).tipo])} <span class="caret">▾</span></button>
     </div>`;
   }).join("");
   return futuriHTML;
@@ -229,9 +229,13 @@ function clickSettimana(e) {
   }
   const az = e.target.closest("[data-sett-azzera]");
   if (az) {
-    const sp = leggiSpostamenti();
-    dateSettimanaDi(az.dataset.settAzzera).forEach(d => { if (d >= oggiISO()) delete sp[d]; });
-    salvaSpostamenti(sp); giornoSelSett = null; aggiornaSettimana(); return true;
+    const lunedi = az.dataset.settAzzera;
+    chiediConferma("Azzerare le modifiche?", "Le calorie dei giorni tornano a quelle di partenza", "Azzera", () => {
+      const sp = leggiSpostamenti();
+      dateSettimanaDi(lunedi).forEach(d => { if (d >= oggiISO()) delete sp[d]; });
+      salvaSpostamenti(sp); giornoSelSett = null; aggiornaSettimana();
+    });
+    return true;
   }
   return false;
 }

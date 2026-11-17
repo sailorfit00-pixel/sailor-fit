@@ -10,6 +10,8 @@ const OFF_CAMPI = "product_name,product_name_it,brands,nutriments,ingredients_te
 const CERCA_URL = "/.netlify/functions/cerca?q=";
 let _lettore = null, _controlli = null; // fotocamera attiva
 
+// Prodotti già noti all'app (valgono anche senza internet): codice a barre → alimento
+const CODICI_NOTI = { "4335619243125": "Latte proteico Lidl" };
 function leggiCodici() { try { return JSON.parse(localStorage.getItem("mp_codici")) || {}; } catch (e) { return {}; } }
 function salvaCodice(codice, nome) { const c = leggiCodici(); c[codice] = nome; localStorage.setItem("mp_codici", JSON.stringify(c)); }
 
@@ -100,7 +102,7 @@ async function cercaCodice(codice) {
   codice = String(codice || "").replace(/\D/g, "");
   if (codice.length < 6) { c.scansione = { stato: "manuale", codice, messaggio: "Il numero sembra incompleto." }; rirenderLibero(); return; }
   // già scansionato in passato: funziona anche offline
-  const noto = leggiCodici()[codice];
+  const noto = leggiCodici()[codice] || CODICI_NOTI[codice];
   if (noto && (window.ALIMENTI || {})[noto]) {
     const v = window.ALIMENTI[noto];
     usaProdotto({ nome: noto, base4: v, extra4: (window.NUTRIENTI_EXTRA || {})[noto] || null }, codice); return;

@@ -163,8 +163,8 @@ const PRINCIPALI = [
     passaggi:["Salta i gamberi con aglio e lime.","Componi con riso venere, avocado e rucola.","Condisci con olio e succo di lime."] },
   { nome:"Pollo con couscous e verdure grigliate", base:"pollo", tempo:22,
     kcal:600, proteine:46, carboidrati:66, grassi:14,
-    ingredienti:[{nome:"Petto di pollo",qta:150,unita:"g"},{nome:"Couscous cotto",qta:200,unita:"g"},{nome:"Zucchine",qta:100,unita:"g"},{nome:"Peperoni",qta:100,unita:"g"},{nome:"Olio EVO",qta:8,unita:"g"}],
-    passaggi:["Marina il pollo con erbe aromatiche e cuocilo in padella.","Griglia zucchine e peperoni.","Servi su couscous con le verdure."] },
+    ingredienti:[{nome:"Petto di pollo",qta:150,unita:"g"},{nome:"Couscous cotto",qta:200,unita:"g"},{nome:"Zucchine",qta:200,unita:"g"},{nome:"Olio EVO",qta:8,unita:"g"}],
+    passaggi:["Marina il pollo con erbe aromatiche e cuocilo in padella.","Griglia le zucchine.","Servi su couscous con le verdure."] },
   { nome:"Tonno scottato con quinoa e insalata asiatica", base:"tonno", tempo:18,
     kcal:560, proteine:44, carboidrati:58, grassi:14,
     ingredienti:[{nome:"Tonno fresco",qta:140,unita:"g"},{nome:"Quinoa cotta",qta:160,unita:"g"},{nome:"Cavolo cappuccio",qta:80,unita:"g"},{nome:"Edamame",qta:60,unita:"g"},{nome:"Salsa di soia",qta:10,unita:"g"}],
@@ -183,8 +183,8 @@ const PRINCIPALI = [
     passaggi:["Unisci lenticchie, pomodorini e rucola.","Aggiungi la feta sbriciolata.","Condisci con olio e limone, servi con pane."] },
   { nome:"Shakshuka proteica con pane integrale", base:"uova", tempo:20,
     kcal:560, proteine:30, carboidrati:50, grassi:26,
-    ingredienti:[{nome:"Uova",qta:3,unita:"pz"},{nome:"Passata di pomodoro",qta:150,unita:"g"},{nome:"Peperoni",qta:100,unita:"g"},{nome:"Ceci cotti",qta:80,unita:"g"},{nome:"Pane integrale",qta:50,unita:"g"},{nome:"Olio EVO",qta:8,unita:"g"}],
-    passaggi:["Cuoci peperoni e passata con paprika e cumino.","Aggiungi i ceci, poi apri le uova nel sugo.","Cuoci coperto finché le uova si rapprendono; servi con pane."] },
+    ingredienti:[{nome:"Uova",qta:3,unita:"pz"},{nome:"Passata di pomodoro",qta:150,unita:"g"},{nome:"Zucchine",qta:100,unita:"g"},{nome:"Ceci cotti",qta:80,unita:"g"},{nome:"Pane integrale",qta:50,unita:"g"},{nome:"Olio EVO",qta:8,unita:"g"}],
+    passaggi:["Cuoci le zucchine a dadini e la passata con paprika e cumino.","Aggiungi i ceci, poi apri le uova nel sugo.","Cuoci coperto finché le uova si rapprendono; servi con pane."] },
 
   { nome:"Bowl di pollo, patate e broccoli", base:"pollo", tempo:25,
     kcal:560, proteine:46, carboidrati:52, grassi:16,
@@ -222,10 +222,10 @@ const PRINCIPALI = [
     kcal:490, proteine:40, carboidrati:38, grassi:18,
     ingredienti:[{nome:"Uova",qta:2,unita:"pz"},{nome:"Albume",qta:150,unita:"g"},{nome:"Patate",qta:150,unita:"g"},{nome:"Spinaci",qta:100,unita:"g"},{nome:"Olio EVO",qta:6,unita:"g"}],
     passaggi:["Rosola le patate a cubetti e gli spinaci.","Versa uova e albumi sbattuti.","Cuoci a fiamma bassa girando la frittata."] },
-  { nome:"Manzo saltato con peperoni e riso", base:"manzo", tempo:20,
+  { nome:"Manzo saltato con zucchine e riso", base:"manzo", tempo:20,
     kcal:580, proteine:44, carboidrati:64, grassi:16,
-    ingredienti:[{nome:"Manzo magro",qta:130,unita:"g"},{nome:"Riso basmati cotto",qta:170,unita:"g"},{nome:"Peperoni",qta:150,unita:"g"},{nome:"Salsa di soia",qta:12,unita:"g"}],
-    passaggi:["Salta il manzo a strisce a fiamma alta.","Aggiungi i peperoni e sfuma con la soia.","Servi con il riso."] },
+    ingredienti:[{nome:"Manzo magro",qta:130,unita:"g"},{nome:"Riso basmati cotto",qta:170,unita:"g"},{nome:"Zucchine",qta:150,unita:"g"},{nome:"Salsa di soia",qta:12,unita:"g"}],
+    passaggi:["Salta il manzo a strisce a fiamma alta.","Aggiungi le zucchine e sfuma con la soia.","Servi con il riso."] },
   { nome:"Pasta integrale tonno, pomodorini e olive", base:"tonno", tempo:18,
     kcal:560, proteine:34, carboidrati:66, grassi:16,
     ingredienti:[{nome:"Pasta integrale",qta:90,unita:"g"},{nome:"Tonno fresco",qta:100,unita:"g"},{nome:"Pomodorini",qta:120,unita:"g"},{nome:"Olive",qta:20,unita:"g"},{nome:"Olio EVO",qta:6,unita:"g"}],
@@ -300,8 +300,8 @@ const PRINCIPALI = [
     passaggi:["Frulla i gamberi ben freddi con amido di mais e di patate, sale e acqua ghiacciata aggiunta poco alla volta.","Forma delle strisce a mo' di udon e lessale in acqua bollente.","Condisci con olio di sesamo e pepe."] },
   { nome:"Kebab di pollo in piadina", base:"pollo", tempo:30,
     kcal:0, proteine:0, carboidrati:0, grassi:0,
-    ingredienti:[{nome:"Piadina",qta:100,unita:"g"},{nome:"Concentrato di pomodoro",qta:10,unita:"g"},{nome:"Coscia di pollo",qta:150,unita:"g"},{nome:"Olio EVO",qta:10,unita:"g"},{nome:"Yogurt greco 0%",qta:100,unita:"g"},{nome:"Peperoni",qta:60,unita:"g"},{nome:"Cipolla",qta:50,unita:"g"},{nome:"Insalata",qta:30,unita:"g"}],
-    passaggi:["Marina il pollo a pezzetti con concentrato di pomodoro, olio, paprika e sale.","Cuoci il pollo in padella con peperone e cipolla.","Scalda la piadina e farciscila con pollo, verdure, insalata e salsa di yogurt con limone ed erba cipollina."] },
+    ingredienti:[{nome:"Piadina",qta:100,unita:"g"},{nome:"Concentrato di pomodoro",qta:10,unita:"g"},{nome:"Coscia di pollo",qta:150,unita:"g"},{nome:"Olio EVO",qta:10,unita:"g"},{nome:"Yogurt greco 0%",qta:100,unita:"g"},{nome:"Zucchine",qta:60,unita:"g"},{nome:"Cipolla",qta:50,unita:"g"},{nome:"Insalata",qta:30,unita:"g"}],
+    passaggi:["Marina il pollo a pezzetti con concentrato di pomodoro, olio, paprika e sale.","Cuoci il pollo in padella con zucchine e cipolla.","Scalda la piadina e farciscila con pollo, verdure, insalata e salsa di yogurt con limone ed erba cipollina."] },
   { nome:"Wrap proteico di verdure e scamorza", base:"salmone", tempo:35, porzioni:2,
     kcal:0, proteine:0, carboidrati:0, grassi:0,
     ingredienti:[{nome:"Carote",qta:250,unita:"g"},{nome:"Zucchine",qta:250,unita:"g"},{nome:"Scamorza",qta:100,unita:"g"},{nome:"Mozzarella light",qta:80,unita:"g"},{nome:"Uova",qta:3,unita:"pz"},{nome:"Patate",qta:220,unita:"g"},{nome:"Salmone affumicato",qta:200,unita:"g"},{nome:"Rucola",qta:30,unita:"g"},{nome:"Fiocchi di latte",qta:200,unita:"g"},{nome:"Cipolla",qta:30,unita:"g"},{nome:"Pomodoro",qta:80,unita:"g"}],
@@ -639,4 +639,4 @@ const RICETTE_ESEMPIO = [
 
 window.RICETTE_ESEMPIO = RICETTE_ESEMPIO;
 // vecchio nome -> nome attuale (i pasti già registrati e i preferiti si aggiornano da soli)
-window.ALIAS_RICETTE = {"Pollo al limone con couscous e verdure grigliate": "Pollo con couscous e verdure grigliate", "Pancake proteici soffici": "Pancake proteici", "Pancake integrali allo yogurt (senza proteine in polvere)": "Pancake integrali allo yogurt", "Mini cinnamon rolls proteici": "Cinnamon rolls proteici", "Banana bread senza zucchero": "Banana bread", "Pollo al curry leggero con basmati": "Pollo al curry con basmati", "Porridge veloce pre-allenamento": "Porridge pre-allenamento"};
+window.ALIAS_RICETTE = {"Manzo saltato con peperoni e riso": "Manzo saltato con zucchine e riso", "Pollo al limone con couscous e verdure grigliate": "Pollo con couscous e verdure grigliate", "Pancake proteici soffici": "Pancake proteici", "Pancake integrali allo yogurt (senza proteine in polvere)": "Pancake integrali allo yogurt", "Mini cinnamon rolls proteici": "Cinnamon rolls proteici", "Banana bread senza zucchero": "Banana bread", "Pollo al curry leggero con basmati": "Pollo al curry con basmati", "Porridge veloce pre-allenamento": "Porridge pre-allenamento"};
