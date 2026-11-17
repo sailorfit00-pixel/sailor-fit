@@ -968,40 +968,57 @@ function anteprimaRicetta(c, nomeRicetta) {
 }
 function anteprimaHTML(c) {
   const a = anteprimaRicetta(c, c.anteprima); if (!a) { c.anteprima = null; return ""; }
-  const fitOn = !!(c.anteprimaFit && a.mosse.length), items = fitOn ? a.fit : a.items, tot = fitOn ? a.totFit : a.tot;
-  const riga = (it, k) => `<li><span>${esc(it.nome)}</span><b>${Math.round(it.qta)} g</b></li>`;
-  // «Più fit»: un tocco lo applica alla ricetta qui sopra, un altro lo toglie
-  const fit = a.mosse.length ? `<button class="ant-fit${fitOn ? " on" : ""}" data-ant-fit aria-pressed="${fitOn}">
-      <span class="ant-fit-t">${fitOn ? "✓ " : ""}🥗 Più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></span>
-      <span class="ant-mosse">${a.mosse.map(m => m.tipo === "cambia" ? `${esc(m.r.nome)} → <b>${esc(m.a)}</b>` : `${esc(m.r.nome)}: ${Math.round(m.r.qta)} → <b>${m.nuova} g</b>`).join(" · ")}</span>
-      <span class="ant-fit-nota">${fitOn ? "Applicato · tocca per tornare alla ricetta originale" : "Tocca per applicarlo"}</span>
+  const descr = a.mosse.map(descrMossaFit).join(" · ");
+  // conferma di «Più fit»: solo per questo piatto o per sempre (la ricetta cambia)
+  if (c.confermaFit && a.mosse.length) return `<button class="btn-link modal-indietro" data-ant-fit-no>‹ Torna</button>
+    <h3 class="modal-title">🥗 Più fit</h3>
+    <p class="ant-conf">${descr} <b class="ant-meno">−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</b></p>
+    <p class="hint">«Sempre» cambia anche la ricetta: le prossime volte la trovi già così.</p>
+    <div class="wiz-nav"><button class="btn-sec" data-ant-fit-si="ora">Solo questa volta</button><button class="btn" data-ant-fit-si="sempre">Sempre</button></div>`;
+  const ora = c.fitApplicato === "ora";
+  const items = ora ? a.fit : a.items, tot = ora ? a.totFit : a.tot;
+  const riga = (it) => `<li><span>${esc(it.nome)}</span><b>${Math.round(it.qta)} g</b></li>`;
+  const fit = c.fitApplicato ? `<div class="ant-fit fatto">✓ Più fit applicato${ora ? " (solo questa volta)" : " alla ricetta"}: ${c.fitDescr || ""}</div>`
+    : a.mosse.length ? `<button class="ant-fit" data-ant-fit>
+      <span class="ant-fit-t">🥗 Più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></span>
+      <span class="ant-mosse">${descr}</span>
+      <span class="ant-fit-nota">Tocca per applicarlo</span>
     </button>` : "";   // niente da alleggerire: non compare niente
   return `<button class="btn-link modal-indietro" data-ant-chiudi>‹ Torna al pasto</button>
     <h3 class="modal-title">${esc(a.ps.nome || a.r.nome)}</h3>
     <div class="ant-box">${macroStileHTML(tot)}<ul class="pm-sola-lista">${items.map(riga).join("")}</ul></div>
     ${fit}
-    <button class="btn block" data-ant-aggiungi="${fitOn ? "fit" : "normale"}">✓ Aggiungi</button>`;
+    <button class="btn block" data-ant-aggiungi>✓ Aggiungi</button>`;
+}
+const descrMossaFit = (m) => m.tipo === "cambia" ? `${esc(m.r.nome.toLowerCase())} → <b>${esc(m.a.toLowerCase())}</b>` : `${esc(m.r.nome.toLowerCase())}: ${Math.round(m.r.qta)} → <b>${m.nuova} g</b>`;
+// risposta alla conferma: «ora» = solo il piatto che aggiungi; «sempre» = anche la ricetta (con Annulla)
+function applicaPiuFit(c, quando) {
+  const a = anteprimaRicetta(c, c.anteprima); c.confermaFit = false;
+  if (!a || !a.mosse.length) { rirenderLibero(); return; }
+  c.fitDescr = a.mosse.map(descrMossaFit).join(" · ");
+  if (quando === "ora") { c.fitApplicato = "ora"; c.fitMosse = a.mosse; rirenderLibero(); return; }
+  const nome = a.r.nome;
+  const annulla = rendiRicettaFit(nome, a.mosse.map(m => m.tipo === "cambia" ? { tipo: "cambia", nome: m.r.nome, a: m.a } : { tipo: "porta", nome: m.r.nome, fattore: m.nuova / Math.max(1, m.r.qta) }));
+  c.fitApplicato = "sempre"; c.fitMosse = null; rirenderLibero();
+  if (annulla) avviso("✓ Ricetta aggiornata", "Annulla", () => { annulla(); if (liberoCtx && liberoCtx.anteprima === nome) { liberoCtx.fitApplicato = null; rirenderLibero(); } });
 }
 // aggiunge la ricetta dell'anteprima (normale o più fit) al pasto e torna al pasto
-function aggiungiDaAnteprima(c, versione) {
-  const a = anteprimaRicetta(c, c.anteprima); c.anteprima = null; c.anteprimaFit = false;
+function aggiungiDaAnteprima(c) {
+  const a = anteprimaRicetta(c, c.anteprima), stato = c.fitApplicato, mosse = c.fitMosse;
+  c.anteprima = null; c.fitApplicato = null; c.fitMosse = null; c.confermaFit = false;
   if (!a) { rirenderLibero(); return; }
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
   const i = aggiungiRicettaIn(c.data, c.pasto, a.r.nome); if (i < 0) { rirenderLibero(); return; }
-  let annullaFit = null;
-  if (versione === "fit" && a.mosse.length) {
+  if (stato === "ora" && mosse && mosse.length) {   // più fit solo per questo piatto: si cambia nel pasto, la ricetta resta com'è
     const g = giornoDiario(c.data), p = g.pasti[i];
-    a.mosse.forEach(m => { const ing = p.ingredienti[m.r.k]; if (!ing) return; if (m.tipo === "cambia") { ing.nome = m.a; ing.cercato = m.a; } else ing.qta = m.nuova; });
+    mosse.forEach(m => { const ing = p.ingredienti[m.r.k]; if (!ing) return; if (m.tipo === "cambia") { ing.nome = m.a; ing.cercato = m.a; } else ing.qta = m.nuova; });
     aggiornaMacro(p); scriviGiorno(c.data, g);
-    // e la ricetta resta così: le prossime volte te la propone già più fit
-    annullaFit = typeof rendiRicettaFit === "function" ? rendiRicettaFit(a.r.nome, a.mosse.map(m => m.tipo === "cambia" ? { tipo: "cambia", nome: m.r.nome, a: m.a } : { tipo: "porta", nome: m.r.nome, fattore: m.nuova / Math.max(1, m.r.qta) })) : null;
   }
   if (typeof renderOggi === "function") renderOggi();
   c._firma0 = undefined;   // appena aggiunto: non è una modifica da salvare
   ricaricaViva(c);
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
-  if (annullaFit) avviso("✓ Aggiunta più fit · la ricetta resta così", "Annulla", () => { annullaFit(); });   // Annulla: la ricetta torna quella di prima (il pasto resta com'è)
-  else avviso("✓ Aggiunta");
+  avviso(stato ? "✓ Aggiunta, più fit" : "✓ Aggiunta");
 }
 function liberoHTML() {
   const c = liberoCtx;
@@ -1352,9 +1369,11 @@ document.addEventListener("DOMContentLoaded", () => {
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
       return;
     }
-    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; c.anteprimaFit = false; rirenderLibero(); return; }
-    if (e.target.closest("[data-ant-fit]")) { c.anteprimaFit = !c.anteprimaFit; rirenderLibero(); return; }
-    const antA = e.target.closest("[data-ant-aggiungi]"); if (antA) { aggiungiDaAnteprima(c, antA.dataset.antAggiungi); return; }
+    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; c.fitApplicato = null; c.confermaFit = false; rirenderLibero(); return; }
+    if (e.target.closest("[data-ant-fit]")) { c.confermaFit = true; rirenderLibero(); return; }
+    if (e.target.closest("[data-ant-fit-no]")) { c.confermaFit = false; rirenderLibero(); return; }
+    const fitSi = e.target.closest("[data-ant-fit-si]"); if (fitSi) { applicaPiuFit(c, fitSi.dataset.antFitSi); return; }
+    const antA = e.target.closest("[data-ant-aggiungi]"); if (antA) { aggiungiDaAnteprima(c); return; }
     const sost = e.target.closest("[data-lib-sostituisci]");
     if (sost) { sostituisciPastoCon(c, sost.dataset.libSostituisci); return; }
     if (e.target.closest("[data-altre-idee]")) { c.altreGiro = (c.altreGiro || 0) + 1; rirenderLibero(); return; }
