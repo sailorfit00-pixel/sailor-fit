@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1417">
+<title>Sailor Fit – Questionario</title>
+<style>
+:root{--bg:#0f1417;--card:#1a2228;--card2:#222d35;--line:#2f3d47;--accent:#35c07d;--text:#e8eef2;--muted:#8ea0ad;--warn:#e0b341}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.35;padding-bottom:110px}
+.top{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,var(--bg) 75%,transparent);padding:14px 16px 10px}
+.top h1{margin:0;font-size:20px}
+.bar{height:6px;background:var(--card2);border-radius:9px;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+main{max-width:640px;margin:0 auto;padding:0 16px}
+.intro{margin:6px 0 14px;color:var(--muted);font-size:15px}
+section{background:var(--card);border-radius:16px;padding:16px;margin:0 0 14px}
+h2{margin:0 0 12px;font-size:17px}
+h2 span{margin-right:6px}
+.q{margin:0 0 14px}
+.q:last-child{margin-bottom:0}
+.q>b{display:block;font-weight:600;margin-bottom:8px;font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;pointer-events:none}
+.chip span{display:block;padding:10px 14px;border-radius:999px;background:var(--card2);border:1.5px solid var(--line);font-size:15px;cursor:pointer;user-select:none}
+.chip input:checked+span{background:var(--accent);border-color:var(--accent);color:#06210f;font-weight:700}
+.chip input:checked+span::before{content:"✓ "}
+.chip input:focus-visible+span{outline:2px solid #fff}
+input[type=text],input[type=number],textarea{width:100%;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--card2);color:var(--text);font-size:16px;font-family:inherit}
+textarea{min-height:76px;resize:vertical}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+/* tabella funzioni: 3 scelte per riga */
+.f{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.f:first-of-type{border-top:0}
+.f .n{font-size:15px;min-width:0}
+.f .n small{display:block;color:var(--muted);font-size:12.5px}
+.tri{display:flex;gap:4px}
+.tri label{position:relative}
+.tri input{position:absolute;opacity:0;pointer-events:none}
+.tri span{display:block;width:44px;text-align:center;padding:9px 0;border-radius:10px;background:var(--card2);border:1.5px solid var(--line);font-size:18px;cursor:pointer}
+.tri input:checked+span{border-color:var(--accent);background:rgba(53,192,125,.22)}
+.tri input[value=no]:checked+span{border-color:#e06a5a;background:rgba(224,106,90,.2)}
+.tri input[value=forse]:checked+span{border-color:var(--warn);background:rgba(224,179,65,.2)}
+.legenda{display:flex;gap:14px;font-size:14px;color:var(--muted);margin:0 0 6px}
+.invia{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(0deg,var(--bg) 70%,transparent)}
+.invia div{max-width:640px;margin:0 auto;display:flex;gap:8px}
+button{font:inherit;border:0;border-radius:14px;padding:15px;font-weight:700;cursor:pointer}
+#wa{flex:1;background:#25d366;color:#06210f;font-size:17px}
+#copia{background:var(--card2);color:var(--text);border:1.5px solid var(--line);width:56px;font-size:20px;padding:0}
+.grazie{display:none;text-align:center;padding:30px 10px}
+.grazie big{font-size:48px;display:block}
+</style>
+</head>
+<body>
+<div class="top"><h1>🌙 Sailor Fit</h1><div class="bar"><i id="pg"></i></div></div>
+<main>
+<p class="intro">Tocca le risposte giuste. Ci vogliono 3 minuti. ✅</p>
+
+<form id="f" onsubmit="return false">
+
+<section>
+<h2><span>👤</span>Chi sei</h2>
+<div class="q"><b>Nome</b><input type="text" name="nome" autocomplete="given-name"></div>
+<div class="q"><b>Sei</b><div class="chips" data-n="sesso" data-one>
+<label class="chip"><input type="radio" name="sesso" value="Donna"><span>Donna</span></label>
+<label class="chip"><input type="radio" name="sesso" value="Uomo"><span>Uomo</span></label></div></div>
+<div class="q row"><div><b>Età</b><input type="number" inputmode="numeric" name="eta" placeholder="anni"></div>
+<div><b>Altezza</b><input type="number" inputmode="numeric" name="altezza" placeholder="cm"></div></div>
+<div class="q row"><div><b>Peso</b><input type="number" inputmode="decimal" name="peso" placeholder="kg"></div>
+<div><b>Peso che vorresti</b><input type="number" inputmode="decimal" name="pesoObiettivo" placeholder="kg"></div></div>
+</section>
+
+<section>
+<h2><span>🎯</span>Il tuo obiettivo</h2>
+<div class="q"><div class="chips">
+<label class="chip"><input type="checkbox" name="obiettivo" value="Dimagrire"><span>📉 Dimagrire</span></label>
+<label class="chip"><input type="checkbox" name="obiettivo" value="Mantenere il peso"><span>⚖️ Mantenere</span></label>
+<label class="chip"><input type="checkbox" name="obiettivo" value="Mettere massa"><span>💪 Mettere massa</span></label>
+<label class="chip"><input type="checkbox" name="obiettivo" value="Mangiare meglio"><span>🥗 Mangiare meglio</span></label>
+<label class="chip"><input type="checkbox" name="obiettivo" value="Più energia"><span>⚡ Più energia</span></label>
+<label class="chip"><input type="checkbox" name="obiettivo" value="Meno gonfiore"><span>🎈 Meno gonfiore</span></label></div></div>
+<div class="q"><b>In quanto tempo?</b><div class="chips">
+<label class="chip"><input type="radio" name="tempo" value="1 mese"><span>1 mese</span></label>
+<label class="chip"><input type="radio" name="tempo" value="3 mesi"><span>3 mesi</span></label>
+<label class="chip"><input type="radio" name="tempo" value="6 mesi"><span>6 mesi</span></label>
+<label class="chip"><input type="radio" name="tempo" value="Senza fretta"><span>Senza fretta</span></label></div></div>
+</section>
+
+<section>
+<h2><span>🏃‍♀️</span>Movimento</h2>
+<div class="q"><b>Cosa fai?</b><div class="chips">
+<label class="chip"><input type="checkbox" name="sport" value="CrossFit"><span>🏋️ CrossFit</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Sala pesi"><span>💪 Sala pesi</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Allenamento funzionale"><span>🤸‍♀️ Funzionale</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Corsa"><span>🏃 Corsa</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Camminata"><span>🚶 Camminata</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Bici"><span>🚴 Bici</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Nuoto"><span>🏊 Nuoto</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Yoga/Pilates"><span>🧘 Yoga / Pilates</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Padel/Tennis"><span>🎾 Padel / Tennis</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Ballo"><span>💃 Ballo</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Sport di squadra"><span>🏐 Squadra</span></label>
+<label class="chip"><input type="checkbox" name="sport" value="Nessuno"><span>🛋️ Nessuno</span></label></div>
+<input type="text" name="sportAltro" placeholder="Altro…" style="margin-top:8px"></div>
+<div class="q"><b>Giorni a settimana</b><div class="chips">
+<label class="chip"><input type="radio" name="giorni" value="0-1"><span>0–1</span></label>
+<label class="chip"><input type="radio" name="giorni" value="2-3"><span>2–3</span></label>
+<label class="chip"><input type="radio" name="giorni" value="4-5"><span>4–5</span></label>
+<label class="chip"><input type="radio" name="giorni" value="6-7"><span>6–7</span></label></div></div>
+<div class="q"><b>A che ora ti alleni?</b><div class="chips">
+<label class="chip"><input type="checkbox" name="oraAll" value="Mattina"><span>🌅 Mattina</span></label>
+<label class="chip"><input type="checkbox" name="oraAll" value="Pausa pranzo"><span>🍽️ Pranzo</span></label>
+<label class="chip"><input type="checkbox" name="oraAll" value="Pomeriggio"><span>☀️ Pomeriggio</span></label>
+<label class="chip"><input type="checkbox" name="oraAll" value="Sera"><span>🌙 Sera</span></label>
+<label class="chip"><input type="checkbox" name="oraAll" value="Cambia ogni giorno"><span>🔀 Cambia</span></label></div></div>
+<div class="q"><b>Lavoro</b><div class="chips">
+<label class="chip"><input type="radio" name="lavoro" value="Seduta/o"><span>🪑 Seduto</span></label>
+<label class="chip"><input type="radio" name="lavoro" value="In piedi/in movimento"><span>🚶 In piedi</span></label>
+<label class="chip"><input type="radio" name="lavoro" value="Fisico"><span>🧱 Fisico</span></label></div></div>
+</section>
+
+<section>
+<h2><span>🍽️</span>I tuoi pasti</h2>
+<div class="q"><b>Quali fai ogni giorno?</b><div class="chips">
+<label class="chip"><input type="checkbox" name="pasti" value="Colazione"><span>☕ Colazione</span></label>
+<label class="chip"><input type="checkbox" name="pasti" value="Spuntino mattina"><span>🍎 Spuntino mattina</span></label>
+<label class="chip"><input type="checkbox" name="pasti" value="Pranzo"><span>🍝 Pranzo</span></label>
+<label class="chip"><input type="checkbox" name="pasti" value="Merenda"><span>🥪 Merenda</span></label>
+<label class="chip"><input type="checkbox" name="pasti" value="Cena"><span>🍲 Cena</span></label>
+<label class="chip"><input type="checkbox" name="pasti" value="Dopo cena"><span>🍫 Dopo cena</span></label></div></div>
+<div class="q"><b>Dove mangi di solito?</b><div class="chips">
+<label class="chip"><input type="checkbox" name="dove" value="A casa"><span>🏠 A casa</span></label>
+<label class="chip"><input type="checkbox" name="dove" value="Pranzo portato da casa"><span>🍱 Da casa</span></label>
+<label class="chip"><input type="checkbox" name="dove" value="Mensa/bar/ristorante"><span>🍴 Fuori</span></label>
+<label class="chip"><input type="checkbox" name="dove" value="Mangio con altri"><span>👨‍👩‍👧 Con altri</span></label></div></div>
+<div class="q"><b>In cucina</b><div class="chips">
+<label class="chip"><input type="radio" name="cucina" value="Poco tempo, cose veloci"><span>⏱️ Veloce</span></label>
+<label class="chip"><input type="radio" name="cucina" value="Cucino volentieri"><span>👩‍🍳 Cucino volentieri</span></label>
+<label class="chip"><input type="radio" name="cucina" value="Preparo tutto in anticipo"><span>🥡 Meal prep</span></label></div></div>
+</section>
+
+<section>
+<h2><span>🥦</span>Cosa mangi</h2>
+<div class="q"><b>Alimentazione</b><div class="chips">
+<label class="chip"><input type="checkbox" name="dieta" value="Mangio di tutto"><span>Di tutto</span></label>
+<label class="chip"><input type="checkbox" name="dieta" value="Vegetariana"><span>🥕 Vegetariana</span></label>
+<label class="chip"><input type="checkbox" name="dieta" value="Vegana"><span>🌱 Vegana</span></label>
+<label class="chip"><input type="checkbox" name="dieta" value="Senza glutine"><span>🌾 Senza glutine</span></label>
+<label class="chip"><input type="checkbox" name="dieta" value="Senza lattosio"><span>🥛 Senza lattosio</span></label></div></div>
+<div class="q"><b>Allergie o intolleranze</b><div class="chips">
+<label class="chip"><input type="checkbox" name="allergie" value="Nessuna"><span>Nessuna</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Glutine"><span>Glutine</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Lattosio"><span>Lattosio</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Uova"><span>Uova</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Frutta secca"><span>Frutta secca</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Arachidi"><span>Arachidi</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Pesce"><span>Pesce</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Crostacei/molluschi"><span>Crostacei / molluschi</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Soia"><span>Soia</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Sesamo"><span>Sesamo</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Sedano/senape"><span>Sedano / senape</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Nichel"><span>Nichel</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Istamina"><span>Istamina</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Fruttosio/FODMAP"><span>Fruttosio / FODMAP</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Lievito"><span>Lievito</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Frutta fresca (allergia orale)"><span>Frutta fresca</span></label>
+<label class="chip"><input type="checkbox" name="allergie" value="Celiachia"><span>Celiachia</span></label></div>
+<input type="text" name="allergieAltro" placeholder="Altro…" style="margin-top:8px"></div>
+<div class="q"><b>Cosa NON mangi?</b><div class="chips">
+<label class="chip"><input type="checkbox" name="noMangio" value="Carne rossa"><span>🥩 Carne rossa</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Pollo/tacchino"><span>🍗 Pollo</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Pesce"><span>🐟 Pesce</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Uova"><span>🥚 Uova</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Latticini"><span>🧀 Latticini</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Legumi"><span>🫘 Legumi</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Maiale/salumi"><span>🥓 Maiale / salumi</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Agnello/coniglio"><span>🐑 Agnello / coniglio</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Frutti di mare"><span>🦐 Crostacei / molluschi</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Pesce crudo"><span>🍣 Pesce crudo</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Tonno/pesce azzurro"><span>🐠 Tonno / azzurro</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Tofu/soia"><span>🫛 Tofu / soia</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Frutta secca"><span>🥜 Frutta secca</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Cipolla/aglio"><span>🧅 Cipolla / aglio</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Funghi"><span>🍄 Funghi</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Pomodoro"><span>🍅 Pomodoro</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Cavoli/broccoli"><span>🥦 Cavoli / broccoli</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Melanzane/peperoni"><span>🍆 Melanzane / peperoni</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Verdure cotte"><span>🥬 Verdure cotte</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Frutta"><span>🍓 Frutta</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Cereali integrali"><span>🌾 Integrali</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Riso"><span>🍚 Riso</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Piccante"><span>🌶️ Piccante</span></label>
+<label class="chip"><input type="checkbox" name="noMangio" value="Fegato/frattaglie"><span>🫀 Frattaglie</span></label></div>
+<input type="text" name="noMangioAltro" placeholder="Altro…" style="margin-top:8px"></div>
+<div class="q"><b>Come sei messo con…</b>
+<div class="chips" style="margin-top:2px">
+<label class="chip"><input type="checkbox" name="debolezze" value="Dolci"><span>🍰 Dolci</span></label>
+<label class="chip"><input type="checkbox" name="debolezze" value="Salato/snack"><span>🍟 Snack salati</span></label>
+<label class="chip"><input type="checkbox" name="debolezze" value="Pane/pasta"><span>🍞 Pane e pasta</span></label>
+<label class="chip"><input type="checkbox" name="debolezze" value="Alcol"><span>🍷 Alcol</span></label>
+<label class="chip"><input type="checkbox" name="debolezze" value="Fame nervosa"><span>😮‍💨 Fame nervosa</span></label>
+<label class="chip"><input type="checkbox" name="debolezze" value="Salto i pasti"><span>⏭️ Salto i pasti</span></label></div></div>
+</section>
+
+<section>
+<h2><span>📱</span>L'app: cosa ti serve?</h2>
+<div class="legenda"><span>👍 Sì</span><span>🤔 Forse</span><span>👎 No</span></div>
+<div id="funzioni"></div>
+</section>
+
+<section>
+<h2><span>✨</span>Come la useresti</h2>
+<div class="q"><b>Quanto la apriresti?</b><div class="chips">
+<label class="chip"><input type="radio" name="uso" value="Tutti i giorni"><span>Tutti i giorni</span></label>
+<label class="chip"><input type="radio" name="uso" value="Qualche volta a settimana"><span>Ogni tanto</span></label>
+<label class="chip"><input type="radio" name="uso" value="Solo per i consigli"><span>Per i consigli</span></label></div></div>
+<div class="q"><b>Telefono</b><div class="chips">
+<label class="chip"><input type="radio" name="tel" value="iPhone"><span>🍎 iPhone</span></label>
+<label class="chip"><input type="radio" name="tel" value="Android"><span>🤖 Android</span></label></div></div>
+<div class="q"><b>Come preferisci registrare?</b><div class="chips">
+<label class="chip"><input type="checkbox" name="registra" value="Scegliere da una lista"><span>📋 Lista</span></label>
+<label class="chip"><input type="checkbox" name="registra" value="Scrivere cosa ho mangiato"><span>⌨️ Scrivo</span></label>
+<label class="chip"><input type="checkbox" name="registra" value="Foto/codice a barre"><span>📷 Foto</span></label>
+<label class="chip"><input type="checkbox" name="registra" value="Piano già pronto"><span>🗓️ Già pronto</span></label></div></div>
+</section>
+
+<section>
+<h2><span>💬</span>Altro</h2>
+<div class="q"><b>Cosa vorresti nell'app che non c'è?</b>
+<textarea name="note" placeholder="Scrivi qui (facoltativo)"></textarea></div>
+</section>
+
+<div class="grazie" id="grazie"><big>🎉</big><b>Grazie!</b></div>
+</form>
+</main>
+
+<div class="invia"><div>
+<button id="wa" type="button">💬 Invia su WhatsApp</button>
+<button id="copia" type="button" aria-label="Copia risposte">📋</button>
+</div></div>
+
+<script>
+// ► Numero WhatsApp di chi riceve le risposte, con prefisso e senza + né spazi (es. "393331234567").
+//   Se lo lasci vuoto, WhatsApp fa scegliere la chat.
+var NUMERO = "393928405915";
+
+var FUNZIONI = [
+ ["📝","Segnare cosa mangio","ogni pasto con kcal e macro"],
+ ["🗓️","Settimana già pronta","pasti suggeriti per ogni giorno"],
+ ["💡","Consigli furbi","cosa cambiare per stare nei numeri"],
+ ["🏃","Allenamento che cambia le calorie","più sport = più cibo"],
+ ["⚠️","Avvisi prima/dopo allenamento","cosa mangiare e cosa evitare"],
+ ["📷","Codice a barre dei prodotti",""],
+ ["📸","Foto di una ricetta",""],
+ ["🍳","Ricettario","con alternative agli ingredienti"],
+ ["🛒","Lista della spesa",""],
+ ["📊","Andamento","grafici di calorie, proteine, zuccheri"],
+ ["⚖️","Diario del peso",""],
+ ["📄","Ricettario in PDF",""],
+ ["🌙","Tutto in italiano, semplice",""]
+];
+var wrap = document.getElementById("funzioni");
+FUNZIONI.forEach(function(f,i){
+  wrap.insertAdjacentHTML("beforeend",
+   '<div class="f"><div class="n">'+f[0]+' '+f[1]+(f[2]?'<small>'+f[2]+'</small>':'')+'</div>'+
+   '<div class="tri">'+
+   ['si','forse','no'].map(function(v,k){return '<label><input type="radio" name="fn'+i+'" value="'+v+'"><span>'+['👍','🤔','👎'][k]+'</span></label>';}).join('')+
+   '</div></div>');
+});
+
+var form = document.getElementById("f");
+// "Nessuna"/"Nessuno"/"Di tutto" tolgono le altre scelte dello stesso gruppo, e viceversa
+form.addEventListener("change", function(e){
+  var t = e.target;
+  if(t.type==="checkbox" && ["Nessuna","Nessuno","Mangio di tutto"].indexOf(t.value)>-1 && t.checked){
+    form.querySelectorAll('input[name="'+t.name+'"]').forEach(function(x){ if(x!==t) x.checked=false; });
+  } else if(t.type==="checkbox" && t.checked){
+    form.querySelectorAll('input[name="'+t.name+'"]').forEach(function(x){ if(["Nessuna","Nessuno","Mangio di tutto"].indexOf(x.value)>-1) x.checked=false; });
+  }
+  progresso(); salva();
+});
+form.addEventListener("input", function(){ progresso(); salva(); });
+
+// quante domande hanno una risposta
+function gruppi(){
+  var g = {};
+  form.querySelectorAll("input,textarea").forEach(function(el){
+    if(el.type==="text" && /Altro$/.test(el.name)) return;
+    if(el.name==="note") return;
+    (g[el.name] = g[el.name] || []).push(el);
+  });
+  return g;
+}
+function pieno(els){ return els.some(function(e){ return (e.type==="radio"||e.type==="checkbox") ? e.checked : e.value.trim()!==""; }); }
+function progresso(){
+  var g = gruppi(), n = Object.keys(g), ok = n.filter(function(k){ return pieno(g[k]); }).length;
+  document.getElementById("pg").style.width = Math.round(ok/n.length*100)+"%";
+}
+
+// risposte salvate sul telefono, così non si perde nulla se esce
+function salva(){ try{ var o={}; form.querySelectorAll("input,textarea").forEach(function(e){ if(e.type==="radio"||e.type==="checkbox"){ if(e.checked) (o[e.name]=o[e.name]||[]).push(e.value);} else if(e.value) o[e.name]=[e.value]; }); localStorage.setItem("sf_quest",JSON.stringify(o)); }catch(x){} }
+function ripristina(){ try{ var o=JSON.parse(localStorage.getItem("sf_quest")||"{}"); form.querySelectorAll("input,textarea").forEach(function(e){ var v=o[e.name]; if(!v) return; if(e.type==="radio"||e.type==="checkbox") e.checked = v.indexOf(e.value)>-1; else e.value=v[0]; }); }catch(x){} }
+ripristina(); progresso();
+
+function val(n){ return Array.prototype.filter.call(form.querySelectorAll('input[name="'+n+'"]'),function(e){return e.checked;}).map(function(e){return e.value;}); }
+function txt(n){ var e=form.elements[n]; return e?e.value.trim():""; }
+function lista(n,altro){ var v=val(n); if(altro&&txt(altro)) v.push(txt(altro)); return v.join(", ")||"—"; }
+
+function riepilogo(){
+  var L=[];
+  L.push("🌙 *SAILOR FIT – Questionario*");
+  L.push("");
+  L.push("👤 *"+(txt("nome")||"(senza nome)")+"* · "+(val("sesso")[0]||"—")+" · "+(txt("eta")||"—")+" anni · "+(txt("altezza")||"—")+" cm");
+  L.push("⚖️ Peso "+(txt("peso")||"—")+" kg → obiettivo "+(txt("pesoObiettivo")||"—")+" kg");
+  L.push("");
+  L.push("🎯 *Obiettivo:* "+lista("obiettivo")+" · tempo: "+(val("tempo")[0]||"—"));
+  L.push("");
+  L.push("🏃 *Sport:* "+lista("sport","sportAltro"));
+  L.push("Giorni/sett.: "+(val("giorni")[0]||"—")+" · Ora: "+lista("oraAll")+" · Lavoro: "+(val("lavoro")[0]||"—"));
+  L.push("");
+  L.push("🍽️ *Pasti:* "+lista("pasti"));
+  L.push("Dove: "+lista("dove")+" · Cucina: "+(val("cucina")[0]||"—"));
+  L.push("");
+  L.push("🥦 *Alimentazione:* "+lista("dieta"));
+  L.push("Allergie: "+lista("allergie","allergieAltro"));
+  L.push("NON mangia: "+lista("noMangio","noMangioAltro"));
+  L.push("Punti deboli: "+lista("debolezze"));
+  L.push("");
+  L.push("📱 *App*");
+  var S=[],F=[],N=[];
+  FUNZIONI.forEach(function(f,i){ var v=val("fn"+i)[0]; if(v==="si") S.push(f[1]); else if(v==="forse") F.push(f[1]); else if(v==="no") N.push(f[1]); });
+  L.push("👍 "+(S.join(", ")||"—"));
+  L.push("🤔 "+(F.join(", ")||"—"));
+  L.push("👎 "+(N.join(", ")||"—"));
+  L.push("Uso: "+(val("uso")[0]||"—")+" · "+(val("tel")[0]||"—")+" · Registra: "+lista("registra"));
+  if(txt("note")){ L.push(""); L.push("💬 "+txt("note")); }
+  return L.join("\n");
+}
+
+function manca(){
+  if(!txt("nome")) return "nome";
+  return "";
+}
+
+document.getElementById("wa").addEventListener("click", function(){
+  if(manca()){ var e=form.elements.nome; e.scrollIntoView({block:"center"}); e.focus(); e.style.borderColor="#e06a5a"; return; }
+  var url = "https://wa.me/"+NUMERO+"?text="+encodeURIComponent(riepilogo());
+  window.location.href = url;
+});
+document.getElementById("copia").addEventListener("click", function(){
+  var t = riepilogo(), b=this;
+  function ok(){ b.textContent="✅"; setTimeout(function(){ b.textContent="📋"; },1500); }
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok,function(){});
+  else { var a=document.createElement("textarea"); a.value=t; document.body.appendChild(a); a.select(); try{document.execCommand("copy");ok();}catch(x){} a.remove(); }
+});
+</script>
+</body>
+</html>
