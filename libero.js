@@ -1156,7 +1156,7 @@ function liberoHTML() {
       ${bloccato ? "" : altreIdeeHTML(c)}
     ` : c.idee()}
     ${c.bozza ? "" : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
-    ${c.bozza ? `<div class="barra-salva"><button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button></div>` : !bloccato && pastoModificato(c) ? `<div class="barra-salva due"><button class="btn-sec" data-lib="annulla-modifiche">Annulla</button><button class="btn lib-conferma" data-lib="salva-modifiche">✓ Salva</button></div>` : ""}
+    ${c.bozza ? `<div class="barra-salva"><button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button></div>` : !bloccato && pastoModificato(c) ? `<div class="barra-salva due"><button class="btn-sec danger" data-lib="annulla-modifiche">Annulla</button><button class="btn lib-conferma" data-lib="salva-modifiche">✓ Salva</button></div>` : ""}
   `;
 }
 // Nome automatico con le parole che hai scritto (es. "Pollo, zucca, riso")
