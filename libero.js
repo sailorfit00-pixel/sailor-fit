@@ -991,7 +991,7 @@ function liberoHTML() {
   const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
 
   const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto${c.ignotoCodice ? " da-codice" : ""}">
-      ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="scan-ok-titolo">Nuovo alimento</p><p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<div class="nota non-trovato"><b>Prodotto non trovato</b><br>Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</div>`
+      ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="scan-ok-titolo">Nuovo alimento</p><p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="scan-ok-titolo">Nuovo alimento</p><p class="hint">Codice ${esc(c.ignotoCodice)} · controlla i valori e salva.</p>`
         : `<p class="hint">Non trovo <b>${esc(c.ignoto)}</b> tra gli alimenti.</p>
           ${ricetteTestoHTML(c.ignoto, "data-ignoto-ricetta") ? `<div class="autoc-lista">${ricetteTestoHTML(c.ignoto, "data-ignoto-ricetta")}</div>` : ""}
           <button class="btn-sec block" data-lib="off-cerca">🔎 Cercalo tra i prodotti confezionati</button>

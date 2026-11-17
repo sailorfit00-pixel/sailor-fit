@@ -1708,3 +1708,8 @@ select.qta-input { padding-right: 30px; background-image: url("data:image/svg+xm
 .scan-msg { margin: 0 0 6px; }
 .scan-aiuto { text-align: center; margin: 10px 0 0; }
 .scan-ok-titolo { font-weight: 700; font-size: 17px; margin: 0 0 4px; }
+
+/* prodotto non identificato: stesso riquadro del «trovato», in rosso */
+.scan-nontrovato { border-color: rgba(229,96,96,.55); background: rgba(229,96,96,.08); }
+.scan-trovato .st-ko { color: var(--bad, #e56060); font-weight: 700; margin: 0 0 6px; }
+.scan-tabella { display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }

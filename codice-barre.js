@@ -69,6 +69,10 @@ function scansioneHTML(c) {
   else if (st === "cerco") corpo = `<p class="scan-stato">Cerco il prodotto ${esc(s.codice)}…</p>`;
   else if (st === "letto") corpo = `<p class="scan-ok">✓ Codice letto: controlla il numero</p>${campo("Codice a barre")}
       <div class="scan-links">${link("scan", "📸 Rifai la foto")}</div>`;
+  else if (st === "nontrovato") corpo = `<div class="scan-trovato scan-nontrovato"><p class="st-ko">✕ Prodotto non identificato</p>
+      <p class="st-valori">${s.nomeArch ? `<b>${esc(s.nomeArch)}</b>: mancano i valori nutrizionali.` : `Il codice ${esc(s.codice)} non è nell'archivio.`} Aggiungilo tu fotografando la tabella nutrizionale.</p></div>
+      <label class="btn block scan-principale scan-tabella">📸 Fotografa la tabella nutrizionale<input type="file" accept="image/*" capture="environment" hidden data-scan-tabella></label>
+      <div class="scan-links">${link("scan-amano", "Scrivo io i valori")}${link("scan", "📸 Un altro codice")}</div>`;
   else if (st === "trovato" && s.prod) corpo = `<div class="scan-trovato"><p class="st-ok">✓ Prodotto trovato</p><p class="st-nome">${esc(s.prod.nome)}</p>
       <p class="st-valori"><b>${Math.round(s.prod.base4[0])} kcal</b> · P ${s.prod.base4[1]} · C ${s.prod.base4[2]} · G ${s.prod.base4[3]} <span>per 100 g</span></p>
       ${s.prod.porzione ? `<p class="st-porz">Porzione indicata: ${Math.round(s.prod.porzione)} g</p>` : ""}</div>
@@ -156,6 +160,13 @@ async function avviaScansione() {
     rirenderLibero();
   }
 }
+// dal «non identificato» al modulo del nuovo alimento: il codice resta legato, così la prossima volta lo trova subito
+function apriNuovoDaCodice(c) {
+  const s = c.scansione || {};
+  c.scansione = null;
+  if (s.stato === "nontrovato" && s.codice) { c.ignoto = "Prodotto " + s.codice; c.ignotoCodice = s.codice; c.nomeArchivio = s.nomeArch || ""; c.ignotoNuovo = false; }
+  else { c.ignoto = null; c.ignotoCodice = null; c.ignotoNuovo = true; }
+}
 // prodotto trovato: prima lo vedi (nome e valori), poi lo aggiungi tu
 function mostraTrovato(prod, codice) {
   if (!liberoCtx) return;
@@ -180,9 +191,8 @@ async function cercaCodice(codice) {
     if (!liberoCtx) return;
     if (prod) { mostraTrovato(prod, codice); return; }
     const pr = d && d.status === 1 ? (d.product || {}) : null, nomeArch = pr ? String(pr.product_name_it || pr.product_name || "").trim() : "";
-    // non c'è: si inseriscono i valori dall'etichetta
-    liberoCtx.scansione = null;
-    liberoCtx.ignoto = "Prodotto " + codice; liberoCtx.ignotoCodice = codice; liberoCtx.nomeArchivio = nomeArch;   // c'è il nome ma mancano i valori: il nome si scrive da solo
+    // non c'è: riquadro rosso, poi foto della tabella (o valori a mano)
+    liberoCtx.scansione = { stato: "nontrovato", codice, nomeArch };
     rirenderLibero();
   } catch (e) {
     if (!liberoCtx) return;
@@ -230,6 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (a === "scan-nuovo") { fermaFotocamera(); c.scansione = null; c.ignoto = null; c.ignotoCodice = null; c.ignotoNuovo = true; rirenderLibero(); return; }
     if (a === "scan-annulla") { fermaFotocamera(); c.scansione = null; rirenderLibero(); return; }
     if (a === "scan-scatta") { scattaELeggi(); return; }
+    if (a === "scan-amano") { apriNuovoDaCodice(c); rirenderLibero(); return; }
     if (a === "scan-scrivi") { fermaFotocamera(); c.scansione = { stato: "manuale" }; rirenderLibero(); const i2 = document.getElementById("scan-manuale"); if (i2) i2.focus(); return; }
     if (a === "scan-aggiungi" && c.scansione && c.scansione.prod) { usaProdotto(c.scansione.prod, c.scansione.codice); return; }
     if (a === "scan-cerca") { fermaFotocamera(); cercaCodice((document.getElementById("scan-manuale") || {}).value); return; }
@@ -240,7 +251,7 @@ document.addEventListener("DOMContentLoaded", () => {
   mc.addEventListener("change", (e) => {
     if (liberoCtx && e.target.matches("[data-scan-tabella]")) {   // nuovo alimento dalla foto della tabella: si apre il modulo e i valori si riempiono da soli
       const files = [...(e.target.files || [])]; e.target.value = ""; if (!files.length) return;
-      const c = liberoCtx; fermaFotocamera(); c.scansione = null; c.ignoto = null; c.ignotoCodice = null; c.ignotoNuovo = true; rirenderLibero();
+      const c = liberoCtx; fermaFotocamera(); apriNuovoDaCodice(c); rirenderLibero();
       if (typeof leggiEtichettaDaFile === "function") leggiEtichettaDaFile("etic-libero", files);
     }
   });
