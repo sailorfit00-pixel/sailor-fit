@@ -1851,3 +1851,16 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 
 /* più fit già applicato: solo una riga lilla, niente riquadro */
 .ant-fatto { color: var(--lilla); font-weight: 700; margin: 2px 0 14px; }
+
+/* «Già mangiato»: kcal del pasto in evidenza, quelle previste in grigio */
+.pm-tot .pm-kcal { font-size: inherit; }
+.pm-tot .pm-kcal b { color: var(--lilla); font-weight: 700; }
+.pm-tot .pm-kcal em { font-style: normal; font-weight: 400; color: var(--muted); }
+.pm-tot .pm-kcal { color: var(--muted); font-weight: 400; }
+/* proteine, carboidrati e grassi subito sotto il riquadro, allineati a sinistra */
+.modal .pm-sezione { margin-bottom: 0; }
+.modal .lib-risultato { margin-top: 0; }
+.modal .lib-risultato .r-macro { justify-content: flex-start; margin-top: 0; padding-left: 2px; }
+.pm-tot .pm-kcal { text-transform: none; letter-spacing: 0; color: var(--muted) !important; font-weight: 400 !important; }
+.pm-tot .pm-kcal b { color: var(--lilla) !important; font-weight: 700 !important; }
+.pm-tot .pm-kcal em { color: var(--muted) !important; }

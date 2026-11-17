@@ -831,10 +831,10 @@ function consiglioFurboHTML(c, m, fitMosse = []) {
 }
 
 // Quello che hai nel pasto rispetto all'obiettivo, in una riga: "88 / 128 kcal · P 11/11 · C 9/14 · G 0/3" (senza obiettivo, solo i valori)
-function macroHaObiettivoHTML(m, T) {
+function macroHaObiettivoHTML(m, T, senzaKcal) {
   const r = (x) => Math.round(+x || 0), ob = T && (T.proteine + T.carboidrati + T.grassi) > 0;
   const v = (k) => `${r(m[k])}${ob ? `<em>/${r(T[k])}</em>` : ""}`;
-  return `<span><b>${r(m.kcal)}</b>${ob ? `<em> / ${r(T.kcal)}</em>` : ""} kcal</span><span class="rr-macro"><i class="dot-p"></i><span>P ${v("proteine")}</span><i class="dot-c"></i><span>C ${v("carboidrati")}</span><i class="dot-g"></i><span>G ${v("grassi")}</span></span>`;
+  return `${senzaKcal ? "" : `<span><b>${r(m.kcal)}</b>${ob ? `<em> / ${r(T.kcal)}</em>` : ""} kcal</span>`}<span class="rr-macro"><i class="dot-p"></i><span>P ${v("proteine")}</span><i class="dot-c"></i><span>C ${v("carboidrati")}</span><i class="dot-g"></i><span>G ${v("grassi")}</span></span>`;
 }
 // La ricetta a porzioni (banana bread, pancake…) già cucinata: si cambia quante ne mangi, non gli ingredienti
 function ricettaPorzioniIntatta(c) {
@@ -1111,7 +1111,7 @@ function liberoHTML() {
     ? x.ks.forEach(k => schede.push({ t: quando(k), k, html: voceHTML(k) }))
     : schede.push({ t: Math.min(...x.ks.map(quando)), k: Math.min(...x.ks), html: ricettaHTML(x.grp, x.html) }));
   schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
-  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza && !c._creatoOra ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
+  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza && !c._creatoOra ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><span class="pm-kcal"><b>${kcalTot}</b>${T.kcal > 0 ? `<em> / ${Math.round(T.kcal)}</em>` : ""} kcal</span></p>${schede.map(x => x.html).join("")}</div>`;   // le kcal del pasto rispetto a quelle previste
 
   const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto pagina${c.ignotoCodice ? " da-codice" : ""}">
       ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Codice ${esc(c.ignotoCodice)} · controlla i valori e salva.</p>`
@@ -1146,7 +1146,7 @@ function liberoHTML() {
     ${c.items.length ? `
       ${ingrLive}
       <div class="lib-risultato">
-        <div class="r-macro">${macroHaObiettivoHTML(m, T)}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
+        <div class="r-macro">${macroHaObiettivoHTML(m, T, true)}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
       </div>
       ${pastoPassatoC(c) ? "" : furboBlocco}
       ${bloccato ? "" : altreIdeeHTML(c)}
