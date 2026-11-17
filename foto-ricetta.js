@@ -320,6 +320,15 @@ document.addEventListener("change", async e => {
 
 // ---- Tabella nutrizionale da foto: i valori per 100 g finiscono nei campi dell'etichetta (poi li controlli tu) ----
 // Con due colonne (per 100 g e per porzione) si prende la prima, che di solito è quella per 100 g.
+// La tabella è per 100 g (o 100 ml) oppure per pezzo/porzione? Se c'è «100 g» vince quella colonna, che è la prima e quella che si legge.
+function baseDaEtichetta(testo) {
+  const t = String(testo).toLowerCase().replace(/,/g, ".");
+  if (/100\s*(g|gr|ml)\b/.test(t)) return { per: "100" };
+  const m = t.match(/(?:per|a|1)\s+(?:porzione|pezzo|barretta|biscotto|vasetto|confezione|bottiglia|lattina|fetta|unit[aà]|merendina|snack|bustina|pz)[^\d]{0,20}(\d+(?:\.\d+)?)\s*(?:g|gr|ml)\b/);
+  if (m) return { per: "pz", pesoPz: +m[1] };
+  if (/porzione|pezzo|barretta|vasetto|merendina/.test(t)) return { per: "pz" };
+  return { per: "100" };
+}
 function valoriDaEtichetta(testo) {
   const t = String(testo).toLowerCase().replace(/,/g, ".").replace(/[|]/g, " ").replace(/\bgr?\b/g, "g").replace(/[ \t]+/g, " ");
   const num = (re, max) => {
@@ -355,6 +364,12 @@ async function leggiEtichettaDaFile(id, files) {
     const v = valoriDaEtichetta(testo), box = document.getElementById(id);
     if (!box || v.slice(0, 4).every(x => x === null)) { mostra("Non trovo la tabella: riprova con una foto più nitida e dritta."); return; }
     v.forEach((x, k) => { const el = box.querySelector(`[data-etic="${k}"]`); if (el && x !== null) el.value = String(x); });
+    // per 100 g o per pezzo: lo capisce dal testo della tabella (si può sempre cambiare a mano)
+    const b = baseDaEtichetta(testo), per = document.querySelector(`[data-etic-per-for="${id}"]`);
+    if (per && b) {
+      const r = per.querySelector(`input[value="${b.per}"]`); if (r) { r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); }
+      const pzg = per.querySelector("[data-etic-pzg]"); if (pzg && b.pesoPz) pzg.value = String(b.pesoPz);
+    }
     // il nome del prodotto, se la foto lo mostra e il campo è ancora vuoto (o è solo un codice a barre)
     const nomeEl = document.getElementById("ignoto-nome"), tit = String(window._ultimoTitolo || "").replace(/\s+/g, " ").trim();
     if (nomeEl && (!nomeEl.value.trim() || /^\d+$/.test(nomeEl.value.trim())) && /[A-Za-zÀ-ù]{4}/.test(tit) && !/valori|nutriz|energia|dichiarazione|per 100/i.test(tit)) {

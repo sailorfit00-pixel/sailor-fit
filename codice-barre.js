@@ -19,7 +19,8 @@ function salvaCodice(codice, nome) { const c = leggiCodici(); c[codice] = nome; 
 function daOpenFoodFacts(p) {
   const n = p.nutriments || {};
   const num = (k) => { const v = parseFloat(n[k]); return isNaN(v) ? null : Math.round(v * 10) / 10; };
-  const kcal = num("energy-kcal_100g") ?? (num("energy_100g") !== null ? Math.round(num("energy_100g") / 4.184) : null);
+  const kj = num("energy-kj_100g") ?? num("energy_100g");
+  const kcal = num("energy-kcal_100g") ?? (kj !== null ? Math.round(kj / 4.184) : null);
   if (kcal === null) return null;
   const marca = (Array.isArray(p.brands) ? p.brands[0] : String(p.brands || "").split(",")[0]).trim();
   let nome = String(p.product_name_it || p.product_name || "Prodotto").trim();
@@ -53,21 +54,30 @@ function usaProdotto(prod, codice) {
 
 // -------- Codice a barre --------
 function scansioneHTML(c) {
-  const s = c.scansione;
-  return `<h3 class="modal-title">📷 Codice a barre</h3>
-    ${s.stato === "fotocamera" ? `<div class="scan-video"><video id="scan-video" playsinline muted></video><span class="scan-mirino"></span></div>
-      <p class="hint scan-aiuto">Inquadra il codice nel riquadro: si legge da solo. Se non parte, tocca «Scatta».</p>
-      <button class="btn block scan-scatta" data-lib="scan-scatta">📸 Scatta e leggi</button>` : ""}
-    ${s.stato === "leggo" ? `<p class="scan-stato">Leggo il codice…</p>` : ""}
-    <label class="btn-sec block scan-foto">🥫 Niente codice? Fotografa la tabella nutrizionale<input type="file" accept="image/*" capture="environment" hidden data-scan-tabella></label>
-    ${s.stato === "cerco" ? `<p class="scan-stato">Cerco il prodotto ${esc(s.codice)}…</p>` : ""}
-    ${s.messaggio ? `<p class="nota">${s.messaggio}</p>` : ""}
-    <label class="wiz-l">Oppure scrivi il numero sotto il codice a barre</label>
-    <div class="lib-add">
-      <input id="scan-manuale" class="qta-input wiz-full" inputmode="numeric" autocomplete="off" placeholder="es. 8001234567890" value="${esc(s.codice || "")}">
-      <button class="btn lib-piu" data-lib="scan-cerca" aria-label="Cerca il codice">→</button>
-    </div>
-    <div class="wiz-nav"><button class="btn-sec" data-lib="scan-annulla">Annulla</button><button class="btn-sec" data-lib="scan-nuovo">✍️ Scrivo io i valori</button></div>`;
+  // Una schermata semplice: in ogni momento un solo tasto grande, il resto sono piccoli link
+  const s = c.scansione, st = s.stato;
+  const link = (azione, testo) => `<button class="btn-link scan-link" data-lib="${azione}">${testo}</button>`;
+  const campo = (titolo) => `<label class="wiz-l">${titolo}</label>
+    <input id="scan-manuale" class="qta-input wiz-full" inputmode="numeric" autocomplete="off" placeholder="es. 8001234567890" value="${esc(s.codice || "")}">
+    <button class="btn block scan-principale" data-lib="scan-cerca">🔎 Cerca il prodotto</button>`;
+  let corpo = "";
+  if (st === "fotocamera") corpo = `<div class="scan-video"><video id="scan-video" playsinline muted></video><span class="scan-mirino"></span></div>
+      <p class="hint scan-aiuto">Inquadra il codice a barre</p>
+      <button class="btn block scan-principale" data-lib="scan-scatta">📸 Scatta</button>
+      <div class="scan-links">${link("scan-scrivi", "Scrivi il numero")}${link("scan-nuovo", "Non ha il codice")}</div>`;
+  else if (st === "leggo") corpo = `<p class="scan-stato">Leggo il codice…</p>`;
+  else if (st === "cerco") corpo = `<p class="scan-stato">Cerco il prodotto ${esc(s.codice)}…</p>`;
+  else if (st === "letto") corpo = `<p class="scan-ok">✓ Codice letto: controlla il numero</p>${campo("Codice a barre")}
+      <div class="scan-links">${link("scan", "📸 Rifai la foto")}</div>`;
+  else if (st === "trovato" && s.prod) corpo = `<div class="scan-trovato"><p class="st-ok">✓ Prodotto trovato</p><p class="st-nome">${esc(s.prod.nome)}</p>
+      <p class="st-valori"><b>${Math.round(s.prod.base4[0])} kcal</b> · P ${s.prod.base4[1]} · C ${s.prod.base4[2]} · G ${s.prod.base4[3]} <span>per 100 g</span></p>
+      ${s.prod.porzione ? `<p class="st-porz">Porzione indicata: ${Math.round(s.prod.porzione)} g</p>` : ""}</div>
+      <button class="btn block scan-principale" data-lib="scan-aggiungi">✓ Aggiungi al pasto</button>
+      <div class="scan-links">${link("scan", "📸 Un altro codice")}</div>`;
+  else corpo = `${s.messaggio ? `<p class="nota scan-msg">${s.messaggio}</p>` : ""}${campo("Numero sotto il codice a barre")}
+      <div class="scan-links">${link("scan", "📸 Usa la fotocamera")}${link("scan-nuovo", "Non ha il codice")}</div>`;
+  return `<button class="btn-link modal-indietro" data-lib="scan-annulla">‹ Torna al pasto</button>
+    <h3 class="modal-title">Codice a barre</h3>${corpo}`;
 }
 function caricaZXing() {
   if (window.ZXingBrowser) return Promise.resolve();
@@ -102,6 +112,12 @@ async function leggiCodiceDaCanvas(canvas) {
   for (const c of prove) { try { const r = l.decodeFromCanvas(c); if (r) return r.getText(); } catch (e) { /* niente codice in questa prova */ } }
   return null;
 }
+// codice trovato nella foto: si scrive nel campo e si aspetta che tu lo confermi
+function codiceLetto(cod) {
+  if (!liberoCtx) return;
+  liberoCtx.scansione = { stato: "letto", codice: String(cod || "").replace(/\D/g, "") };
+  rirenderLibero();
+}
 function nonLetto(codice) {
   if (!liberoCtx) return;
   liberoCtx.scansione = { stato: "manuale", codice, messaggio: "Non riesco a leggere il codice. Riprova con il codice ben a fuoco e illuminato, oppure scrivi il numero qui sotto." };
@@ -114,7 +130,7 @@ async function scattaELeggi() {
   fermaFotocamera();
   liberoCtx.scansione = { stato: "leggo" }; rirenderLibero();
   const cod = await leggiCodiceDaCanvas(canvas);
-  if (cod) cercaCodice(cod); else nonLetto();
+  if (cod) codiceLetto(cod); else nonLetto();
 }
 function fermaFotocamera() {
   try { if (_controlli) _controlli.stop(); } catch (e) {}
@@ -130,7 +146,7 @@ async function avviaScansione() {
     await caricaZXing();
     if (!liberoCtx || !liberoCtx.scansione) return;
     const l = lettoreCodici(), video = document.getElementById("scan-video");
-    const trovato = (res) => { if (res && liberoCtx && liberoCtx.scansione && liberoCtx.scansione.stato === "fotocamera") { fermaFotocamera(); cercaCodice(res.getText()); } };
+    const trovato = (res) => { if (res && liberoCtx && liberoCtx.scansione && liberoCtx.scansione.stato === "fotocamera") { fermaFotocamera(); codiceLetto(res.getText()); } };
     try {   // fotocamera posteriore ad alta risoluzione: i codici piccoli si leggono meglio
       _controlli = await l.decodeFromConstraints({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } }, video, trovato);
     } catch (e) { _controlli = await l.decodeFromVideoDevice(undefined, video, trovato); }
@@ -140,6 +156,12 @@ async function avviaScansione() {
     rirenderLibero();
   }
 }
+// prodotto trovato: prima lo vedi (nome e valori), poi lo aggiungi tu
+function mostraTrovato(prod, codice) {
+  if (!liberoCtx) return;
+  liberoCtx.scansione = { stato: "trovato", prod, codice };
+  rirenderLibero();
+}
 async function cercaCodice(codice) {
   const c = liberoCtx; if (!c) return;
   codice = String(codice || "").replace(/\D/g, "");
@@ -148,7 +170,7 @@ async function cercaCodice(codice) {
   const noto = leggiCodici()[codice] || CODICI_NOTI[codice];
   if (noto && (window.ALIMENTI || {})[noto]) {
     const v = window.ALIMENTI[noto];
-    usaProdotto({ nome: noto, base4: v, extra4: (window.NUTRIENTI_EXTRA || {})[noto] || null }, codice); return;
+    mostraTrovato({ nome: noto, base4: v, extra4: (window.NUTRIENTI_EXTRA || {})[noto] || null }, codice); return;
   }
   c.scansione = { stato: "cerco", codice }; rirenderLibero();
   try {
@@ -156,10 +178,11 @@ async function cercaCodice(codice) {
     const d = await r.json();
     const prod = d && d.status === 1 ? daOpenFoodFacts(d.product || {}) : null;
     if (!liberoCtx) return;
-    if (prod) { usaProdotto(prod, codice); return; }
+    if (prod) { mostraTrovato(prod, codice); return; }
+    const pr = d && d.status === 1 ? (d.product || {}) : null, nomeArch = pr ? String(pr.product_name_it || pr.product_name || "").trim() : "";
     // non c'è: si inseriscono i valori dall'etichetta
     liberoCtx.scansione = null;
-    liberoCtx.ignoto = "Prodotto " + codice; liberoCtx.ignotoCodice = codice;
+    liberoCtx.ignoto = "Prodotto " + codice; liberoCtx.ignotoCodice = codice; liberoCtx.nomeArchivio = nomeArch;   // c'è il nome ma mancano i valori: il nome si scrive da solo
     rirenderLibero();
   } catch (e) {
     if (!liberoCtx) return;
@@ -207,6 +230,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (a === "scan-nuovo") { fermaFotocamera(); c.scansione = null; c.ignoto = null; c.ignotoCodice = null; c.ignotoNuovo = true; rirenderLibero(); return; }
     if (a === "scan-annulla") { fermaFotocamera(); c.scansione = null; rirenderLibero(); return; }
     if (a === "scan-scatta") { scattaELeggi(); return; }
+    if (a === "scan-scrivi") { fermaFotocamera(); c.scansione = { stato: "manuale" }; rirenderLibero(); const i2 = document.getElementById("scan-manuale"); if (i2) i2.focus(); return; }
+    if (a === "scan-aggiungi" && c.scansione && c.scansione.prod) { usaProdotto(c.scansione.prod, c.scansione.codice); return; }
     if (a === "scan-cerca") { fermaFotocamera(); cercaCodice((document.getElementById("scan-manuale") || {}).value); return; }
     if (a === "off-cerca") { cercaProdottiOFF(c.ignoto || ""); return; }
     const sc = e.target.closest("[data-off-scegli]");

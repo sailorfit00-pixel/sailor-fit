@@ -1685,4 +1685,26 @@ select.qta-input { padding-right: 30px; background-image: url("data:image/svg+xm
 
 /* prodotto non trovato dal codice a barre: messaggio chiaro e «Scatta foto» in evidenza */
 .non-trovato { margin: 0 0 10px; line-height: 1.45; }
-.lib-ignoto.da-codice .foto-due .wiz-foto:first-child { background: var(--accent); border-color: var(--accent); color: #0d1a12; font-weight: 700; }
+.lib-ignoto .foto-due .wiz-foto:first-child { background: var(--accent); border-color: var(--accent); color: #0d1a12; font-weight: 700; }
+
+/* codice letto dalla foto: lo controlli e poi cerchi il prodotto */
+.scan-letto { margin: 0 0 10px; line-height: 1.45; }
+.scan-cerca-grande { margin: 14px 0 8px; }
+.scan-riprova { text-align: center; margin: 0 0 12px; }
+
+/* prodotto trovato dal codice a barre: lo vedi prima di aggiungerlo */
+.scan-trovato { background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r-l); padding: 14px; margin: 12px 0; }
+.scan-trovato .st-ok { color: var(--accent); font-weight: 700; margin: 0 0 4px; }
+.scan-trovato .st-nome { font-size: 18px; font-weight: 700; margin: 0 0 6px; }
+.scan-trovato .st-valori { margin: 0; }
+.scan-trovato .st-valori span, .scan-trovato .st-porz { color: var(--muted); font-size: 13px; }
+.scan-trovato .st-porz { margin: 4px 0 0; }
+
+/* schermata del codice a barre: un tasto grande, il resto piccoli link */
+.scan-principale { margin: 14px 0 6px; }
+.scan-links { display: flex; justify-content: center; gap: 22px; flex-wrap: wrap; margin: 6px 0 4px; }
+.scan-link { color: var(--lilla); font-size: 15px; padding: 8px 4px; }
+.scan-ok { color: var(--accent); font-weight: 700; margin: 4px 0 4px; }
+.scan-msg { margin: 0 0 6px; }
+.scan-aiuto { text-align: center; margin: 10px 0 0; }
+.scan-ok-titolo { font-weight: 700; font-size: 17px; margin: 0 0 4px; }
