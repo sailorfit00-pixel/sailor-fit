@@ -52,7 +52,7 @@ else {
   var fatti=[]; // [icona, testo, classe]
   var R=[];     // righe del verdetto: [livello 0 ok/1 attenzione/2 serve lavoro, icona, testo]
   var ob=d.ob||[], di=d.di||[], al=(d.al||[]).filter(function(x){return x!=="Nessuna";}), nm=d.nm||[], sp=d.sp||[], pa=d.pa||[];
-  var dimagrire=ob.indexOf("Dimagrire")>-1, massa=ob.indexOf("Mettere massa")>-1, mant=ob.indexOf("Mantenere il peso")>-1;
+  var dimagrire=ob.indexOf("Dimagrire")>-1, massa=ob.indexOf("Mettere massa")>-1, mant=ob.indexOf("Mantenere il peso")>-1, perf=ob.indexOf("Migliorare le prestazioni")>-1;
 
   // ---- numeri (stessa formula dell'app) ----
   var NUM="";
@@ -81,6 +81,7 @@ else {
       var bmi=peso/Math.pow(alt/100,2);
       if(po&&po/Math.pow(alt/100,2)<18.5) R.push([2,"🔴","Peso obiettivo sotto la normalità (BMI<18,5): meglio parlarne"]);
     }
+    else if(perf&&!massa) R.push([1,"🟡","Obiettivo prestazioni: nel Profilo deficit 0% e recupero 100% dell'allenamento, carboidrati attorno agli allenamenti"]);
     else if(massa) R.push([1,"🟡","Obiettivo massa: nel Profilo il deficit va messo a 0 (anzi, un piccolo surplus)"]);
     else if(mant) R.push([1,"🟡","Mantenimento: nel Profilo il deficit va messo a 0%"]);
     else R.push([0,"🟢","Nessun obiettivo di peso: l'app va bene, con deficit a 0%"]);
@@ -129,8 +130,8 @@ else {
   var SPORT_APP=["CrossFit","Equitazione","Kitesurf","Corsa","Allenamento funzionale","Sala pesi","Camminata","Bici","Ballo","Corpo libero"];
   var nome=d.n||"Senza nome", slug=(nome.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""))||"persona";
   var gg=d.g||"";
-  var protK=massa?2.0:(gg==="0-1"?1.6:(gg==="2-3"?1.8:2.2)), grK=(massa||mant)?0.8:0.6;
-  var defPct=massa?-8:(dimagrire?(d.t==="Senza fretta"?10:15):0);
+  var protK=massa?2.0:(gg==="0-1"?1.6:(gg==="2-3"?1.8:2.2)), grK=(massa||mant||perf)?0.8:0.6;
+  var defPct=massa?-8:(perf&&!dimagrire?0:(dimagrire?(d.t==="Senza fretta"?10:15):0));
   var sportScelti=sp.filter(function(x){return x!=="Nessuno";});
   var B=[];
   B.push("# Brief: Sailor Fit su misura per "+nome);
@@ -140,12 +141,14 @@ else {
   B.push("## 1. Persona");
   B.push("- Nome: "+nome+" · "+(d.s||"sesso non indicato")+" · "+(d.e||"?")+" anni · "+(d.a||"?")+" cm · "+(d.p||"?")+" kg"+(d.po?" → obiettivo "+d.po+" kg":""));
   B.push("- Obiettivo: "+(ob.join(", ")||"non indicato")+(d.t?" · tempo: "+d.t:""));
+  if(d.oba) B.push("- Obiettivo con parole sue: «"+d.oba+"» → tienine conto nelle scelte (è un'atleta/o esperta/o: niente consigli da principiante)");
+  B.push("- App che usa adesso: "+(d.au||"—")+(d.note?" · cosa gli manca: «"+d.note+"»":"")+" (NON conosce la mia app: le sue richieste partono dall'app che ha ora)");
   B.push("- Lavoro: "+(d.l||"—")+" · Telefono: "+(d.tel||"—")+" · Uso previsto: "+(d.u||"—"));
   B.push("- Testi dell'app: "+(d.s==="Uomo"?"forma MASCHILE":(d.s==="Donna"?"forma FEMMINILE":"forma neutra"))+", titolo/nome app con il suo nome o uno a scelta.");
   B.push("");
   B.push("## 2. Profilo da impostare (`PROFILO_DEFAULT` in app.js)");
   B.push("- peso: "+(d.p||"?")+(typeof bmr!=="undefined"?" · bmr: "+bmr+" (Mifflin-St Jeor)":" · bmr: DA CALCOLARE (mancano dati)"));
-  B.push("- deficit: "+defPct+"%"+(defPct<0?" (surplus per mettere massa)":"")+" · recupero allenamento: 80%");
+  B.push("- deficit: "+defPct+"%"+(defPct<0?" (surplus per mettere massa)":"")+" · recupero allenamento: "+(perf&&!dimagrire?"100":"80")+"%");
   B.push("- proteine: "+protK+" g/kg · grassi: "+grK+" g/kg · carboidrati = il resto (valori PROPOSTI in base a obiettivo e giorni di sport; Serena usa 2,4 e 0,6: non copiarli alla cieca)");
   if(typeof riposo!=="undefined") B.push("- Obiettivi attesi: riposo ~"+riposo+" kcal · allenamento ~"+allen+" kcal (verifica che l'app dia numeri simili)");
   if(po&&po>=peso&&dimagrire) B.push("- ⚠️ peso obiettivo non più basso dell'attuale: chiedimi conferma prima di fissare il deficit");
@@ -180,7 +183,7 @@ else {
   B.push("- Non scelte (decidi tu, restano com'è): "+nf(fn.split("").map(function(c,i){return c==="-"?i:-1;}).filter(function(i){return i>-1;})));
   B.push("- Come preferisce registrare: "+((d.rg||[]).join(", ")||"—"));
   B.push("");
-  if(d.note){ B.push("## 7. Richieste sue"); B.push(d.note); B.push(""); }
+  if(d.note){ B.push("## 7. Cosa gli manca nell'app che usa ora"); B.push(d.note); B.push(""); }
   B.push("## "+(d.note?"8":"7")+". Punti d'attenzione emersi dal questionario");
   R.slice().sort(function(a,b){return b[0]-a[0];}).forEach(function(r){B.push("- "+r[1]+" "+r[2]);});
   B.push("");
@@ -202,7 +205,7 @@ else {
     '<section><h2>📱 Funzioni</h2><b>👍 Sì</b><br>'+tags(si,"s")+'<br><br><b>🤔 Forse</b><br>'+tags(fo,"f")+'<br><br><b>👎 No</b><br>'+tags(no,"n")+'</section>'+
     (d.note?'<section><h2>💬 Note</h2>'+esc(d.note)+'</section>':'')+
     '<section><h2>🍽️ Il resto</h2><ul>'+
-      [["🎯","Obiettivo",(ob.join(", ")||"—")+(d.t?" · "+d.t:"")],["🏃","Sport",(sp.concat(d.spa?[d.spa]:[]).join(", ")||"—")+" · "+(d.g||"—")+" gg/sett"],["🍽️","Pasti",pa.join(", ")||"—"],["🥦","Alimentazione",di.join(", ")||"—"],["🚫","Non mangia",nm2.join(", ")||"—"],["⚠️","Punti deboli",(d.db||[]).join(", ")||"—"]]
+      [["🎯","Obiettivo",(ob.concat(d.oba?["«"+d.oba+"»"]:[]).join(", ")||"—")+(d.t?" · "+d.t:"")],["🏃","Sport",(sp.concat(d.spa?[d.spa]:[]).join(", ")||"—")+" · "+(d.g||"—")+" gg/sett"],["🍽️","Pasti",pa.join(", ")||"—"],["🥦","Alimentazione",di.join(", ")||"—"],["🚫","Non mangia",nm2.join(", ")||"—"],["⚠️","Punti deboli",(d.db||[]).join(", ")||"—"]]
       .map(function(r){return '<li><i>'+r[0]+'</i><span><b>'+r[1]+':</b> '+esc(r[2])+'</span></li>';}).join("")+'</ul></section>';
 }
 </script>

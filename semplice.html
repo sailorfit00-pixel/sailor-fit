@@ -56,17 +56,23 @@ var Q = [
  {k:"e", t:"n", e:"🎂", q:"Quanti anni hai?", un:"anni", ph:"34"},
  {k:"a", t:"n", e:"📏", q:"Quanto sei alta/o?", un:"cm", ph:"168"},
  {k:"p", t:"n", e:"⚖️", q:"Quanto pesi?", un:"kg", ph:"65", dec:1},
- {k:"po", t:"n", e:"🎯", q:"Che peso vorresti?", un:"kg", ph:"60", dec:1, opz:1},
- {k:"ob", t:"u", e:"✨", q:"Cosa vuoi ottenere?", o:[["Dimagrire","📉"],["Mantenere il peso","⚖️"],["Mettere massa","💪"],["Mangiare meglio","🥗"]], arr:1},
+ {k:"ob", t:"m", e:"✨", q:"Qual è il tuo obiettivo?", o:[["Dimagrire","📉"],["Mantenere il peso","⚖️"],["Mettere massa","💪"],["Migliorare le prestazioni","🏆"],["Mangiare meglio","🥗"],["Più energia","⚡"]], req:1, due:1, altro:"oba", altroPh:"Con parole tue (se vuoi)"},
+ {k:"po", t:"n", e:"🎯", q:"Che peso vorresti?", un:"kg", ph:"60", dec:1, opz:1, salta:function(a){var o=a.ob||[];return !(o.indexOf("Dimagrire")>-1||o.indexOf("Mettere massa")>-1);}},
  {k:"sp", t:"m", e:"🏃‍♀️", q:"Che sport fai?", o:[["CrossFit","🏋️"],["Sala pesi","💪"],["Allenamento funzionale","🤸‍♀️"],["Corsa","🏃"],["Camminata","🚶"],["Bici","🚴"],["Nuoto","🏊"],["Yoga/Pilates","🧘"],["Padel/Tennis","🎾"],["Ballo","💃"],["Sport di squadra","🏐"],["Nessuno","🛋️"]], excl:"Nessuno", due:1, altro:"spa"},
  {k:"g", t:"u", e:"📅", q:"Quanti giorni a settimana ti alleni?", o:[["0-1","1️⃣"],["2-3","3️⃣"],["4-5","5️⃣"],["6-7","7️⃣"]], due:1, salta:function(a){return (a.sp||[]).indexOf("Nessuno")>-1||!(a.sp||[]).length&&!a.spa;}},
  {k:"oa", t:"u", e:"🕒", q:"A che ora ti alleni di solito?", o:[["Mattina","🌅"],["Pausa pranzo","🍽️"],["Pomeriggio","☀️"],["Sera","🌙"],["Cambia ogni giorno","🔀"]], arr:1, salta:function(a){return (a.sp||[]).indexOf("Nessuno")>-1||!(a.sp||[]).length&&!a.spa;}},
+ {k:"l", t:"u", e:"💼", q:"Com'è il tuo lavoro?", o:[["Seduta/o","🪑"],["In piedi/in movimento","🚶"],["Fisico","🧱"]]},
+ {k:"pa", t:"m", e:"🍽️", q:"Quali pasti fai ogni giorno?", o:[["Colazione","☕"],["Spuntino mattina","🍎"],["Pranzo","🍝"],["Merenda","🥪"],["Cena","🍲"],["Dopo cena","🍫"]], due:1},
+ {k:"c", t:"u", e:"👩‍🍳", q:"E in cucina?", o:[["Poco tempo, cose veloci","⏱️"],["Cucino volentieri","👩‍🍳"],["Preparo tutto in anticipo","🥡"]]},
  {k:"di", t:"u", e:"🥗", q:"Come mangi?", o:[["Mangio di tutto","🍽️"],["Vegetariana","🥕"],["Vegana","🌱"]], arr:1},
  {k:"al", t:"m", e:"⚠️", q:"Hai allergie o intolleranze?", o:[["Nessuna","👍"],["Glutine","🌾"],["Lattosio","🥛"],["Uova","🥚"],["Frutta secca","🥜"],["Pesce","🐟"],["Crostacei/molluschi","🦐"],["Nichel","🔩"],["Soia","🫛"]], excl:"Nessuna", due:1, altro:"ala"},
  {k:"nm", t:"m", e:"🚫", q:"C'è qualcosa che non mangi proprio?", o:[["Niente, mangio tutto","👍"],["Carne rossa","🥩"],["Pollo/tacchino","🍗"],["Maiale/salumi","🥓"],["Pesce","🐟"],["Uova","🥚"],["Latticini","🧀"],["Legumi","🫘"],["Verdure","🥬"],["Frutta","🍓"],["Funghi","🍄"],["Cipolla/aglio","🧅"],["Piccante","🌶️"]], excl:"Niente, mangio tutto", due:1, altro:"nma"},
- {k:"fn", t:"m", e:"📱", q:"Cosa vorresti nell'app?", o:[["Segnare cosa mangio","📝",0],["Settimana già pronta","🗓️",1],["Consigli su cosa mangiare","💡",2],["Calorie che cambiano con lo sport","🏃",3],["Lista della spesa","🛒",8],["Diario del peso","⚖️",10],["Foto di una ricetta","📸",6],["Codice a barre","📷",5]]},
+ {k:"db", t:"m", e:"🍰", q:"Qual è il tuo punto debole?", o:[["Nessuno","👍"],["Dolci","🍰"],["Salato/snack","🍟"],["Pane/pasta","🍞"],["Alcol","🍷"],["Fame nervosa","😮‍💨"],["Salto i pasti","⏭️"]], excl:"Nessuno", due:1},
+ {k:"fn", t:"m", e:"📱", q:"Cosa ti servirebbe in un'app?", o:[["Segnare cosa mangio","📝",0],["Settimana già pronta","🗓️",1],["Consigli su cosa mangiare","💡",2],["Calorie che cambiano con lo sport","🏃",3],["Lista della spesa","🛒",8],["Diario del peso","⚖️",10],["Foto di una ricetta","📸",6],["Codice a barre","📷",5]]},
+ {k:"u", t:"u", e:"📆", q:"Quanto useresti un'app così?", o:[["Tutti i giorni","📅"],["Qualche volta a settimana","🗓️"],["Solo per i consigli","💡"]]},
  {k:"tel", t:"u", e:"📲", q:"Che telefono hai?", o:[["iPhone","🍎"],["Android","🤖"]], due:1},
- {k:"note", t:"t", e:"💬", q:"Vuoi aggiungere qualcosa?", ph:"Scrivi qui (se vuoi)", opz:1, lungo:1}
+ {k:"au", t:"t", e:"📲", q:"Che app usi adesso per mangiare meglio o allenarti?", ph:"Nome, oppure «nessuna»", opz:1, lungo:1},
+ {k:"note", t:"t", e:"💬", q:"Nell'app che usi adesso, cosa ti manca?", ph:"Scrivi qui (se vuoi)", opz:1, lungo:1}
 ];
 var A = {};     // risposte
 var step = 0;
@@ -82,6 +88,7 @@ function prossimo(da,dir){ var i=da+dir; while(i>=0&&i<Q.length&&!attiva(Q[i])) 
 function ok(q){
   var v=A[q.k];
   if(q.opz) return true;
+  if(q.req) return (A[q.k]||[]).length>0||!!(q.altro&&A[q.altro]);
   if(q.t==="m") return true;     // si può andare avanti anche senza scegliere
   if(q.t==="u") return v!==undefined&&v!=="";
   return v!==undefined&&String(v).trim()!=="";
@@ -102,7 +109,7 @@ function render(){
     var sel = q.t==="m" ? (A[q.k]||[]) : (q.arr ? (A[q.k]||[]) : (v?[v]:[]));
     h+='<div class="sc'+(q.due?" due":"")+'">'+q.o.map(function(o,i){
       return '<button type="button" class="b'+(sel.indexOf(o[0])>-1?" on":"")+'" data-i="'+i+'"><span class="e">'+o[1]+'</span><span>'+esc(o[0])+'</span></button>'; }).join("")+'</div>';
-    if(q.altro) h+='<div class="altro"><input id="alt" type="text" placeholder="Altro? Scrivi qui" value="'+esc(A[q.altro]||"")+'"></div>';
+    if(q.altro) h+='<div class="altro"><input id="alt" type="text" placeholder="'+esc(q.altroPh||"Altro? Scrivi qui")+'" value="'+esc(A[q.altro]||"")+'"></div>';
     if(q.t==="m") h+='<p class="pic">Puoi toccarne più di uno</p>';
   }
   m.innerHTML=h; window.scrollTo(0,0); m.scrollTop=0;
@@ -118,7 +125,7 @@ function aggiornaBtn(){
 m.addEventListener("input", function(e){
   var q=Q[step];
   if(e.target.id==="inp"){ A[q.k]=e.target.value; aggiornaBtn(); salva(); }
-  if(e.target.id==="alt"){ A[q.altro]=e.target.value.trim(); salva(); }
+  if(e.target.id==="alt"){ A[q.altro]=e.target.value.trim(); aggiornaBtn(); salva(); }
 });
 m.addEventListener("click", function(e){
   var b=e.target.closest(".b"); if(!b) return;
@@ -150,8 +157,8 @@ function dati(){
   var fn=[]; for(var i=0;i<13;i++) fn.push("-");
   (A.fn||[]).forEach(function(nome){ Q.filter(function(q){return q.k==="fn";})[0].o.forEach(function(o){ if(o[0]===nome) fn[o[2]]="s"; }); });
   var nm=(A.nm||[]).filter(function(x){return x!=="Niente, mangio tutto";});
-  return {n:A.n||"",s:A.s||"",e:A.e||"",a:A.a||"",p:A.p||"",po:A.po||"",ob:A.ob||[],t:"",sp:A.sp||[],spa:A.spa||"",g:A.g||"",oa:A.oa||[],l:"",pa:[],dv:[],c:"",
-    di:A.di||[],al:A.al||[],ala:A.ala||"",nm:nm,nma:A.nma||"",db:[],u:"",tel:A.tel||"",rg:[],note:A.note||"",fn:fn.join("")};
+  return {n:A.n||"",s:A.s||"",e:A.e||"",a:A.a||"",p:A.p||"",po:A.po||"",ob:A.ob||[],oba:A.oba||"",t:"",sp:A.sp||[],spa:A.spa||"",g:A.g||"",oa:A.oa||[],l:A.l||"",pa:A.pa||[],dv:[],c:A.c||"",
+    di:A.di||[],al:A.al||[],ala:A.ala||"",nm:nm,nma:A.nma||"",db:(A.db||[]).filter(function(x){return x!=="Nessuno";}),u:A.u||"",tel:A.tel||"",rg:[],note:A.note||"",au:A.au||"",fn:fn.join("")};
 }
 function link(){
   var b=btoa(unescape(encodeURIComponent(JSON.stringify(dati())))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
@@ -161,19 +168,20 @@ function messaggio(){
   var d=dati(), L=[];
   L.push("🌙 *SAILOR FIT* – risposte di *"+(d.n||"?")+"*");
   L.push((d.s||"")+" · "+(d.e||"?")+" anni · "+(d.a||"?")+" cm · "+(d.p||"?")+" kg"+(d.po?" → "+d.po+" kg":""));
-  L.push("🎯 "+(d.ob.join(", ")||"—"));
+  L.push("🎯 "+((d.ob.concat(d.oba?[d.oba]:[])).join(", ")||"—"));
   L.push("🏃 "+((d.sp.concat(d.spa?[d.spa]:[])).join(", ")||"—")+(d.g?" · "+d.g+" gg/sett":"")+((d.oa||[]).length?" · "+d.oa.join(", "):""));
   L.push("🥗 "+(d.di.join(", ")||"—")+" · ⚠️ "+((d.al.concat(d.ala?[d.ala]:[])).join(", ")||"nessuna"));
   L.push("🚫 "+((d.nm.concat(d.nma?[d.nma]:[])).join(", ")||"niente"));
-  if(d.note) L.push("💬 "+d.note);
+  if(d.au) L.push("📲 App che usa adesso: "+d.au);
+  if(d.note) L.push("💬 Cosa gli manca: "+d.note);
   L.push(""); L.push("🔎 Scheda:"); L.push(link());
   return L.join("\n");
 }
 
 function fine(){
   document.getElementById("pg").style.width="100%";
-  m.innerHTML='<h1><span>🎉</span>Fatto, grazie!</h1><div class="sc"><p style="margin:0;color:var(--muted)">Ora tocca il bottone verde e poi invia il messaggio su WhatsApp.</p></div>';
-  btn.disabled=false; btn.className="wa"; btn.textContent="💬 Invia su WhatsApp";
+  m.innerHTML='<h1><span>🎉</span>Fatto, grazie!</h1><div class="sc"><p style="margin:0;color:var(--muted)">Ultimo passo: manda le risposte 👇</p></div>';
+  btn.disabled=false; btn.className="wa"; btn.textContent="✅ Invia le risposte";
 }
 btn.addEventListener("click", function(){
   if(step>=Q.length){ window.location.href="https://wa.me/"+NUMERO+"?text="+encodeURIComponent(messaggio()); return; }
