@@ -1371,7 +1371,7 @@ function renderOggi() {
     ${typeof recuperoHTML === "function" ? recuperoHTML(data) : ""}
     <div class="oggi-nav">
       <button class="nav-btn" data-oggi-giorno="-1" aria-label="Giorno precedente">‹</button>
-      <div class="oggi-data"><b>${isOggi ? "Oggi" : data === addGiorniISO(oggiISO(), -1) ? "Ieri" : data === addGiorniISO(oggiISO(), 1) ? "Domani" : fmtGiornoLungo(data)}</b>
+      <div class="oggi-data"><b>${isOggi ? "Oggi" : fmtGiornoLungo(data)}</b>
         <button class="tipo-btn" data-scegli-allen-data="${data}">${TIPI_GIORNATA[g.tipo].icone} ${esc(TIPI_GIORNATA[g.tipo].label)} <span class="caret">▾</span></button></div>
       <button class="nav-btn" data-oggi-giorno="1" aria-label="Giorno successivo">›</button>
     </div>
