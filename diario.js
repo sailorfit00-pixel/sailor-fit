@@ -775,24 +775,40 @@ function mosseCosaAggiungere(data, p, m) {
     else if (a.tipo === "cambia") out.push({ key: `${p}|cam|${a.r.rif[0]}|${a.r.rif[1]}|${a.a}|${a.g || 0}`, testa: `Cambia <b>${esc(a.r.nome.toLowerCase())}</b> (${Math.round(a.r.qta)} g) con <b>${a.g ? a.g + " g di " : ""}${esc(a.a.toLowerCase())}</b>`, d: a.d });
   });
   // macro quasi a posto ma restano kcal: piccoli completamenti (grassi per primi), mai oltre quello che resta; nel pre-workout niente grassi
-  if (solo && m.kcal >= 60) {
-    const A = window.ALIMENTI || {}, pre = p === "spuntino" && typeof preSera === "function" && preSera(data);
-    const POOL = [["Olio EVO", [5, 10]], ["Mandorle", [10, 15, 20]], ["Noci", [10, 15]], ["Avocado", [30, 50]], ["Banana", [60, 100]], ["Mela", [100, 150]], ["Yogurt greco 0%", [100, 150]]];
-    POOL.forEach(([n, grammi]) => {
-      if (!A[n] || MAI_CONSIGLIATI.test(n)) return;
-      let best = null;
-      grammi.forEach(g => {
-        const dd = { kcal: 0, proteine: A[n][1] * g / 100, carboidrati: A[n][2] * g / 100, grassi: A[n][3] * g / 100 };
-        dd.kcal = 4 * dd.proteine + 4 * dd.carboidrati + 9 * dd.grassi;
-        if (dd.kcal < Math.min(40, m.kcal * 0.5) || dd.kcal > m.kcal + 15) return;
-        if (dd.grassi > Math.max(m.grassi, 0) + 3 || dd.carboidrati > Math.max(m.carboidrati, 0) + 8 || dd.proteine > Math.max(m.proteine, 0) + 5) return;
-        if (pre && dd.grassi > 3) return;
-        if (!best || dd.kcal > best.d.kcal) best = { g, d: dd };
-      });
-      if (best) out.push({ key: `${p}|agg|${n}|${best.g}`, testa: `Aggiungi <b>${best.g} g di ${esc(n.toLowerCase())}</b>`, d: best.d });
-    });
-  }
+  if (solo && m.kcal >= 60) out.push(...piccoliCompletamenti(data, p, m));
   return out.filter((x, i, a) => a.findIndex(y => y.key === x.key) === i);
+}
+// Piccoli completamenti: poche kcal da riempire (macro a posto, oppure qualche grammo di grassi/carboidrati/proteine che manca).
+// Quantità piccole (anche 5 g di olio o 4 anacardi), mai oltre le kcal che restano; prima ciò che colma il macro che manca. Nel pre-workout niente grassi.
+const POOL_COMPLETAMENTI = [
+  ["Olio EVO", [3, 5, 8, 10], "g"], ["Anacardi", [5, 7, 9, 11, 15], "n"], ["Mandorle", [5, 7, 10, 15, 20], "n"], ["Noci", [5, 8, 10, 15], "g"], ["Avocado", [20, 30, 50], "g"],
+  ["Yogurt greco 0%", [50, 100, 150], "g"], ["Albume", [50, 100], "g"], ["Fesa di tacchino", [20, 30, 50], "g"],
+  ["Banana", [40, 60, 100], "g"], ["Mela", [80, 100, 150], "g"], ["Gallette di riso", [8, 16], "g"],
+];
+function piccoliCompletamenti(data, p, m) {
+  const A = window.ALIMENTI || {}, pre = p === "spuntino" && typeof preSera === "function" && preSera(data);
+  const cm = mancantiColmabili(m), manca = { proteine: m.proteine > 4 ? cm.proteine : 0, carboidrati: m.carboidrati > 5 ? cm.carboidrati : 0, grassi: m.grassi > 2 ? cm.grassi : 0 };
+  const qualcosa = manca.proteine + manca.carboidrati + manca.grassi > 0;
+  const out = [];
+  POOL_COMPLETAMENTI.forEach(([n, grammi, modo]) => {
+    if (!A[n] || MAI_CONSIGLIATI.test(n)) return;
+    let best = null;
+    grammi.forEach(g => {
+      const dd = macroAlimento(n, g);   // kcal 4/4/9 come nel diario
+      if (dd.kcal < Math.min(25, m.kcal * 0.4) || dd.kcal > m.kcal + 10) return;
+      if (dd.grassi > Math.max(m.grassi, 0) + 2 || dd.carboidrati > Math.max(m.carboidrati, 0) + 4 || dd.proteine > Math.max(m.proteine, 0) + 4) return;
+      if (pre && dd.grassi > 3) return;
+      // quanto colma ciò che manca (se manca qualcosa), altrimenti quante kcal riempie
+      const v = qualcosa ? Math.min(dd.grassi, manca.grassi) * 9 + Math.min(dd.carboidrati, manca.carboidrati) * 4 + Math.min(dd.proteine, manca.proteine) * 4 : dd.kcal;
+      if (qualcosa && v < 12) return;
+      if (!best || v > best.v || (v === best.v && dd.kcal < best.d.kcal)) best = { g, d: dd, v };
+    });
+    if (!best) return;
+    const pz = modo === "n" && (window.PESO_PZ || {})[n], k = pz ? Math.round(best.g / pz) : 0;
+    const testa = k >= 2 ? `Aggiungi <b>${k} ${esc(n.toLowerCase())}</b> (${best.g} g)` : `Aggiungi <b>${best.g} g di ${esc(n.toLowerCase())}</b>`;
+    out.push({ key: `${p}|agg|${n}|${best.g}`, testa, d: best.d, _v: best.v });
+  });
+  return out.sort((a, b) => b._v - a._v);
 }
 // i pasti ancora vuoti: ricette che ci stanno (calorie e macro che restano, quota del pasto) e riempiono quello che manca; senza ripetere base o proteina già nei pasti scritti
 function ideeCosaAggiungere(data, p, m, usate, basiC, basiP) {
@@ -1091,7 +1107,7 @@ const macroDi = (nome, g) => macroAlimento(nome, g);   // le kcal promesse = que
 // quanti grammi di un alimento stanno in ciò che resta (grassi e carboidrati mai oltre; le calorie di poco)
 function grammiCheCi(nome, voluti, massimo, m) {
   const kcalMax = m.kcal + KCAL_EXTRA, cMax = Math.max(0, m.carboidrati) + 1, gMax = Math.max(0, m.grassi) + 0.5;
-  for (let g = Math.min(massimo, Math.max(15, Math.ceil(voluti / 5) * 5)); g >= 20; g -= 5) {
+  for (let g = Math.min(massimo, Math.max(5, Math.ceil(voluti / 5) * 5)); g >= 5; g -= 5) {   // anche porzioni piccole: con poche kcal 10 g di frutta secca possono starci
     const d = macroDi(nome, g);
     if (d.kcal <= kcalMax && d.carboidrati <= cMax && d.grassi <= gMax) return { g, d };
   }
@@ -1124,7 +1140,7 @@ function mosseLeggere(data, p, m) {
   const verdure = VERDURE_CONSIGLI.filter(v => A[v]);
   const out = [];
   magre.forEach(([nome, massimo], i) => {
-    const kcalMax = Math.max(m.kcal + KCAL_EXTRA, 200);   // se si è già sopra, il pasto che resta può comunque essere leggero
+    const kcalMax = sopraKcal(m) ? 200 : m.kcal + KCAL_EXTRA;   // se si è già sopra con le kcal, il pasto che resta può comunque essere leggero; altrimenti mai oltre quelle che restano
     for (let g = Math.min(massimo, Math.max(40, Math.ceil(voluti * 100 / A[nome][1] / 5) * 5)); g >= 40; g -= 10) {
       if (tipo !== "principale") { const d = macroDi(nome, g); if (d.kcal <= kcalMax) { out.push({ key: `${p}|agg|${nome}|${g}`, testa: `Leggero: <b>${g} g di ${esc(nome.toLowerCase())}</b>`, d }); break; } continue; }
       const v = verdure[(hashStr(data + p) + i) % verdure.length], dp = macroDi(nome, g), dv = macroDi(v, 200);
@@ -1146,7 +1162,12 @@ function cosaAggiungereHTML() {
   if (mg.ok) return `<h3 class="modal-title">Giornata completa ✓</h3>`;
   const gOggi = giornoDiario(data).pasti, usate = new Set();
   const basiC = new Set(gOggi.map(x => rilevaBaseCarbo(x)).filter(Boolean)), basiP = new Set(gOggi.map(x => rilevaBaseProt(x)).filter(Boolean));
-  const righe = momentiGiorno(data).filter(p => !pastoPassato(data, p)).map(p => {
+  let momenti = momentiGiorno(data).filter(p => !pastoPassato(data, p));
+  if (!momenti.length && momentiGiorno(data).includes("cena")) momenti = ["cena"];   // la sera, a cena passata, il completamento va nella cena
+  const ultimo = momenti[momenti.length - 1];
+  const mReale = mancaData(data);   // in «modalità leggera» m è spostato apposta: i piccoli completamenti guardano le kcal che restano davvero
+  const poche = mReale.kcal >= 25 && mReale.kcal <= 220 && !sopraKcal(mReale);   // restano poche kcal: piccoli completamenti (olio, frutta secca, yogurt…)
+  const righe = momenti.map(p => {
     const scritto = gOggi.some(x => x.pasto === p);
     const kcalPasto = gOggi.filter(x => x.pasto === p).reduce((a, x) => a + (x.kcal || 0), 0), spuntino = p === "mattina" || p === "spuntino";
     const sopra = -m.carboidrati > Math.max(10, targetData(data).carboidrati * 0.05) || -m.grassi > Math.max(5, targetData(data).grassi * 0.1) || sopraKcal(m);
@@ -1154,6 +1175,8 @@ function cosaAggiungereHTML() {
     let mosse = mp ? mosseProteine(data, p, m, scritto).filter(x => !(spuntino && kcalPasto + Math.max(0, x.d.kcal) > 320)) : [];   // mancano proteine: solo fonti di proteine, in ogni pasto che resta
     if (!mosse.length) mosse = scritto ? mosseCosaAggiungere(data, p, m).filter(x => !(spuntino && kcalPasto + Math.max(0, x.d.kcal) > 320)) : ideeCosaAggiungere(data, p, m, usate, basiC, basiP);
     if (!scritto && sopra) mosse = mosseLeggere(data, p, m).concat(mosse);                // grassi o carboidrati sopra: un pasto vuoto può essere leggero
+    if (poche && p === ultimo) mosse = piccoliCompletamenti(data, p, mReale).concat(mosse);   // con poche kcal: quantità piccole che colmano quello che manca, nell'ultimo pasto
+    mosse = mosse.filter((x, i, a) => a.findIndex(y => y.key === x.key) === i);
     mosse = mosse.filter(x => !furbiScartati.has(x.key));   // suggerimenti tolti con lo swipe
     if (!mosse.length) return "";
     const giro = cosaGiro[p] || 0;
