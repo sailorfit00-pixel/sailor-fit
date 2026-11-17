@@ -91,7 +91,7 @@ function etichettaMomento(data, momento) {
 const oraDecimale = () => typeof window.__ora === "number" ? window.__ora : new Date().getHours() + new Date().getMinutes() / 60;
 // i tuoi orari: colazione 8–8:30, spuntino 11–11:30, pranzo 13:30–14:30, pre-workout 16–16:30 (allenamento ~18), cena 20:30–21:30.
 // Un momento resta "in corso" fino a un po' dopo il suo orario, poi passa al successivo
-const indiceOra = () => { const h = oraDecimale(); return h < 9.5 ? 0 : h < 12.5 ? 1 : h < 15.5 ? 2 : h < 17.5 ? 3 : 4; };
+const indiceOra = () => { const h = oraDecimale(); return h < 9.5 ? 0 : h < 12.5 ? 1 : h < 15.5 ? 2 : h < 17.5 ? 3 : h < 22 ? 4 : 5; };   // dopo le 22 anche la cena è passata
 // un pasto è "passato" se è di un giorno precedente, o di oggi ma di un momento già trascorso: lì non si propongono cambi a ciò che hai già mangiato
 function pastoPassato(data, pasto) {
   const oggi = oggiISO();
@@ -308,7 +308,9 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
       } else c.gruppi = caricaItemiVivi(data, c.pasto).gruppi;   // le intestazioni seguono lo stato (il contatore porzioni c'è solo se la ricetta è intatta)
     },
     intestazione: () => liberoCtx.items.length ? "" : liberoCtx.obiettivo(),   // con delle righe la riga "ti restano" sta sotto il risultato
-    obiettivo: () => { const T = liberoCtx.target(); return `<p class="lib-obiettivo">Obiettivo <b>${T.kcal} kcal</b> ${macroStileHTML(T, { senzaKcal: true })}</p>`; },
+    // pasto vuoto: stessa testata del pasto pieno («Obiettivo · 0 kcal / 299 kcal», sotto P C G con gli obiettivi)
+    obiettivo: () => { const T = liberoCtx.target(), z = { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 };
+      return `<p class="pm-tot lib-obiettivo"><span>Obiettivo</span><span class="pm-kcal"><b>0 kcal</b><em> / ${Math.round(T.kcal)} kcal</em></span></p><div class="r-macro lib-ob-macro">${macroHaObiettivoHTML(z, T, true)}</div>`; },
     // quando il pasto è vuoto: pasti recenti e idee dal ricettario
     idee: () => consiglioFurboHTML(liberoCtx, { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 }) + ideeBloccoHTML(liberoCtx, "💡 Idee", null),
     tutteRicette: true,
@@ -1077,13 +1079,6 @@ function rigeneraGiorno(data, momento, tutti) {   // momento: solo quel pasto; s
   ripristina();   // nessuna alternativa che stia nei valori del giorno: resta il pasto di prima
   return { prima: { [data]: orig }, messe: 0 };
 }
-// ↻ (swipe a sinistra sul pasto): rifà quel solo pasto compilato dall'app
-function cambiaPastoCompilato(momento) {
-  const r = rigeneraGiorno(dataDiario, momento, true);   // anche un pasto scritto da te: viene sostituito con uno che sta nei valori del giorno
-  renderOggi();
-  if (!r.messe) { avviso("Nessuna alternativa che stia nei tuoi valori", "", () => {}); return; }
-  avviso("✓ Pasto cambiato", "Annulla", () => { annullaPianificazione(r.prima); renderOggi(); });
-}
 function annullaPianificazione(prima) {
   const d = leggiDiario();
   Object.entries(prima).forEach(([k, v]) => { if (v === "null") delete d[k]; else d[k] = JSON.parse(v); });
@@ -1189,6 +1184,7 @@ function cosaAggiungereHTML() {
   }).join("");
   return `<h3 class="modal-title">${esc(mg.testo)}</h3>
     ${camminataHTML(data)}
+    ${righe ? `<p class="cosa-sez">🌙 Consigli furbi</p>` : ""}
     ${righe || `<p class="hint">Niente che ci stia nelle kcal che restano</p>`}`;
 }
 function aggiornaCosaAggiungere() {   // riscrive il foglio senza riaprirlo (la posizione di scorrimento resta)
@@ -1489,6 +1485,19 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-vista]").forEach(b => b.addEventListener("click", () => mostraVista(b.dataset.vista)));
 
   const oggi = document.getElementById("oggi");
+  // swipe sulla parte in alto (data e riepilogo): a sinistra il giorno dopo, a destra il giorno prima
+  let _sw = null;
+  oggi.addEventListener("touchstart", (e) => {
+    const zona = e.target.closest && e.target.closest(".oggi-nav, .oggi-card.riepilogo");
+    _sw = zona && e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  }, { passive: true });
+  oggi.addEventListener("touchend", (e) => {
+    if (!_sw || !e.changedTouches.length) return;
+    const dx = e.changedTouches[0].clientX - _sw.x, dy = e.changedTouches[0].clientY - _sw.y; _sw = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;   // solo un gesto chiaramente orizzontale
+    const btn = oggi.querySelector(`[data-oggi-giorno="${dx < 0 ? 1 : -1}"]`);
+    if (btn) btn.click();
+  }, { passive: true });
   oggi.addEventListener("click", (e) => {
     const sa = e.target.closest("[data-scegli-allen-data]");
     if (sa) {

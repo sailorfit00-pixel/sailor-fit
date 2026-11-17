@@ -1864,3 +1864,8 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 .pm-tot .pm-kcal { text-transform: none; letter-spacing: 0; color: var(--muted) !important; font-weight: 400 !important; }
 .pm-tot .pm-kcal b { color: var(--lilla) !important; font-weight: 700 !important; }
 .pm-tot .pm-kcal em { color: var(--muted) !important; }
+
+/* testata del pasto vuoto come quella del pasto pieno */
+.lib-obiettivo.pm-tot { margin: 0 0 4px; }
+.lib-ob-macro { justify-content: flex-start; margin: 0 0 12px; }
+.cosa-sez { font-size: 13px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); margin: 10px 0 2px; }

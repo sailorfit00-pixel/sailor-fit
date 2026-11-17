@@ -923,7 +923,7 @@ function altreIdeeHTML(c) {
   }
   const tutte = c._altre; if (!tutte.length) return "";
   const pagine = Math.ceil(tutte.length / 3), pg = (c.altreGiro || 0) % pagine;
-  return `<div class="altre-idee"><h4 class="cosa-testa"><span>💡 Altre idee</span>${pagine > 1 ? `<button class="cosa-altre" data-altre-idee aria-label="Altre idee">${ICONA_ALTRE}</button>` : ""}</h4>
+  return `<div class="altre-idee"><h4 class="cosa-testa"><span>💡 Idee</span>${pagine > 1 ? `<button class="cosa-altre" data-altre-idee aria-label="Altre idee">${ICONA_ALTRE}</button>` : ""}</h4>
     <div class="sugg-ricette">${tutte.slice(pg * 3, pg * 3 + 3).map(x => `<button class="riga-ricetta rr-sostituisci" data-lib-sostituisci="${esc(x.r.nome)}"><span class="rr-nome">${esc(x.nome || x.r.nome)}</span>${macroStileHTML(x.tot)}</button>`).join("")}</div></div>`;
 }
 // sostituisce tutto quello che c'è nel pasto con la ricetta scelta (porzione su misura per le kcal che restano), con Annulla
@@ -1065,7 +1065,7 @@ function liberoHTML() {
     const r0 = typeof ricettaDaNome === "function" ? ricettaDaNome(gr.ricetta) : null, o = r0 ? (r0._orig || r0) : null, passi = o && Array.isArray(o.passaggi) ? o.passaggi : [];
     return `<div class="pm-blocco pm-card pm-piatto pm-ricetta${aperta ? " aperto" : ""}" data-grp-box="${n}">
       <div class="pasto-riga pm-testa${bloccato ? " sola-lettura" : ""}" data-grp-t="${n}" data-grp-toggle="${n}" role="button" tabindex="0" aria-expanded="${aperta}">
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(gr.nome)}</b>${macroStileHTML(m, { senzaKcal: true })}</span>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(gr.nome)}</b></span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${frecciaHTML(aperta)}
         <button class="lib-grp-del" data-grp-del="${n}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>
@@ -1095,7 +1095,7 @@ function liberoHTML() {
     const aperta = !!(c.vociAperte && c.vociAperte.has(it.nome));
     return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
       <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura" : ""}" data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}">
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${macroStileHTML(m, { senzaKcal: true })}</span>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b></span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
@@ -1103,6 +1103,8 @@ function liberoHTML() {
   };
   const parti = [];
   ordine.forEach(k => { const gp = c.items[k].grp == null ? null : c.items[k].grp; const ult = parti[parti.length - 1]; if (!ult || ult.grp !== gp) parti.push({ grp: gp, html: "", ks: [] }); const u = parti[parti.length - 1]; u.html += righeK[k]; u.ks.push(k); });
+  const gruppiPresenti = [...new Set(c.items.filter(x => x.grp != null).map(x => x.grp))];
+  const mPasto = gruppiPresenti.reduce((t, n) => { const g = macroGruppo(n); return { kcal: t.kcal + g.kcal, proteine: t.proteine + g.proteine, carboidrati: t.carboidrati + g.carboidrati, grassi: t.grassi + g.grassi }; }, macroDa(c.items.filter(x => x.qta > 0 && x.grp == null)));
   const kcalTot = Math.round(macroDa(c.items.filter(x => x.qta > 0 && x.grp == null)).kcal + [...new Set(c.items.filter(x => x.grp != null).map(x => x.grp))].reduce((s, n) => s + macroGruppo(n).kcal, 0));
   // un riquadro per ogni cosa mangiata, dall'ultima aggiunta alla prima (la riga appena aggiunta non ha ancora l'ora: è la più nuova)
   const quando = (k) => c.items[k].t == null ? Infinity : c.items[k].t;
@@ -1146,7 +1148,7 @@ function liberoHTML() {
     ${c.items.length ? `
       ${ingrLive}
       <div class="lib-risultato">
-        <div class="r-macro">${macroHaObiettivoHTML(m, T, true)}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
+        <div class="r-macro">${macroHaObiettivoHTML(mPasto, T, true)}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
       </div>
       ${pastoPassatoC(c) ? "" : furboBlocco}
       ${bloccato ? "" : altreIdeeHTML(c)}
