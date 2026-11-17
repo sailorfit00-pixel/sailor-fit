@@ -1872,3 +1872,7 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 /* «Salva pasto» / «Salva modifiche»: in una barra scura fissa in fondo al pannello (il tasto non galleggia sul contenuto) */
 .modal .lib-conferma { position: static; box-shadow: none; margin: 0; width: 100%; }
 .barra-salva { position: sticky; bottom: -32px; z-index: 5; margin: 16px -18px -32px; padding: 12px 18px calc(16px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line2); }
+
+.barra-salva.due { display: flex; gap: 10px; }
+.barra-salva.due > * { flex: 1 1 0; margin: 0; }
+.barra-salva.due .btn-sec { min-height: 50px; text-align: center; }

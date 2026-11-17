@@ -905,7 +905,7 @@ const pastoPassatoC = (c) => !!(c && c.vivo && typeof pastoPassato === "function
 const firmaPasto = (c) => JSON.stringify((c.items || []).map(it => [it.nome, Math.round((+it.qta || 0) * 10) / 10, it.unita || ""]));
 function pastoModificato(c) {
   if (!c || !c.vivo || c.bozza) return false;
-  if (c._firma0 === undefined || c._firma0 === "[]") { c._firma0 = firmaPasto(c); return false; }   // com'era quando l'hai aperto (un pasto vuoto appena riempito non conta come modifica)
+  if (c._firma0 === undefined || c._firma0 === "[]") { c._firma0 = firmaPasto(c); c._giorno0 = JSON.stringify(leggiDiario()[c.data] || null); return false; }   // com'era quando l'hai aperto (un pasto vuoto appena riempito non conta come modifica); il giorno serve per «Annulla»
   return firmaPasto(c) !== c._firma0;
 }
 // «Altre idee» per un pasto già scritto (es. compilato dall'app): fino a 3 ricette simili che stanno nelle calorie e nei macro
@@ -1156,7 +1156,7 @@ function liberoHTML() {
       ${bloccato ? "" : altreIdeeHTML(c)}
     ` : c.idee()}
     ${c.bozza ? "" : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
-    ${c.bozza ? `<div class="barra-salva"><button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button></div>` : !bloccato && pastoModificato(c) ? `<div class="barra-salva"><button class="btn block lib-conferma" data-lib="salva-modifiche">✓ Salva modifiche</button></div>` : ""}
+    ${c.bozza ? `<div class="barra-salva"><button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button></div>` : !bloccato && pastoModificato(c) ? `<div class="barra-salva due"><button class="btn-sec" data-lib="annulla-modifiche">Annulla</button><button class="btn lib-conferma" data-lib="salva-modifiche">✓ Salva</button></div>` : ""}
   `;
 }
 // Nome automatico con le parole che hai scritto (es. "Pollo, zucca, riso")
@@ -1324,6 +1324,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const a = b.dataset.lib;
       if (a === "aggiungi") { const inp = document.getElementById("lib-input"); aggiungiDaTesto(inp.value); c.addAperto = false; rirenderLibero(); }
       else if (a === "mostra-add") { c.addAperto = true; rirenderLibero(); const i2 = document.getElementById("lib-input"); if (i2) i2.focus(); }
+      else if (a === "annulla-modifiche") {   // il pasto torna com'era quando l'hai aperto
+        if (c._giorno0 !== undefined) { const d = leggiDiario(); if (c._giorno0 === "null") delete d[c.data]; else d[c.data] = JSON.parse(c._giorno0); salvaDiario(d); }
+        closeModal(); if (typeof renderOggi === "function") renderOggi(); avviso("Modifiche annullate");
+      }
       else if (a === "salva-modifiche") { closeModal(); avviso("✓ Modifiche salvate"); }   // erano già nel diario: si conferma e si torna a Oggi
       else if (a === "conferma-bozza") { c._conferma = true; c.bozza = false; try { rirenderLibero(); } finally { c._conferma = false; } if (liberoCtx === c) rirenderLibero(); }   // ora il pasto è nel diario: si vede il riepilogo
       else if (a === "al-modifica") { c.modificaAl = b.dataset.nome; c.ignotoNuovo = true; c.ignoto = null; c.ignotoCodice = null; rirenderLibero(); }
