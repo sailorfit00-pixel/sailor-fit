@@ -923,6 +923,13 @@ function righeSolaLetturaHTML(items) {
   }).join("")}</ul>`;
 }
 const pastoPassatoC = (c) => !!(c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto));
+// Pasto già salvato e modificato in questa apertura: le modifiche sono già nel diario, il tasto «✓ Salva modifiche» lo conferma e chiude
+const firmaPasto = (c) => JSON.stringify((c.items || []).map(it => [it.nome, Math.round((+it.qta || 0) * 10) / 10, it.unita || ""]));
+function pastoModificato(c) {
+  if (!c || !c.vivo || c.bozza) return false;
+  if (c._firma0 === undefined) { c._firma0 = firmaPasto(c); return false; }   // com'era quando l'hai aperto
+  return firmaPasto(c) !== c._firma0;
+}
 function liberoHTML() {
   const c = liberoCtx;
   if (!c) return "";
@@ -1071,7 +1078,7 @@ function liberoHTML() {
       </div>
       ${pastoPassatoC(c) ? "" : (furboBlocco || consigliFitHTML(c))}
     ` : c.idee()}
-    ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button>` : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
+    ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button>` : bloccato ? "" : `${pastoModificato(c) ? `<button class="btn block lib-conferma" data-lib="salva-modifiche">✓ Salva modifiche</button>` : ""}<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
   `;
 }
 // Nome automatico con le parole che hai scritto (es. "Pollo, zucca, riso")
@@ -1239,6 +1246,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const a = b.dataset.lib;
       if (a === "aggiungi") { const inp = document.getElementById("lib-input"); aggiungiDaTesto(inp.value); c.addAperto = false; rirenderLibero(); }
       else if (a === "mostra-add") { c.addAperto = true; rirenderLibero(); const i2 = document.getElementById("lib-input"); if (i2) i2.focus(); }
+      else if (a === "salva-modifiche") { closeModal(); avviso("✓ Modifiche salvate"); }   // erano già nel diario: si conferma e si torna a Oggi
       else if (a === "conferma-bozza") { c._conferma = true; c.bozza = false; try { rirenderLibero(); } finally { c._conferma = false; } if (liberoCtx === c) rirenderLibero(); }   // ora il pasto è nel diario: si vede il riepilogo
       else if (a === "bilancia") { scalaPastoLibero(); rirenderLibero(); }   // stesse proporzioni, kcal del pasto
       else if (a === "al-modifica") { c.modificaAl = b.dataset.nome; c.ignotoNuovo = true; c.ignoto = null; c.ignotoCodice = null; rirenderLibero(); }

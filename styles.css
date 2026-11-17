@@ -1808,3 +1808,8 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* conferma di un'azione che cancella: tasto rosso pieno */
 .btn.btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+
+/* niente pallino davanti a ciò che hai già mangiato: si confondeva con i pallini di proteine, carboidrati e grassi */
+.pm-card .pr-testo b .pm-ck, .pm-sezione.bloccato .pm-card .pm-ck { display: none !important; }
+/* «Salva pasto» / «Salva modifiche» restano sempre visibili in fondo al pannello mentre scorri */
+.modal .lib-conferma { position: sticky; bottom: 10px; z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
