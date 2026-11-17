@@ -1814,5 +1814,10 @@ input[type=number] { -moz-appearance: textfield; }
 /* «Salva pasto» / «Salva modifiche» restano sempre visibili in fondo al pannello mentre scorri */
 .modal .lib-conferma { position: sticky; bottom: 10px; z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 
-/* ↻ accanto alle kcal del pasto: un altro piatto per quel pasto */
-.pm-tot-dx { display: inline-flex; align-items: center; gap: 10px; }
+/* nel pasto: la riga dei valori più vicina al riquadro di ciò che hai mangiato */
+.modal .pm-sezione { margin-bottom: 6px; }
+.modal .lib-risultato { margin-top: 4px; }
+.altre-idee { margin: 14px 0 4px; }
+
+/* «Altre idee» sostituiscono il piatto: ⇄ invece di ＋ */
+.modal .sugg-ricette .riga-ricetta.rr-sostituisci::after { content: "⇄"; font-size: 15px; }

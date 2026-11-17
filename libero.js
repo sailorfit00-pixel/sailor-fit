@@ -930,6 +930,33 @@ function pastoModificato(c) {
   if (c._firma0 === undefined) { c._firma0 = firmaPasto(c); return false; }   // com'era quando l'hai aperto
   return firmaPasto(c) !== c._firma0;
 }
+// «Altre idee» per un pasto già scritto (es. compilato dall'app): fino a 3 ricette simili che stanno nelle calorie e nei macro
+// che restano nella giornata (contando gli altri pasti, non questo). ↻ ne mostra altre 3; toccandone una sostituisce il pasto.
+function altreIdeeHTML(c) {
+  if (!c || !c.vivo || c.bozza || !c.items.length || typeof ricetteConsigliate !== "function") return "";
+  const g = giornoDiario(c.data), idx = new Set(g.pasti.map((p, k) => p.pasto === c.pasto ? k : -1).filter(k => k >= 0));
+  const attuali = new Set(g.pasti.filter(p => p.pasto === c.pasto).map(p => p.ricetta || p.nome));
+  if (!c._altre || c._altreChiave !== [...attuali].join("|")) {
+    const resta = mancaData(c.data, idx);   // ciò che resta nella giornata senza questo pasto: le idee non devono sforare
+    const ciSta = (t) => t.kcal <= resta.kcal + 15 && t.carboidrati <= Math.max(0, resta.carboidrati) + 4 && t.grassi <= Math.max(0, resta.grassi) + 2;
+    c._altre = ricetteConsigliate(c.data, c.pasto, 24, idx).filter(x => !attuali.has(x.r.nome) && ciSta(x.tot) && !(typeof ricettaEsclusa === "function" && ricettaEsclusa(x.r)))
+      .sort((a, b) => Math.abs(resta.kcal - a.tot.kcal) - Math.abs(resta.kcal - b.tot.kcal));   // prima quelle che riempiono meglio le kcal che restano
+    c._altreChiave = [...attuali].join("|");
+  }
+  const tutte = c._altre; if (!tutte.length) return "";
+  const pagine = Math.ceil(tutte.length / 3), pg = (c.altreGiro || 0) % pagine;
+  return `<div class="altre-idee"><h4 class="cosa-testa"><span>💡 Altre idee</span>${pagine > 1 ? `<button class="cosa-altre" data-altre-idee aria-label="Altre idee">${ICONA_ALTRE}</button>` : ""}</h4>
+    <div class="sugg-ricette">${tutte.slice(pg * 3, pg * 3 + 3).map(x => `<button class="riga-ricetta rr-sostituisci" data-lib-sostituisci="${esc(x.r.nome)}"><span class="rr-nome">${esc(x.nome || x.r.nome)}</span>${macroStileHTML(x.tot)}</button>`).join("")}</div></div>`;
+}
+// sostituisce tutto quello che c'è nel pasto con la ricetta scelta (porzione su misura per le kcal che restano), con Annulla
+function sostituisciPastoCon(c, nomeRicetta) {
+  const dataP = c.data, pastoP = c.pasto, d0 = leggiDiario(), prima = JSON.stringify(d0[dataP] || null);
+  const g = giornoDiario(dataP); g.pasti = g.pasti.filter(p => p.pasto !== pastoP); scriviGiorno(dataP, g);
+  if (aggiungiRicettaIn(dataP, pastoP, nomeRicetta) < 0) { annullaPianificazione({ [dataP]: prima }); return; }
+  if (typeof renderOggi === "function") renderOggi();
+  apriPastoDiario(dataP, null, pastoP);
+  avviso("✓ Pasto cambiato", "Annulla", () => { annullaPianificazione({ [dataP]: prima }); renderOggi(); if (liberoCtx && liberoCtx.data === dataP && liberoCtx.pasto === pastoP) apriPastoDiario(dataP, null, pastoP); });
+}
 function liberoHTML() {
   const c = liberoCtx;
   if (!c) return "";
@@ -1037,7 +1064,7 @@ function liberoHTML() {
     ? x.ks.forEach(k => schede.push({ t: quando(k), k, html: voceHTML(k) }))
     : schede.push({ t: Math.min(...x.ks.map(quando)), k: Math.min(...x.ks), html: ricettaHTML(x.grp, x.html) }));
   schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
-  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza && !c._creatoOra ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><span class="pm-tot-dx"><b>${kcalTot} kcal</b>${!bloccato && !c.bozza && c.vivo && c.items.length ? `<button class="cosa-altre pm-cambia" data-lib-cambia-pasto aria-label="Un altro piatto per questo pasto">${ICONA_ALTRE}</button>` : ""}</span></p>${schede.map(x => x.html).join("")}</div>`;
+  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza && !c._creatoOra ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
 
   const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto pagina${c.ignotoCodice ? " da-codice" : ""}">
       ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Codice ${esc(c.ignotoCodice)} · controlla i valori e salva.</p>`
@@ -1076,6 +1103,7 @@ function liberoHTML() {
           const arr = Math.round(m.kcal * Math.max(0.25, Math.min(2.5, T.kcal / m.kcal)));   // le quantità cambiano al massimo di 2,5 volte: la scheda promette solo quello che ottiene
           const su = arr > m.kcal; return Math.abs(arr - m.kcal) / m.kcal > 0.08 ? `<button class="var-furbo lib-furbo lib-bil-furbo" data-lib="bilancia">⚖️ <b>${su ? "Aumenta" : "Riduci"} tutte le quantità</b><em>${Math.round(m.kcal)} → ${arr} kcal · ${su ? "+" : "−"}${Math.abs(arr - Math.round(m.kcal))}</em></button>` : ""; })()}
       </div>
+      ${bloccato ? "" : altreIdeeHTML(c)}
       ${pastoPassatoC(c) ? "" : (furboBlocco || consigliFitHTML(c))}
     ` : c.idee()}
     ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button>` : bloccato ? "" : `${pastoModificato(c) ? `<button class="btn block lib-conferma" data-lib="salva-modifiche">✓ Salva modifiche</button>` : ""}<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
@@ -1277,15 +1305,9 @@ document.addEventListener("DOMContentLoaded", () => {
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
       return;
     }
-    if (e.target.closest("[data-lib-cambia-pasto]")) {   // ↻ un altro piatto per questo pasto, che stia nei valori del giorno (come lo swipe in Oggi)
-      const dataP = c.data, pastoP = c.pasto;
-      const r = rigeneraGiorno(dataP, pastoP, true);
-      if (typeof renderOggi === "function") renderOggi();
-      if (!r.messe) { avviso("Nessuna alternativa che stia nei tuoi valori", "", () => {}); return; }
-      apriPastoDiario(dataP, null, pastoP);
-      avviso("✓ Pasto cambiato", "Annulla", () => { annullaPianificazione(r.prima); renderOggi(); if (liberoCtx && liberoCtx.data === dataP && liberoCtx.pasto === pastoP) apriPastoDiario(dataP, null, pastoP); });
-      return;
-    }
+    const sost = e.target.closest("[data-lib-sostituisci]");
+    if (sost) { sostituisciPastoCon(c, sost.dataset.libSostituisci); return; }
+    if (e.target.closest("[data-altre-idee]")) { c.altreGiro = (c.altreGiro || 0) + 1; rirenderLibero(); return; }
     if (e.target.closest("[data-lib-riblocca]")) { pastiSbloccati.delete(c.data + "|" + c.pasto); rirenderLibero(); return; }
     const ub = e.target.closest("[data-lib-unita-set]");
     if (ub) { const [kk, uu] = ub.dataset.libUnitaSet.split("|"), it = c.items[+kk]; if (it) { it.unita = uu; salvaUnitaPreferita(it.nome, uu); rirenderLibero(); } return; }   // pz ⇄ g: la quantità resta, cambia come la leggi
