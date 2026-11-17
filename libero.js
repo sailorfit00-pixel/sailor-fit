@@ -1051,6 +1051,8 @@ function liberoHTML() {
   // Toccando una scheda si apre e gli ingredienti si modificano lì (− quantità +, unità, cestino); lo swipe a sinistra su una scheda la toglie.
   const frecciaHTML = () => `<span class="pm-freccia"></span>`;   // la freccia gira da sola quando la scheda è aperta (CSS)
   // valori di una ricetta del pasto: k pezzi di una ricetta a porzioni intatta = k × 1 pezzo (come nell'elenco ricette), altrimenti dagli ingredienti
+  // ogni riquadro di «Già mangiato» ha i suoi P/C/G (come nelle Idee); sotto, i totali del pasto rispetto all'obiettivo
+  const piuPiatti = true;
   const macroGruppo = (n) => {
     const gr = (c.gruppi || []).find(x => x.n === n), it = c.items.filter(x => x.grp === n && x.qta > 0);
     const esatti = gr && gr.intatta && typeof macroPastoRicetta === "function" && macroPastoRicetta({ ricetta: gr.ricetta, nPezzi: gr.nPezzi, ingredienti: it.map(x => ({ nome: x.nome, qta: x.qta, unita: "g" })) });
@@ -1065,7 +1067,7 @@ function liberoHTML() {
     const r0 = typeof ricettaDaNome === "function" ? ricettaDaNome(gr.ricetta) : null, o = r0 ? (r0._orig || r0) : null, passi = o && Array.isArray(o.passaggi) ? o.passaggi : [];
     return `<div class="pm-blocco pm-card pm-piatto pm-ricetta${aperta ? " aperto" : ""}" data-grp-box="${n}">
       <div class="pasto-riga pm-testa${bloccato ? " sola-lettura" : ""}" data-grp-t="${n}" data-grp-toggle="${n}" role="button" tabindex="0" aria-expanded="${aperta}">
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(gr.nome)}</b></span>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(gr.nome)}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${frecciaHTML(aperta)}
         <button class="lib-grp-del" data-grp-del="${n}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>
@@ -1095,7 +1097,7 @@ function liberoHTML() {
     const aperta = !!(c.vociAperte && c.vociAperte.has(it.nome));
     return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
       <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura" : ""}" data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}">
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b></span>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
