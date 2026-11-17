@@ -310,7 +310,7 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
     intestazione: () => liberoCtx.items.length ? "" : liberoCtx.obiettivo(),   // con delle righe la riga "ti restano" sta sotto il risultato
     // pasto vuoto: stessa testata del pasto pieno («Obiettivo · 0 kcal / 299 kcal», sotto P C G con gli obiettivi)
     obiettivo: () => { const T = liberoCtx.target(), z = { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 };
-      return `<p class="pm-tot lib-obiettivo"><span>Obiettivo</span><span class="pm-kcal"><b>0 kcal</b><em> / ${Math.round(T.kcal)} kcal</em></span></p><div class="r-macro lib-ob-macro">${macroHaObiettivoHTML(z, T, true)}</div>`; },
+      return `<p class="pm-tot lib-obiettivo"><span>Obiettivo</span><span class="pm-kcal"><b>0</b><em> / ${Math.round(T.kcal)} kcal</em></span></p><div class="r-macro lib-ob-macro">${macroHaObiettivoHTML(z, T, true)}</div>`; },
     // quando il pasto è vuoto: pasti recenti e idee dal ricettario
     idee: () => consiglioFurboHTML(liberoCtx, { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 }) + ideeBloccoHTML(liberoCtx, "💡 Idee", null),
     tutteRicette: true,
