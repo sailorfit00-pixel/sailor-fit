@@ -1669,6 +1669,28 @@ function salvaNuovaRicetta() {
   avviso(`✓ Ricetta salvata · ${n > 1 ? `${Math.round(m.kcal / n)} kcal a ${base.pezzo || "porzione"}` : `${m.kcal} kcal`}`, "Vedi ›", () => apriRicetta(nomeSalvata), true);   // toccando il banner si apre la ricetta
 }
 
+// «Più fit» scelto nell'anteprima: la ricetta diventa la tua versione fit (stesso nome), così le volte dopo te la propone già così.
+// mosse: [{tipo:"cambia", nome, a} | {tipo:"porta", nome, fattore}] riferite agli ingredienti per nome. Restituisce una funzione per annullare.
+function rendiRicettaFit(nome, mosse) {
+  const versioni = ricette.filter(x => x.nome === nome); if (!versioni.length || !mosse.length) return null;
+  const o = clone(versioni[0]._orig || versioni[0]);
+  o.ingredienti = (o.ingredienti || []).map(i => {
+    const m = mosse.find(x => x.nome === i.nome); if (!m) return i;
+    if (m.tipo === "cambia") return Object.assign({}, i, { nome: m.a, cercato: m.a });
+    return Object.assign({}, i, { qta: Math.max(1, Math.round((+i.qta || 0) * m.fattore)) });
+  });
+  const primaC = JSON.stringify(leggiCustom()), primaN = JSON.stringify([...leggiNascoste()]);
+  const m = calcolaMacro(o), pasti = [...new Set(versioni.map(x => x.pasto))];
+  const base = Object.assign({}, o, { custom: true, kcal: m.kcal, proteine: m.proteine, carboidrati: m.carboidrati, grassi: m.grassi });
+  delete base._orig;
+  let custom = leggiCustom();
+  if (custom.some(x => x.nome === nome)) custom = custom.filter(x => x.nome !== nome);
+  else { const n = leggiNascoste(); n.add(nome); salvaNascoste(n); }   // la ricetta di base si nasconde: al suo posto la tua versione fit
+  pasti.forEach(p => custom.push(Object.assign(clone(base), { pasto: p })));
+  salvaCustom(custom); caricaRicette();
+  return () => { localStorage.setItem("mp_ricette_custom", primaC); localStorage.setItem("mp_ricette_nascoste", primaN); caricaRicette(); };
+}
+
 // Elimina una ricetta (per nome): le tue vengono cancellate, quelle del
 // ricettario di base vengono nascoste.
 function eliminaRicetta(nome) {

@@ -988,16 +988,20 @@ function aggiungiDaAnteprima(c, versione) {
   if (!a) { rirenderLibero(); return; }
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
   const i = aggiungiRicettaIn(c.data, c.pasto, a.r.nome); if (i < 0) { rirenderLibero(); return; }
+  let annullaFit = null;
   if (versione === "fit" && a.mosse.length) {
     const g = giornoDiario(c.data), p = g.pasti[i];
     a.mosse.forEach(m => { const ing = p.ingredienti[m.r.k]; if (!ing) return; if (m.tipo === "cambia") { ing.nome = m.a; ing.cercato = m.a; } else ing.qta = m.nuova; });
     aggiornaMacro(p); scriviGiorno(c.data, g);
+    // e la ricetta resta così: le prossime volte te la propone già più fit
+    annullaFit = typeof rendiRicettaFit === "function" ? rendiRicettaFit(a.r.nome, a.mosse.map(m => m.tipo === "cambia" ? { tipo: "cambia", nome: m.r.nome, a: m.a } : { tipo: "porta", nome: m.r.nome, fattore: m.nuova / Math.max(1, m.r.qta) })) : null;
   }
   if (typeof renderOggi === "function") renderOggi();
   c._firma0 = undefined;   // appena aggiunto: non è una modifica da salvare
   ricaricaViva(c);
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
-  avviso(versione === "fit" ? "✓ Aggiunta la versione più fit" : "✓ Aggiunta");
+  if (annullaFit) avviso("✓ Aggiunta più fit · la ricetta resta così", "Annulla", () => { annullaFit(); });   // Annulla: la ricetta torna quella di prima (il pasto resta com'è)
+  else avviso("✓ Aggiunta");
 }
 function liberoHTML() {
   const c = liberoCtx;
@@ -1008,8 +1012,7 @@ function liberoHTML() {
   const T = c.target();
   const m = c.items.length ? macroDa(c.items) : null;
   const diff = m ? { kcal: T.kcal - m.kcal, proteine: T.proteine - m.proteine, carboidrati: T.carboidrati - m.carboidrati, grassi: T.grassi - m.grassi } : null;
-  const fitMosse = c.items && c.items.length && !ricettaATeglia(c) ? mosseFit(c) : [];
-  const furboBlocco = m ? consiglioFurboHTML(c, m, fitMosse) : "";      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
+  const furboBlocco = m ? consiglioFurboHTML(c, m) : "";   // dopo l'aggiunta: solo consigli per stare nei valori («Più fit» si sceglie prima, nell'anteprima della ricetta)      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
 
   const { pre, post } = contestoAllenamento(c);
   const righeK = c.items.map((it, k) => {
