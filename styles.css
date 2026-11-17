@@ -1685,7 +1685,7 @@ select.qta-input { padding-right: 30px; background-image: url("data:image/svg+xm
 
 /* prodotto non trovato dal codice a barre: messaggio chiaro e «Scatta foto» in evidenza */
 .non-trovato { margin: 0 0 10px; line-height: 1.45; }
-.lib-ignoto .foto-due .wiz-foto:first-child { background: var(--accent); border-color: var(--accent); color: #0d1a12; font-weight: 700; }
+
 
 /* codice letto dalla foto: lo controlli e poi cerchi il prodotto */
 .scan-letto { margin: 0 0 10px; line-height: 1.45; }
@@ -1713,3 +1713,7 @@ select.qta-input { padding-right: 30px; background-image: url("data:image/svg+xm
 .scan-nontrovato { border-color: rgba(229,96,96,.55); background: rgba(229,96,96,.08); }
 .scan-trovato .st-ko { color: var(--bad, #e56060); font-weight: 700; margin: 0 0 6px; }
 .scan-tabella { display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+
+/* modulo del nuovo alimento: l'unico tasto verde è «Salva alimento»; foto e scelte sono lilla, come il resto dell'app */
+.foto-due .wiz-foto { background: var(--lilla-bg); border: 1px solid var(--lilla); color: var(--lilla); font-weight: 600; }
+.etic-per > input:checked + label { border-color: var(--lilla); background: var(--lilla-bg); color: var(--lilla); }
