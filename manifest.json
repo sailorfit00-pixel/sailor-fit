@@ -1,0 +1,28 @@
+{
+  "name": "Sailor Fit",
+  "short_name": "Sailor Fit",
+  "description": "Il tuo diario alimentare: scrivi cosa mangi, ti dice cosa ti manca",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0c0a16",
+  "theme_color": "#0f1417",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

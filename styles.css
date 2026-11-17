@@ -1,0 +1,1558 @@
+@charset "UTF-8";
+:root {
+  --bg: #0f1417;
+  --card: #1a2228;
+  --card2: #222d35;
+  --accent: #35c07d;
+  --accent-d: #2aa96b;
+  --text: #e8eef2;
+  --muted: #8ea0ad;
+  --ok: #35c07d;
+  --warn: #e0b341;
+  --bad: #e06a5a;
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: 40px;
+}
+
+header {
+  padding: 20px 16px 12px;
+  position: sticky; top: 0;
+  background: linear-gradient(180deg, var(--bg) 70%, transparent);
+  z-index: 5;
+}
+header h1 { margin: 0; font-size: 22px; letter-spacing: -0.3px; }
+header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+main { padding: 0 16px; max-width: 720px; margin: 0 auto; }
+
+/* Barra azioni compatta in alto */
+.azioni { display: flex; gap: 8px; align-items: stretch; margin: 4px 0 4px; }
+.azioni .btn { flex: 1; width: auto; margin-top: 0; white-space: nowrap; padding-left: 8px; padding-right: 8px; }
+.btn-icon { flex: 0 0 auto; width: 48px; background: var(--card2); color: var(--text); border: 1px solid #2f3d47; border-radius: 12px; font-size: 20px; cursor: pointer; }
+.btn-icon:active { background: #2b373f; }
+
+/* Intestazione sezione Settimana + link ricette */
+.sezione-head { display: flex; justify-content: space-between; align-items: center; margin: 6px 4px 4px; }
+.sezione-titolo { margin: 0; color: var(--muted); font-size: 15px; text-transform: uppercase; letter-spacing: .5px; }
+.btn-link { background: none; border: none; color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 2px; }
+.sottotitolo { margin: 2px 4px 12px; }
+.btn-sec.block { display: block; width: 100%; text-align: left; margin-top: 8px; }
+
+/* Modale bottom-sheet */
+body.no-scroll { overflow: hidden; }
+.modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.modal[hidden] { display: none; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); animation: fade .2s ease; }
+.modal-sheet {
+  position: relative; width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto;
+  background: var(--card); border-radius: 22px 22px 0 0; padding: 10px 18px 32px;
+  animation: slideUp .28s cubic-bezier(.2,.8,.2,1);
+}
+@media (min-width: 680px) { .modal { align-items: center; } .modal-sheet { border-radius: 20px; max-height: 82vh; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.modal-grip { width: 40px; height: 4px; background: #3a4750; border-radius: 4px; margin: 4px auto 10px; }
+.modal-close { position: absolute; top: 12px; right: 14px; width: 32px; height: 32px; border-radius: 50%; background: var(--card2); color: var(--text); border: none; font-size: 15px; cursor: pointer; }
+.modal-title { margin: 4px 30px 12px 0; font-size: 20px; letter-spacing: -.2px; }
+
+/* Elenco ricette (righe cliccabili) */
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 14px; -webkit-overflow-scrolling: touch; }
+.chip { flex: 0 0 auto; background: var(--card2); color: var(--muted); border: 1px solid #2f3d47; border-radius: 20px; padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.chip.attivo { background: var(--accent); color: #08130c; border-color: var(--accent); font-weight: 700; }
+.riga-ricetta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; background: var(--card2); border: none; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; }
+.riga-ricetta:active { background: #2b373f; }
+.rr-nome { color: var(--text); font-size: 15px; font-weight: 600; }
+.rr-meta { color: var(--muted); font-size: 12px; text-transform: capitalize; }
+.ok-txt { color: var(--accent); font-weight: 700; text-transform: none; }
+.manca-txt { color: var(--warn); text-transform: none; }
+
+/* Dettaglio ricetta (dentro il modale) */
+.r-macro { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 6px; align-items: center; }
+.pill { background: var(--card2); padding: 2px 8px; border-radius: 6px; text-transform: uppercase; font-size: 10px; }
+.modal-content h4, .r-body h4 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+#modal-content h4 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.r-ing { list-style: none; padding: 0; margin: 0; }
+.r-ing li { padding: 6px 0; border-bottom: 1px solid #232f38; font-size: 15px; }
+.r-ing li:last-child { border-bottom: none; }
+.ing-edit { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ing-nome { flex: 1; }
+.ing-qta { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ing-qta em { color: var(--muted); font-style: normal; font-size: 13px; }
+.qta-input { width: 62px; background: var(--card2); border: 1px solid #2f3d47; color: var(--text); border-radius: 8px; padding: 7px 8px; font-size: 15px; text-align: right; }
+.qta-input:focus { outline: none; border-color: var(--accent); }
+.hint-inline { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 11px; }
+.reset-qta { margin-top: 12px; width: 100%; }
+
+/* ---- Wizard "Nuova ricetta" ---- */
+.btn.block { width: 100%; margin-top: 0; margin-bottom: 12px; }
+.wiz-steps { display: flex; gap: 6px; margin: 4px 0 14px; font-size: 12px; }
+.wiz-steps span { flex: 1; text-align: center; padding: 6px 4px; border-radius: 8px; background: var(--card2); color: var(--muted); }
+.wiz-steps span.on { background: var(--accent); color: #08130c; font-weight: 700; }
+.wiz-steps span.done { color: var(--accent); }
+.wiz-l { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+.qta-input.wiz-full { width: 100%; text-align: left; }
+select.qta-input { text-align: left; }
+.wiz-ing { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.wiz-ing .ing-n { flex: 1; text-align: left; }
+.wiz-ing .ing-q { width: 66px; }
+.wiz-ing .ing-u { width: 60px; }
+.qta-input.sconosciuto { border-color: var(--warn); }
+.wiz-macro { margin: 14px 0 6px; padding: 12px; background: var(--card2); border-radius: 12px; text-align: center; font-size: 14px; color: var(--muted); }
+.wiz-macro strong { color: var(--accent); font-size: 20px; }
+.wiz-step { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+.wiz-num { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; background: var(--card2); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 12px; margin-top: 6px; }
+.wiz-ta { flex: 1; text-align: left; min-height: 44px; resize: vertical; font-family: inherit; }
+.wiz-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; }
+.wiz-nav .btn, .wiz-nav .btn-sec { margin-top: 0; flex: 1; }
+.r-steps { margin: 0; padding-left: 22px; }
+.r-steps li { padding: 6px 0; font-size: 15px; line-height: 1.5; }
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card h2 { margin: 0 0 12px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+/* Tipi di giornata (card calorie) */
+.tipi { list-style: none; padding: 0; margin: 0 0 6px; }
+.tipi li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #232f38; font-size: 14px; }
+.tipi li:last-child { border-bottom: none; }
+.tipi .tipo-nome { flex: 1; }
+.tipi strong { color: var(--text); font-size: 13px; white-space: nowrap; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.dot.alta { background: var(--accent); }
+.dot.media { background: var(--warn); }
+.dot.equit { background: #5b9bd5; }
+.dot.riposo { background: #6b8a9c; }
+
+.griglia-obi { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.campo { display: flex; flex-direction: column; gap: 4px; }
+.campo label { font-size: 12px; color: var(--muted); }
+.campo input {
+  background: var(--card2); border: 1px solid #2f3d47; color: var(--text);
+  border-radius: 10px; padding: 12px; font-size: 16px; width: 100%;
+}
+.campo input:focus { outline: none; border-color: var(--accent); }
+
+.btn {
+  background: var(--accent); color: #08130c; border: none;
+  border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700;
+  width: 100%; margin-top: 14px; cursor: pointer;
+}
+.btn:active { background: var(--accent-d); }
+
+.riga-import { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.btn-sec {
+  background: var(--card2); color: var(--text); border: 1px solid #2f3d47;
+  border-radius: 10px; padding: 10px 14px; font-size: 14px; cursor: pointer;
+}
+.file-label { display: inline-block; }
+.file-label input { display: none; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 8px; line-height: 1.5; }
+
+.giorno { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.giorno-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.giorno-head h3 { margin: 0; font-size: 17px; }
+.giorno-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.tipo-select {
+  background: var(--card2); color: var(--text); border: 1px solid #2f3d47;
+  border-radius: 8px; padding: 6px 8px; font-size: 12px; max-width: 150px; cursor: pointer;
+}
+.mini { background: var(--card2); color: var(--text); border: 1px solid #2f3d47; border-radius: 8px; padding: 6px 9px; font-size: 13px; cursor: pointer; }
+.mini:disabled { opacity: .4; cursor: default; }
+.mini.lock.on { background: rgba(53,192,125,.18); border-color: var(--accent); }
+.giorno.confermato { border: 1px solid rgba(53,192,125,.4); }
+.tipo-select:disabled { opacity: .5; }
+.tag-conf { font-size: 10px; color: var(--accent); background: rgba(53,192,125,.15); padding: 2px 7px; border-radius: 20px; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: .3px; }
+
+.pasti { list-style: none; padding: 0; margin: 10px 0; }
+.pasti li { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid #232f38; font-size: 14px; }
+.pasti li:last-child { border-bottom: none; }
+.pasto-tag { flex: 0 0 auto; width: 62px; font-size: 10px; text-transform: uppercase; color: var(--muted); background: var(--card2); padding: 3px 6px; border-radius: 6px; text-align: center; }
+.pasto-nome { flex: 1; min-width: 0; }
+/* Maniglie di trascinamento */
+/* I puntini sono solo un indizio visivo: si trascina tutto il blocco */
+.day-grip, .meal-grip { flex: 0 0 auto; color: #5a6b76; font-size: 15px; line-height: 1; user-select: none; -webkit-user-select: none; padding: 0 2px; }
+.meal-grip { margin-left: 2px; }
+.giorno-title { display: flex; align-items: center; gap: 8px; }
+.giorno-title .day-grip { font-size: 18px; }
+/* Indica che i blocchi sono trascinabili; i pulsanti mantengono il loro cursore */
+.giorno-head, .pasti li { cursor: grab; }
+.giorno-head:active, .pasti li:active { cursor: grabbing; }
+.giorno-actions, .giorno-actions select, .giorno-actions button { cursor: pointer; }
+.sortable-ghost { opacity: .4; }
+.sortable-chosen { background: rgba(53,192,125,.06); }
+.pasto-nome { line-height: 1.3; text-align: left; background: none; border: none; color: var(--text); font: inherit; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: #33444f; text-underline-offset: 2px; }
+.pasto-nome:active { color: var(--accent); }
+.pasto-kcal { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.swap { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 2px; }
+.swap:active { color: var(--accent); }
+.swap:disabled { opacity: .3; cursor: default; }
+.crudo { color: var(--muted); font-size: .82em; }
+
+.totali { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.badge { font-size: 11px; padding: 1px 6px; border-radius: 20px; font-weight: 700; }
+.badge.ok { background: rgba(53,192,125,.15); color: var(--ok); }
+.badge.warn { background: rgba(224,179,65,.15); color: var(--warn); }
+.badge.bad { background: rgba(224,106,90,.15); color: var(--bad); }
+
+#spesa { list-style: none; padding: 0; margin: 0; }
+#spesa li { padding: 8px 0; border-bottom: 1px solid #232f38; font-size: 15px; }
+#spesa li:last-child { border-bottom: none; }
+#spesa li.reparto-h { border-bottom: none; padding: 14px 0 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); }
+#spesa li.reparto-h:first-child { padding-top: 2px; }
+#spesa label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+#spesa input { width: 20px; height: 20px; accent-color: var(--accent); flex: 0 0 auto; }
+/* Voci già prese: in fondo, grigie e barrate */
+#spesa li.preso span { text-decoration: line-through; color: var(--muted); }
+#spesa li.preso { opacity: .7; }
+#spesa li.presi-h { color: var(--muted); margin-top: 6px; }
+
+/* ---- Percentuali dei macro ---- */
+:root { --mp: #5b9bd5; --mc: #e0b341; --mg: #d77fa1; }
+.macro-bar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; margin-top: 8px; background: var(--card2); width: 100%; }
+.macro-bar span { display: block; height: 100%; }
+.mb-p { background: var(--mp); } .mb-c { background: var(--mc); } .mb-g { background: var(--mg); }
+.macro-pct { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; font-size: 12px; color: var(--muted); width: 100%; }
+.macro-pct b { color: var(--text); }
+.macro-pct em { font-style: normal; opacity: .75; }
+.dot-p, .dot-c, .dot-g { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+.dot-p { background: var(--mp); } .dot-c { background: var(--mc); } .dot-g { background: var(--mg); }
+.r-macro .macro-bar, .r-macro .macro-pct { flex-basis: 100%; }
+.pill.adattato { background: rgba(53,192,125,.15); color: var(--accent); text-transform: none; font-size: 11px; }
+.tipi li.tipo-card { display: block; padding: 10px 0; }
+.tipo-riga { display: flex; align-items: center; gap: 10px; }
+.tipo-macro { font-size: 12px; color: var(--muted); margin: 4px 0 0 20px; }
+.tipo-card .macro-bar, .tipo-card .macro-pct { margin-left: 20px; width: calc(100% - 20px); }
+.promemoria { list-style: none; padding: 0; margin: 0; font-size: 13px; line-height: 1.45; }
+.promemoria li { padding: 5px 0; }
+
+/* ---- Modifica / elimina ricetta ---- */
+.r-azioni { display: flex; gap: 8px; margin-top: 18px; }
+.r-azioni .btn-sec { flex: 1; margin-top: 0; }
+.btn-sec.danger { color: var(--bad); }
+
+/* ---- Spesa con quantità ---- */
+.spesa-qta { margin-left: auto; padding-left: 10px; font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; }
+#spesa .voce label { display: flex; align-items: center; gap: 8px; width: 100%; }
+
+/* ---- Profilo ---- */
+.riga-profilo { display: flex !important; justify-content: space-between; align-items: center; gap: 8px; }
+.riga-profilo .freccia { color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+/* ---- Diario del peso ---- */
+.peso-form { display: flex; gap: 8px; align-items: stretch; margin: 6px 0 12px; }
+.peso-form #peso-data { flex: 1.3; width: auto; text-align: left; min-width: 0; }
+.peso-form #peso-kg { flex: 1; width: auto; min-width: 0; }
+.peso-form .btn { flex: 0 0 auto; width: auto; margin-top: 0; padding: 0 16px; }
+.peso-stat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.peso-stat div { background: var(--card2); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.peso-stat span { font-size: 11px; color: var(--muted); }
+.peso-stat b { font-size: 15px; }
+.consiglio { font-size: 13px; color: var(--text); }
+.grafico-peso { width: 100%; height: auto; display: block; margin-top: 6px; }
+.gr-grid { stroke: #2a3640; stroke-width: 1; }
+.gr-lab { fill: var(--muted); font-size: 10px; }
+.gr-pt { fill: var(--mp); opacity: .75; }
+.gr-line { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.leg-pt, .leg-line { display: inline-block; margin-right: 5px; vertical-align: 2px; }
+.leg-pt { width: 7px; height: 7px; border-radius: 50%; background: var(--mp); }
+.leg-line { width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
+.lista-pesi { list-style: none; padding: 0; margin: 0; }
+.lista-pesi li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #232f38; font-size: 14px; }
+.lista-pesi li span { flex: 1; color: var(--muted); }
+
+/* ---- Pasto libero ---- */
+ul.pasti li.libero .pasto-nome { color: var(--accent); }
+.sugg-link { display: block; width: 100%; margin-top: 10px; text-align: left; background: rgba(224,179,65,.12); color: var(--warn); border: 1px solid rgba(224,179,65,.35); border-radius: 10px; padding: 8px 10px; font-size: 13px; cursor: pointer; }
+.lib-target { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; background: var(--card2); border-radius: 12px; padding: 10px 12px; font-size: 13px; color: var(--muted); }
+.lib-target b { color: var(--text); font-size: 16px; }
+.lib-add { display: flex; gap: 8px; margin-top: 12px; }
+.lib-add .btn { width: auto; margin-top: 0; padding: 0 16px; flex: 0 0 auto; }
+.lib-righe { display: flex; flex-direction: column; gap: 8px; }
+.lib-riga { display: flex; align-items: center; gap: 6px; }
+.lib-riga .lib-alt { flex: 1; min-width: 0; width: auto; text-align: left; }
+.lib-riga .lib-nome { flex: 1; min-width: 0; font-size: 15px; }
+.lib-riga .lib-qta { width: 64px; }
+.lib-riga em { color: var(--muted); font-style: normal; font-size: 13px; }
+.lib-lock.on { background: rgba(53,192,125,.18); border-color: var(--accent); }
+.lib-risultato { margin-top: 12px; }
+.lib-sugg { margin-top: 8px; font-size: 13px; }
+.lib-sugg .chips { margin-top: 6px; flex-wrap: wrap; }
+.lib-ignoto { margin-top: 10px; background: var(--card2); border-radius: 12px; padding: 4px 12px 12px; }
+.lib-nuovo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.lib-nuovo label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.lib-nuovo .qta-input { width: 100%; }
+.lib-salva { margin-top: 14px; }
+.sugg-lista { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
+.sugg-lista em { color: var(--muted); font-style: normal; }
+
+/* ---- Schede Oggi / Piano ---- */
+.viste { display: flex; background: var(--card2); border-radius: 12px; padding: 4px; margin: 10px 0 12px; }
+.vista-btn { flex: 1; background: none; border: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; padding: 9px 0; border-radius: 9px; cursor: pointer; }
+.vista-btn.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+
+/* ---- Diario "Oggi" ---- */
+.oggi-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.oggi-nav .mini { width: 38px; height: 38px; font-size: 18px; padding: 0; }
+.oggi-data { flex: 1; text-align: center; display: flex; flex-direction: column; }
+.oggi-data b { font-size: 18px; }
+.oggi-data span { font-size: 12px; color: var(--muted); }
+.oggi-card { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.oggi-card h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.oggi-tipo { width: 100%; margin-bottom: 12px; }
+.kcal-big { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 10px; }
+.kcal-big b { font-size: 30px; }
+.kcal-big span { color: var(--muted); margin-left: 4px; }
+.kcal-resto { font-size: 14px; color: var(--accent); }
+.kcal-resto.sopra { color: var(--warn); }
+.prog { margin-top: 8px; }
+.prog-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.prog-top b { color: var(--text); }
+.prog-top em { font-style: normal; margin-left: 6px; color: var(--muted); }
+.prog-top em.sopra { color: var(--warn); }
+.prog-bar { height: 8px; background: var(--card2); border-radius: 5px; overflow: hidden; }
+.prog-bar span { display: block; height: 100%; border-radius: 5px; transition: width .3s; }
+.prog-bar span.sopra { box-shadow: inset 0 0 0 2px var(--warn); }
+.oggi-pasti li { cursor: default; }
+.oggi-pasti li.vuoto { border-bottom: none; padding: 4px 0; }
+.oggi-pasti li.vuoto button { width: 100%; text-align: left; background: none; border: 1px dashed #33444f; color: var(--muted); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 14px; cursor: pointer; text-transform: capitalize; }
+.oggi-pasti li.vuoto button:active { border-color: var(--accent); color: var(--accent); }
+.sugg-card { border: 1px solid rgba(53,192,125,.25); }
+.sugg-card .btn.block { margin: 8px 0 4px; }
+.sugg-quota { font-size: 14px; margin: 0 0 4px; }
+.tag-focus { display: inline-block; background: rgba(91,155,213,.18); color: var(--mp); border-radius: 6px; padding: 1px 7px; font-size: 11px; margin-left: 4px; }
+.sugg-ricette { margin-top: 6px; }
+.scelta-pasto { flex-wrap: wrap; padding-bottom: 6px; }
+.scelta-pasto .chip { text-transform: capitalize; }
+.sugg-ricette .rr-meta { text-transform: none; }
+.azioni .btn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ================= UX semplificata ================= */
+.topbar { display: flex; align-items: center; gap: 8px; padding: 14px 16px 8px; max-width: 720px; margin: 0 auto; }
+.topbar h1 { flex: 1; font-size: 20px; }
+.topbar .btn-icon { width: 42px; height: 42px; font-size: 18px; }
+.piano-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; }
+.piano-head h2 { flex: 1; margin: 0; font-size: 17px; text-align: center; }
+.piano-head .btn-sec { margin-top: 0; padding: 8px 12px; }
+
+/* Menu */
+.menu-lista { display: flex; flex-direction: column; gap: 8px; }
+.menu-voce { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--card2); border: none; border-radius: 14px; padding: 13px 14px; color: var(--text); font: inherit; cursor: pointer; }
+.menu-voce:active { background: #2b373f; }
+.mv-icona { font-size: 22px; }
+.mv-testo { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.mv-testo b { font-size: 15px; }
+.mv-testo small { color: var(--muted); font-size: 12px; }
+.mv-freccia { color: var(--muted); font-size: 20px; }
+.altre-opz { margin-top: 14px; }
+.altre-opz summary { color: var(--muted); font-size: 13px; cursor: pointer; padding: 6px 0; }
+
+/* Oggi */
+.oggi-nav { margin: 4px 0 12px; }
+.nav-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--card2); color: var(--text); font-size: 20px; cursor: pointer; }
+.nav-btn:disabled { opacity: .25; cursor: default; }
+.oggi-data { gap: 2px; align-items: center; }
+.oggi-data b { font-size: 20px; }
+.oggi-tipo { background: none; border: none; color: var(--muted); font: inherit; font-size: 13px; text-align: center; text-align-last: center; padding: 2px 4px; cursor: pointer; width: auto; margin: 0; }
+.kcal-big { align-items: flex-end; margin-bottom: 6px; }
+.kb-num { display: flex; flex-direction: column; }
+.kb-num b { font-size: 40px; line-height: 1; color: var(--accent); }
+.kb-num.sopra b { color: var(--warn); }
+.kb-num span { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+.kb-tot { color: var(--muted); font-size: 13px; }
+.prog-top em { font-style: normal; color: var(--muted); margin-left: 4px; }
+.oggi-pasti { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.pasto-riga { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--card); border: 1px solid transparent; border-radius: 14px; padding: 12px 14px; color: var(--text); font: inherit; cursor: pointer; }
+.pasto-riga:active { background: var(--card2); }
+.pr-icona { font-size: 20px; width: 26px; text-align: center; }
+.pr-testo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pr-testo small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+.pr-testo b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-kcal { color: var(--muted); font-size: 13px; }
+.pasto-riga.vuoto { background: none; border: 1px dashed #33444f; }
+.pasto-riga.vuoto b { color: var(--muted); font-weight: 500; }
+.pasto-riga.prossimo { border: 1px solid var(--accent); background: rgba(53,192,125,.08); }
+.pasto-riga.prossimo b { color: var(--accent); }
+.pasto-riga.prossimo .pr-kcal { color: var(--accent); }
+.nota { background: var(--card); border-radius: 14px; padding: 12px 14px; margin: 0; font-size: 14px; line-height: 1.45; }
+.nota.ok { color: var(--accent); }
+.aggiungi-altro { align-self: center; }
+
+/* Editor pasto */
+.lib-obiettivo { margin: 0 0 4px; font-size: 14px; }
+.lib-obiettivo span { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.lib-del { background: none; border: none; color: var(--muted); font-size: 16px; padding: 6px; cursor: pointer; }
+.elimina-pasto { display: block; margin: 14px auto 0; color: var(--bad); }
+
+/* ---- Andamento ---- */
+.and-viste { margin-top: 0; }
+.and-stat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.and-stat div { background: var(--card2); border-radius: 12px; padding: 9px 10px; display: flex; flex-direction: column; gap: 1px; }
+.and-stat span { font-size: 11px; color: var(--muted); }
+.and-stat b { font-size: 19px; }
+.and-stat small { font-size: 10.5px; color: var(--muted); }
+.grafico-kcal { width: 100%; height: auto; display: block; }
+.gk-ok { fill: var(--accent); background: var(--accent); }
+.gk-warn { fill: var(--warn); background: var(--warn); }
+.gk-bad { fill: var(--bad); background: var(--bad); }
+.gk-low { fill: var(--mp); background: var(--mp); }
+.gk-parz { fill: #3a4a55; background: #3a4a55; }
+.gk-vuoto { fill: #26323b; }
+.gk-target { stroke: var(--text); stroke-width: 1.6; opacity: .55; }
+.legenda-kcal { font-size: 11px; }
+.lk { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.lk-line { display: inline-block; width: 12px; height: 2px; background: var(--text); opacity: .55; margin-right: 4px; vertical-align: 3px; }
+.insight { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.insight li { display: flex; gap: 10px; background: var(--card2); border-radius: 12px; padding: 10px 12px; border-left: 3px solid var(--muted); }
+.insight li.ins-ok { border-left-color: var(--accent); }
+.insight li.ins-warn { border-left-color: var(--warn); }
+.insight li.ins-info { border-left-color: var(--mp); }
+.insight p { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.tab-sett { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tab-sett th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 4px; border-bottom: 1px solid #2a3640; }
+.tab-sett td { padding: 7px 4px; border-bottom: 1px solid #232f38; }
+.t-ok { color: var(--accent); } .t-warn { color: var(--warn); } .t-low { color: var(--mp); }
+
+/* ---- Avviso temporaneo ---- */
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translate(-50%, 12px); opacity: 0; visibility: hidden; pointer-events: none; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px); background: var(--card2); color: var(--text); border: 1px solid #33444f; border-radius: 14px; padding: 11px 14px 11px 16px; font-size: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.5); transition: transform .2s, opacity .2s, visibility 0s .2s; z-index: 50; }
+.toast.on { transform: translate(-50%, 0); opacity: 1; visibility: visible; pointer-events: auto; transition: transform .2s, opacity .2s; }
+.toast span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast button { background: none; border: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; padding: 4px; }
+
+/* ---- Ricetta in una pagina ---- */
+.wiz-titolo { font-size: 17px; padding: 10px 12px; }
+.wiz-riga { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.wiz-riga select { flex: 1; width: auto; text-align: left; }
+.wiz-tempo { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.wiz-tempo .qta-input { width: 58px; }
+.wiz-salva { margin-top: 18px; }
+.lib-add .lib-piu { font-size: 22px; padding: 0 18px; }
+.lib-add .lib-piu { font-size: 22px; padding: 0 18px; }
+.modal-trash { position: absolute; top: 12px; right: 56px; width: 32px; height: 32px; border-radius: 50%; background: var(--card2); border: none; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.modal-trash:active { background: rgba(224,106,90,.25); }
+
+/* ---- Ricetta: incolla ingredienti e porzioni ---- */
+.wiz-porzioni { font-size: 14px; color: var(--muted); }
+.wiz-porzioni input[data-campo="porzioni"] { width: 56px; }
+.wiz-porzioni input[data-campo="pezzo"] { flex: 1; width: auto; text-align: left; min-width: 0; }
+.wiz-incolla { width: 100%; text-align: left; font-size: 15px; line-height: 1.45; margin-top: 8px; resize: vertical; }
+.wiz-ing { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.wiz-ing .ing-n { flex: 1; min-width: 0; width: auto; text-align: left; }
+.wiz-ing .ing-q { width: 60px; }
+.wiz-ing .ing-u { width: 104px; }
+.wiz-ing .qta-input:disabled { opacity: .35; }
+.wiz-ignoto { background: rgba(224,179,65,.1); border-radius: 10px; padding: 8px 10px; margin: -2px 0 10px; font-size: 12.5px; color: var(--warn); }
+.wiz-ignoto .lib-nuovo { margin-top: 6px; }
+.wiz-macro div { font-size: 15px; }
+.wiz-macro small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+/* riga ingrediente su due righe: nome intero, sotto quantità e unità */
+.wiz-ing { display: grid; grid-template-columns: 74px 128px 1fr 30px; grid-template-areas: "nome nome nome del" "qta unita kcal ."; gap: 6px; align-items: center; background: var(--card2); border-radius: 12px; padding: 8px; margin-bottom: 8px; }
+.wiz-ing .ing-n { grid-area: nome; width: 100%; background: transparent; border-color: transparent; font-size: 15px; padding-left: 4px; }
+.wiz-ing .ing-q { grid-area: qta; width: 100%; }
+.wiz-ing .ing-u { grid-area: unita; width: 100%; }
+.wiz-ing .lib-del { grid-area: del; }
+.wiz-ing .ing-kcal { grid-area: kcal; text-align: right; color: var(--muted); font-size: 12px; padding-right: 2px; }
+.wiz-ing .ing-n.sconosciuto { border-color: var(--warn); }
+.pezzi-stepper { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 4px 0 10px; }
+.pezzi-stepper b { font-size: 18px; min-width: 110px; text-align: center; }
+.sugg-ricette .rr-meta, .riga-ricetta .rr-meta { text-transform: none; }
+
+/* ---- iPhone: barra in alto sotto ora/batteria, pulsanti più grandi ---- */
+.topbar { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: calc(env(safe-area-inset-top) + 12px) 16px 10px; }
+.topbar .btn-icon { width: 48px; height: 48px; font-size: 20px; border-radius: 14px; }
+.topbar h1 { font-size: 21px; }
+.modal-sheet { padding-bottom: calc(32px + env(safe-area-inset-bottom)); max-height: calc(100vh - env(safe-area-inset-top) - 24px); }
+
+/* ---- Obiettivo settimanale ---- */
+.settimana-riga { display: flex; justify-content: space-between; gap: 8px; width: 100%; margin-top: 12px; padding: 9px 12px; background: var(--card2); border: none; border-radius: 10px; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.settimana-riga b { color: var(--text); }
+.settimana-riga .piu { color: var(--warn); }
+.settimana-riga .meno { color: var(--mp); }
+.piano-sett { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.piano-sett li { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 12px; padding: 8px 10px; }
+.piano-sett li.oggi { border: 1px solid var(--accent); }
+.piano-sett li.passato { opacity: .6; }
+.ps-giorno { width: 92px; display: flex; flex-direction: column; font-size: 13px; }
+.ps-giorno small, .ps-kcal small { color: var(--muted); font-size: 11px; }
+.ps-kcal { flex: 1; display: flex; flex-direction: column; }
+.ps-kcal b { font-size: 16px; }
+.ps-btn { display: flex; gap: 6px; }
+.ps-btn .nav-btn { width: 36px; height: 36px; font-size: 18px; }
+.toggle-riga { display: flex; gap: 12px; align-items: flex-start; background: var(--card2); border-radius: 12px; padding: 12px; margin-top: 14px; cursor: pointer; }
+.toggle-riga input { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--accent); flex: 0 0 auto; }
+.toggle-riga span { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.toggle-riga small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+
+/* ---- Lista della spesa dal diario ---- */
+#spesa .voce { display: flex; align-items: center; gap: 6px; }
+#spesa .voce label { flex: 1; min-width: 0; flex-wrap: wrap; }
+#spesa .spesa-qta { flex-basis: 100%; margin-left: 30px; padding-left: 0; white-space: normal; }
+#spesa { margin-top: 12px; }
+
+/* ---- Pulsante Salva fisso in basso nei pannelli ---- */
+.wiz-salva { position: sticky; bottom: 0; z-index: 4; margin-top: 18px; box-shadow: 0 -18px 18px -2px var(--card), 0 14px 0 14px var(--card); }
+.lib-footer { position: sticky; bottom: 0; z-index: 4; display: flex; gap: 10px; margin-top: 18px; padding-top: 10px; background: var(--card); box-shadow: 0 -18px 18px -2px var(--card), 0 14px 0 14px var(--card); }
+.lib-footer .lib-salva { flex: 1; margin: 0; }
+.lib-footer .lib-elimina { flex: 0 0 auto; margin: 0; color: var(--bad); border-color: rgba(224,106,90,.45); white-space: nowrap; }
+.lib-footer .lib-elimina:only-child { flex: 1; }
+.lib-footer .lib-elimina.conferma { background: var(--bad); color: #fff; border-color: var(--bad); flex: 1; }
+
+/* ---- Andamento: vista giorno ---- */
+.and-pasti { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.and-pasti li { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 12px; padding: 9px 12px; }
+.ap-testo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ap-testo b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-testo small, .ap-kcal small { color: var(--muted); font-size: 11px; }
+.ap-kcal { display: flex; flex-direction: column; align-items: flex-end; }
+.and-viste .vista-btn { padding: 8px 0; }
+
+/* ---- Pannelli: mai sopra la barra in alto, ✕ sempre visibile ---- */
+.modal-sheet { max-height: calc(100vh - env(safe-area-inset-top) - 84px); max-height: calc(100dvh - env(safe-area-inset-top) - 84px); }
+.modal-close { position: sticky; top: 0; display: block; margin: 0 -4px -32px auto; z-index: 6; box-shadow: 0 0 0 4px var(--card); }
+
+/* ---- Oggi | Settimana ---- */
+.vista-home { margin: 0 0 10px; }
+.kb-num { flex-direction: row; align-items: baseline; gap: 8px; flex-wrap: wrap; background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.kb-num span { margin: 0; font-size: 14px; }
+.recupero { background: rgba(224,179,65,.1); border: 1px solid rgba(224,179,65,.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; }
+.recupero p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.recupero small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.recupero-btn { display: flex; gap: 8px; }
+.recupero-btn button { flex: 1; margin: 0; }
+
+/* budget e striscia dei 7 giorni */
+.budget-sett .bs-top { display: flex; justify-content: space-between; align-items: baseline; }
+.budget-sett .bs-top span { color: var(--muted); font-size: 13px; }
+.budget-sett .bs-top b { font-size: 22px; }
+.budget-sett .bs-sotto { color: var(--muted); font-size: 13px; margin: 2px 0 12px; }
+.ss-striscia { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.ss-giorno { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--card2); border: 1px solid transparent; border-radius: 12px; padding: 7px 2px 6px; color: var(--text); font: inherit; cursor: pointer; }
+.ss-giorno.oggi { border-color: var(--accent); }
+.ss-giorno.sel { background: rgba(53,192,125,.18); border-color: var(--accent); }
+.ss-giorno.passato { cursor: pointer; }
+.ss-lett { font-size: 12px; font-weight: 700; }
+.ss-barra { width: 10px; height: 54px; background: #26323b; border-radius: 5px; display: flex; align-items: flex-end; overflow: hidden; }
+.ss-barra span { display: block; width: 100%; background: var(--accent); border-radius: 5px; }
+.ss-barra span.piu { background: var(--warn); }
+.ss-barra span.meno { background: var(--mp); }
+.ss-barra span.fatto { background: var(--muted); }
+.ss-barra span.sopra { background: var(--bad); }
+.ss-kcal { font-size: 10.5px; color: var(--muted); }
+.ss-pin { position: absolute; top: 3px; right: 5px; font-size: 8px; color: var(--warn); }
+.ss-aiuto { text-align: center; margin: 10px 0 0; }
+.ss-pannello { margin-top: 12px; background: var(--card2); border-radius: 14px; padding: 12px; }
+.ss-titolo { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.ss-titolo span { color: var(--muted); font-size: 13px; }
+.ss-chips { flex-wrap: wrap; padding-bottom: 8px; }
+.ss-chips .chip { background: var(--card); }
+.ss-fine { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 4px 0 6px; }
+.ss-fine span { font-size: 18px; font-weight: 700; min-width: 100px; text-align: center; }
+.giorno-riga .pr-testo b { white-space: normal; font-size: 14px; }
+.gr-barra { display: block; height: 4px; background: #26323b; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.gr-barra span { display: block; height: 100%; background: var(--accent); }
+.gr-barra span.sopra { background: var(--warn); }
+
+/* ---- Titolo toccabile "Oggi ▾" con menu ---- */
+.titolo-vista { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.titolo-sel { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: var(--text); font: inherit; cursor: pointer; padding: 2px 8px; border-radius: 10px; }
+.titolo-sel:active { background: var(--card2); }
+.titolo-sel b { font-size: 20px; }
+.titolo-sel .caret { color: var(--muted); font-size: 13px; }
+.sotto-titolo { font-size: 12px; color: var(--muted); }
+.menu-vista { position: absolute; top: 38px; left: 50%; transform: translateX(-50%); z-index: 20; min-width: 220px; background: var(--card2); border: 1px solid #33444f; border-radius: 14px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,.5); display: flex; flex-direction: column; }
+.mv-voce { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; padding: 11px 12px; border-radius: 10px; cursor: pointer; }
+.mv-voce:active, .mv-voce.on { background: rgba(53,192,125,.15); color: var(--accent); }
+.mv-data { position: relative; }
+.mv-data input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.mv-sep { height: 1px; background: #33444f; margin: 4px 8px; }
+.titolo-sel .caret { font-size: 16px; color: var(--accent); transform: translateY(1px); }
+
+/* =============================================================
+   STILE UNIFICATO (pulizia grafica): stesse misure ovunque
+   ============================================================= */
+:root {
+  --line: rgba(255,255,255,.06);
+  --line2: rgba(255,255,255,.10);
+  --r-l: 18px;     /* schede grandi */
+  --r-m: 14px;     /* righe, pulsanti */
+  --r-s: 10px;     /* campi, chip */
+  --tabbar-h: 62px;
+}
+body { font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased; padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 24px); }
+main { padding: 0 16px; }
+
+/* testi */
+.modal-title { font-size: 21px; font-weight: 700; margin: 4px 44px 14px 0; }
+#modal-content h4, .oggi-card h4 { margin: 22px 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.hint { font-size: 13px; line-height: 1.5; }
+
+/* schede e righe: stesso fondo, bordo sottile, stessi angoli */
+.oggi-card, .budget-sett, .nota, .recupero { border-radius: var(--r-l); }
+.oggi-card { background: var(--card); border: 1px solid var(--line); padding: 16px; margin-bottom: 12px; }
+.pasto-riga, .menu-voce, .riga-ricetta, .and-pasti li, .insight li, .piano-sett li, .ss-pannello, .and-stat div, .peso-stat div, .wiz-ing, .lib-target {
+  border-radius: var(--r-m);
+}
+.pasto-riga { border: 1px solid var(--line); padding: 13px 14px; }
+.pasto-riga.vuoto { border: 1px dashed var(--line2); }
+.oggi-pasti { gap: 10px; }
+.menu-voce, .riga-ricetta { border: 1px solid var(--line); }
+
+/* pulsanti: stessa altezza e stessi angoli */
+.btn { border-radius: var(--r-m); min-height: 50px; padding: 13px 16px; font-size: 16px; }
+.btn-sec { border-radius: var(--r-m); min-height: 46px; padding: 11px 16px; font-size: 15px; border-color: var(--line2); }
+.btn-sec.block { text-align: center; }
+.chip { border-radius: 999px; padding: 8px 14px; border-color: var(--line2); }
+.qta-input { border-radius: var(--r-s); border-color: var(--line2); min-height: 40px; }
+.nav-btn { width: 40px; height: 40px; }
+
+/* barra in alto: solo titolo e profilo */
+.topbar { padding-bottom: 6px; }
+.topbar h1 { font-size: 22px; font-weight: 800; letter-spacing: -.3px; }
+.btn-profilo { width: 42px !important; height: 42px !important; border-radius: 50% !important; font-size: 19px !important; }
+
+/* ---- Barra di navigazione in basso ---- */
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(17,23,27,.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line2); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+.tabbar button { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 600; padding: 4px 0; border-radius: 12px; cursor: pointer; }
+.tabbar .tb-ico { font-size: 21px; line-height: 1.15; filter: grayscale(1) opacity(.7); transition: filter .15s; }
+body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body[data-tab="andamento"] #apri-andamento, body[data-tab="altro"] #apri-menu { color: var(--accent); }
+body[data-tab="oggi"] #tab-oggi .tb-ico, body[data-tab="settimana"] #tab-settimana .tb-ico, body[data-tab="andamento"] #apri-andamento .tb-ico, body[data-tab="altro"] #apri-menu .tb-ico { filter: none; }
+/* i pannelli si aprono sopra la barra in basso, che resta sempre toccabile */
+.modal { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+.modal-sheet { padding-bottom: 24px; max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--tabbar-h) - 76px); }
+.toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px); }
+
+/* ---- Anello delle calorie ---- */
+.riepilogo { display: flex; align-items: center; gap: 16px; }
+.anello { position: relative; flex: 0 0 132px; width: 132px; height: 132px; background: none; border: none; padding: 0; cursor: pointer; color: var(--text); }
+.anello svg { width: 100%; height: 100%; display: block; }
+.an-fondo { fill: none; stroke: #26323b; stroke-width: 11; }
+.an-arco { fill: none; stroke: var(--accent); stroke-width: 11; stroke-linecap: round; transition: stroke-dasharray .4s; }
+.anello svg.sopra .an-arco { stroke: var(--warn); }              /* sforato: il giro è pieno, dello stesso giallo-ambra dell'avviso */
+.an-centro.sopra b, .an-centro.sopra small { color: var(--warn); }   /* anche il numero («180 sopra») */                          /* «180 sopra» giallo-arancione */
+.an-centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+.an-centro b { font-size: 30px; font-weight: 800; letter-spacing: -.5px; }
+.an-centro small { font-size: 12px; color: var(--muted); }
+.an-centro em { font-style: normal; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.rp-macro { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.mc-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 5px; gap: 6px; }
+.mc-top b { color: var(--text); }
+.mc-top em { font-style: normal; opacity: .8; }
+.mc-bar { height: 7px; background: #26323b; border-radius: 4px; overflow: hidden; }
+.mc-bar span { display: block; height: 100%; border-radius: 4px; }
+.mc-bar span.sopra { box-shadow: inset 0 0 0 2px var(--warn); }
+.settimana-riga { margin: -4px 0 12px; border-radius: var(--r-m); border: 1px solid var(--line); background: var(--card); }
+.mc-top { font-size: 12.5px; white-space: nowrap; }
+.mc-top > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.anello { flex-basis: 124px; width: 124px; height: 124px; }
+.riepilogo { gap: 14px; }
+
+/* ---- Settimana: un contatore per ogni giorno ---- */
+.gs-lista { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+.gs-passati { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.gs-passato { flex: 1; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-m); padding: 8px 4px; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.gs-passato b { color: var(--text); font-size: 15px; }
+.gs-passato b.sopra { color: var(--warn); }
+.gs-passato small { font-size: 10.5px; }
+.gs-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-l); padding: 14px; transition: border-color .2s; }
+.gs-card.oggi { border-color: rgba(53,192,125,.5); }
+.gs-card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.gs-testa { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.gs-nome { display: flex; flex-direction: column; min-width: 0; }
+.gs-nome b { font-size: 16px; }
+.gs-nome small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-contatore { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.gs-contatore .nav-btn { width: 38px; height: 38px; font-size: 20px; }
+.gs-contatore span { display: flex; flex-direction: column; align-items: center; min-width: 58px; line-height: 1.1; }
+.gs-contatore b { font-size: 20px; font-weight: 800; }
+.gs-contatore small { font-size: 11px; color: var(--muted); }
+.gs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gs-chips .chip { padding: 6px 12px; font-size: 12.5px; }
+.gs-nota { text-align: center; margin: 2px 8px 0; }
+.link-ricette { display: block; margin: 14px auto 0; }
+.tabbar #apri-menu .tb-ico { font-size: 20px; }
+
+/* tipo di allenamento modificabile */
+.gs-tipo { background: none; border: none; color: var(--muted); font: inherit; font-size: 12.5px; padding: 2px 0; max-width: 100%; cursor: pointer; text-overflow: ellipsis; }
+.sett-tipo { display: flex; flex-direction: column; gap: 6px; }
+.st-riga { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.st-riga select { flex: 0 1 200px; width: auto; text-align: left; }
+.gs-tipo { display: block; margin-top: 6px; background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r-s); color: var(--text); padding: 7px 10px; font-size: 13px; width: 100%; }
+
+/* titolo sempre visibile: anche se il telefono non comunica lo spazio della barra di stato */
+@media (display-mode: standalone) { .topbar { padding-top: calc(max(env(safe-area-inset-top), 0px) + 14px); } }
+
+/* ---- Sport del giorno ---- */
+.tipo-btn { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: var(--muted); font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 10px; cursor: pointer; }
+.tipo-btn:active { background: var(--card2); }
+.tipo-btn .caret { font-size: 12px; color: var(--accent); }
+.gs-tipo.tipo-btn { display: flex; width: 100%; justify-content: space-between; background: var(--card2); border: 1px solid var(--line2); color: var(--text); padding: 8px 12px; margin-top: 8px; font-size: 13.5px; }
+.sport-griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sport-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--card2); border: 1.5px solid var(--line2); border-radius: var(--r-m); padding: 14px 8px; color: var(--text); font: inherit; cursor: pointer; }
+.sport-btn .sb-ico { font-size: 28px; }
+.sport-btn b { font-size: 14px; }
+.sport-btn small { color: var(--muted); font-size: 11.5px; }
+.sport-btn.on { border-color: var(--accent); background: rgba(53,192,125,.14); }
+.allen-anteprima { margin-top: 14px; padding: 12px 14px; background: var(--card2); border-radius: var(--r-m); font-size: 14px; color: var(--muted); }
+.allen-anteprima b { color: var(--text); }
+.sport-lista { display: flex; flex-direction: column; gap: 8px; }
+.sport-riga { display: flex; align-items: center; gap: 8px; }
+.sport-riga .sr-ico { font-size: 22px; width: 30px; text-align: center; }
+.sport-riga .sr-nome { flex: 1; font-size: 15px; }
+.sport-riga input[data-sport-kcal], #nuovo-sport-kcal { width: 72px; }
+.sport-riga em { color: var(--muted); font-style: normal; font-size: 12px; }
+.sport-riga.nuovo { margin-top: 4px; }
+.sr-ico-sel { width: 58px; font-size: 18px; text-align: center; }
+.sr-nome-in { flex: 1; min-width: 0; text-align: left; width: auto; }
+.st-riga .tipo-btn { background: var(--card2); border: 1px solid var(--line2); color: var(--text); padding: 8px 12px; }
+
+/* ---- Più cose nello stesso pasto ---- */
+.pasto-gruppo { display: flex; gap: 8px; align-items: stretch; }
+.pasto-gruppo .pasto-riga { flex: 1; min-width: 0; }
+.pasto-piu { flex: 0 0 48px; background: var(--card); border: 1px dashed var(--line2); border-radius: var(--r-m); color: var(--accent); font-size: 22px; cursor: pointer; }
+.pasto-piu:active { background: var(--card2); }
+.sport-riga.nuovo { flex-wrap: wrap; background: var(--card2); border-radius: var(--r-m); padding: 10px; }
+.sport-riga.nuovo .sr-ico-sel { flex: 0 0 64px; width: 64px; }
+.sport-riga.nuovo .sr-nome-in { flex: 1 1 calc(100% - 80px); }
+.sport-riga.nuovo #nuovo-sport-kcal { flex: 1 1 auto; width: auto; }
+.sport-riga.nuovo .btn.lib-piu { flex: 0 0 auto; width: auto; min-height: 40px; padding: 0 18px; margin: 0; }
+
+/* ---- Lo zoom con due dita è libero; i campi restano a 16px così l'iPhone non ingrandisce da solo. Il doppio tocco non zooma ---- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
+input, select, textarea, .qta-input { font-size: 16px !important; }
+.oggi-tipo, .gs-tipo { font-size: 16px; }
+.lib-footer .lib-elimina { padding: 11px 18px; }
+
+/* togli un elemento: cestino rosso */
+.lib-del { color: var(--bad); display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; padding: 0; }
+.lib-del:active { background: rgba(224,106,90,.15); }
+
+/* campi dell'etichetta per un alimento nuovo */
+.lib-nuovo label span i { font-style: normal; opacity: .7; font-size: 10px; }
+.lib-nuovo { grid-template-columns: repeat(4, 1fr); }
+.etic-agg { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin: 8px 0 4px; }
+.etic-agg input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* ---- Zuccheri, fibre e sale ---- */
+.ex-riga { margin-top: 10px; }
+.ex-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+.ex-top b { color: var(--text); }
+.ex-bar { position: relative; height: 7px; background: #26323b; border-radius: 4px; overflow: visible; }
+.ex-bar span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.ex-bar span.medio { background: var(--warn); }
+.ex-bar span.sopra { background: var(--bad); }
+.ex-bar span.basso { background: var(--mp); }
+.ex-bar i { position: absolute; top: -3px; width: 2px; height: 13px; background: var(--text); opacity: .5; border-radius: 1px; }
+.ex-riga small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+.ex-fonti { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; line-height: 1.5; }
+.ex-fonti b { color: var(--text); font-weight: 600; }
+
+/* copia giornata */
+.oggi-azioni { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
+
+/* ---- Codice a barre ---- */
+.lib-add .lib-scan { flex: 0 0 auto; width: 52px; min-height: 0; padding: 0; font-size: 20px; margin: 0; }
+.scan-video { position: relative; border-radius: var(--r-m); overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
+.scan-video video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-mirino { position: absolute; left: 12%; right: 12%; top: 38%; height: 24%; border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 999px rgba(0,0,0,.35); }
+.scan-stato { text-align: center; color: var(--muted); padding: 20px 0; }
+.lib-ignoto .btn-sec.block { margin: 6px 0 4px; }
+
+/* ===== Lilla: colore dell'app (identità). I pulsanti restano universali: verde salva, rosso elimina ===== */
+:root { --lilla: #b79cf5; --lilla-bg: rgba(183,156,245,.12); --neutro: #c3ccd3; }
+.topbar h1 { color: var(--lilla); }
+body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body[data-tab="andamento"] #apri-andamento, body[data-tab="altro"] #apri-menu { color: var(--lilla); }
+.an-arco { stroke: var(--lilla); }
+.vista-btn.on { color: var(--lilla); box-shadow: inset 0 0 0 1px rgba(183,156,245,.35), 0 1px 3px rgba(0,0,0,.3); }
+.pasto-riga.prossimo { border-color: var(--lilla); background: var(--lilla-bg); }
+.pasto-riga.prossimo b, .pasto-riga.prossimo .pr-kcal { color: var(--lilla); }
+.btn-link, .pasto-piu, .tipo-btn .caret, .riga-profilo .freccia { color: var(--lilla); }
+.gs-card.sel { border-color: var(--lilla); box-shadow: 0 0 0 1px var(--lilla); }
+.ss-giorno.oggi { border-color: var(--lilla); }
+.ss-giorno.sel { background: var(--lilla-bg); border-color: var(--lilla); }
+.sport-btn.on { border-color: var(--lilla); background: var(--lilla-bg); }
+.qta-input:focus, .campo input:focus { border-color: var(--lilla); }
+/* i dati non riusano i colori dei macro: fibre e "sotto obiettivo" in grigio chiaro, non blu */
+.ex-bar span.basso { background: var(--neutro); }
+.ex-bar span.medio { background: #f0a04b; }
+.gk-low { fill: var(--neutro); background: var(--neutro); }
+.t-low { color: var(--neutro); }
+/* Andamento: più respiro tra le barre */
+.and-vista .prog { margin-top: 16px; }
+.and-vista .prog-top { margin-bottom: 7px; font-size: 14px; }
+.and-vista .prog-bar { height: 9px; }
+.and-vista .and-sotto { margin: 24px 0 0; font-size: 13px; color: var(--muted); }
+.and-vista .and-sotto span { opacity: .7; }
+.and-vista .and-sotto + .macro-bar { margin-top: 8px; height: 9px; }
+.and-vista .macro-pct { margin-top: 10px; gap: 6px 16px; font-size: 13px; }
+.and-vista .ex-riga { margin-top: 16px; }
+.and-vista .ex-top { margin-bottom: 7px; font-size: 14px; }
+.and-vista .ex-riga small, .and-vista .ex-fonti { margin-top: 7px; }
+.and-vista h4 { margin-top: 28px; }
+.insight li.ins-info { border-left-color: var(--lilla); }
+/* Macro: proteine azzurro, carboidrati giallo, grassi corallo (niente lilla: è il colore dell'app) */
+:root { --mp: #5b9bd5; --mc: #e0b341; --mg: #ec8a73; }
+/* "sotto" e "meno" non sono un macro: grigio chiaro, non il colore delle proteine */
+.settimana-riga .meno { color: var(--neutro); }
+.ss-barra span.meno { background: var(--neutro); }
+.gr-pt, .leg-pt { fill: var(--neutro); background: var(--neutro); }
+.gk-warn { fill: #f0a04b; background: #f0a04b; }
+/* Un riquadro per pasto: i nomi dei piatti su massimo due righe */
+.pr-testo b.pr-nomi { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+/* Elenco dei piatti di un pasto */
+.pm-tot { margin: -4px 0 14px; color: var(--muted); font-size: 14px; }
+.pm-tot b { color: var(--text); }
+.pm-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.pm-piatto .pr-testo { gap: 3px; }
+.pm-piatto .pr-testo b { white-space: normal; }
+.pm-piatto .pr-testo small { text-transform: none; letter-spacing: 0; font-size: 12px; }
+.pm-freccia { color: var(--muted); font-size: 20px; margin-left: 2px; }
+.pr-check { color: var(--lilla); font-weight: 800; font-size: 16px; margin-left: -4px; }
+.pr-check { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--lilla); color: #1a1426; font-size: 13px; font-weight: 900; margin-left: 0; flex: 0 0 auto; }
+.pm-blocco { margin-bottom: 6px; }
+.pm-tot { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 8px; }
+.pm-tot span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.pm-agg { margin: 18px 0 4px; }
+/* Pannello del pasto: tre parti ben distinte */
+/* 1. già mangiato: un riquadro unico, righe compatte */
+.pm-lista { gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; }
+.pm-lista .pm-piatto { background: none; border: none; border-radius: 0; padding: 11px 14px; }
+.pm-lista .pm-piatto + .pm-piatto { border-top: 1px solid var(--line); }
+.pm-tot span { display: inline-flex; align-items: center; gap: 7px; }
+.pm-tot .pr-check { width: 18px; height: 18px; font-size: 11px; font-style: normal; }
+.pm-blocco { margin-bottom: 18px; }
+/* 2. aggiungi: riquadro con bordo lilla */
+.lib-box { border: 1px solid rgba(183,156,245,.45); background: var(--lilla-bg); border-radius: var(--r-l); padding: 12px 12px 14px; }
+.lib-box .pm-agg { margin: 0 0 6px; color: var(--lilla); }
+.lib-box .lib-obiettivo { margin-top: 0; }
+.lib-box .lib-add { margin-top: 8px; }
+/* 3. suggerimenti: righe leggere con un ＋ */
+.modal .sugg-ricette .riga-ricetta { position: relative; background: none; border: 1px solid var(--line2); padding-right: 52px; }
+.modal .sugg-ricette .riga-ricetta::after { content: "＋"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: var(--lilla-bg); color: var(--lilla); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.modal .lib-box h4.pm-agg { margin-top: 0; } .lib-box > :first-child { margin-top: 0; }
+#modal-content .lib-box h4.pm-agg { margin-top: 0; }
+#modal-content .lib-box h4.pm-agg { color: var(--lilla); }
+/* Pasto completato: come il prossimo pasto (lilla) ma con la linea continua */
+.pasto-riga.fatto { border: 1px solid var(--lilla); background: var(--lilla-bg); }
+/* Pasti da fare: tutti lilla tratteggiati (il prossimo ha in più il fondo lilla e "Cosa mangi?") */
+.pasto-riga.vuoto { border: 1px dashed rgba(183,156,245,.6); }
+.pasto-riga.vuoto b { color: var(--lilla); }
+.pasto-riga.vuoto.prossimo { border: 1px dashed var(--lilla); background: var(--lilla-bg); }
+/* Corsa: scelta dei km */
+.km-scelta { margin-top: 14px; }
+.km-scelta .chips { align-items: center; }
+.km-input { width: 84px; flex: 0 0 auto; text-align: center; }
+.sr-km { flex: 1; font-style: normal; font-size: 12.5px; color: var(--muted); }
+/* Andamento: ogni sezione nel suo riquadro */
+.and-sez { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-l); padding: 4px 14px 16px; margin-top: 14px; }
+#modal-content .and-sez > h4:first-child, #modal-content .and-sez > .ex-titolo:first-child { margin-top: 14px; }
+.and-sez .grafico-kcal { margin-top: 4px; }
+.and-sez .btn-sec.block { margin-top: 14px; }
+.and-sez .insight { margin: 0; }
+.and-sez .and-pasti { margin: 0; }
+/* Selezione = lilla (come lo sport scelto); il verde resta per Salva/Aggiungi */
+.chip.attivo { background: var(--lilla); border-color: var(--lilla); color: #1a1426; }
+/* Profilo: sport nuovo su due righe, l'intensità a tutta larghezza */
+.sport-riga.nuovo { flex-wrap: wrap; }
+.sport-riga.nuovo .sr-nome-in { flex: 1 1 calc(100% - 80px); min-width: 0; }
+.sport-riga.nuovo .sr-int-sel { flex: 1 1 calc(100% - 72px); min-width: 0; width: auto; font-size: 15px; }
+.sr-kmin { width: 64px; text-align: center; flex: 0 0 auto; }
+.km-scelta .hint { margin-top: 6px; }
+/* Editor del pasto: tutte le righe nella stessa scatola, anche quando c'è una sola scelta */
+.lib-riga { flex-wrap: wrap; }
+.lib-riga .lib-fisso { display: flex; align-items: center; min-height: 44px; font-size: 16px; color: var(--text); }
+.lib-riga .lib-peso { flex: 0 0 100%; color: var(--muted); font-size: 11.5px; margin: -2px 0 2px 2px; text-align: right; padding-right: 44px; }
+.lib-riga .lib-qta[type="text"] { text-align: center; }
+/* Suggerimenti mentre scrivi */
+.lib-autoc { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.lib-autoc:empty { display: none; }
+.autoc-voce { text-align: left; background: var(--card); border: 1px solid var(--line2); border-radius: var(--r-s); color: var(--text); font: inherit; font-size: 16px; padding: 11px 14px; cursor: pointer; }
+.autoc-voce:active { background: var(--lilla-bg); border-color: var(--lilla); }
+.sr-dur { width: 58px; text-align: center; flex: 0 0 auto; }
+.sr-kcal { margin-left: auto; white-space: nowrap; }
+.lib-riga .lib-peso { margin: -10px 0 0; padding-right: 44px; }
+.autoc-titolo { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 6px 2px 0; }
+.autoc-lista { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.autoc-ricetta { display: flex; flex-direction: column; gap: 2px; border-color: rgba(183,156,245,.45); background: var(--lilla-bg); }
+.autoc-ricetta small { color: var(--muted); font-size: 12px; font-weight: 400; }
+/* Swipe a sinistra per eliminare (come su iPhone) */
+.sw { position: relative; overflow: hidden; border-radius: var(--r-m); }
+.sw-corpo { position: relative; touch-action: pan-y; transition: transform .22s ease; }
+.sw-fondo { position: absolute; top: 0; right: 0; bottom: 0; width: 84px; border: none; border-radius: 0 var(--r-m) var(--r-m) 0; background: #d9534f; color: #fff; display: none; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.sw.sw-mov .sw-fondo, .sw.aperto .sw-fondo { display: flex; }
+.sw-fondo svg { width: 24px; height: 24px; }
+.sw-fondo:active { background: #c0413d; }
+.pm-lista .sw + .sw .pm-piatto { border-top: 1px solid var(--line); }
+.pm-lista .sw { border-radius: 0; }
+.pm-lista .sw-fondo { border-radius: 0; }
+/* "Tutte le ricette" aperta da un pasto: ＋ su ogni ricetta */
+.agg-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--lilla-bg); border: 1px solid rgba(183,156,245,.45); border-radius: var(--r-m); padding: 10px 14px; margin-bottom: 10px; font-size: 14px; }
+.agg-banner b { color: var(--lilla); }
+.riga-ricetta[role="button"] { cursor: pointer; }
+.riga-ricetta.con-agg { position: relative; padding-right: 56px; }
+.rr-agg { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--lilla-bg); color: var(--lilla); font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.rr-agg:active { background: var(--lilla); color: #1a1426; }
+.rr-agg.fatto { background: var(--lilla); color: #1a1426; font-size: 16px; }
+.pasto-gruppo .sw { flex: 1; min-width: 0; }
+/* Nome del piatto + interruttore "Salva tra le mie ricette" */
+.piatto-nome-riga { position: relative; display: flex; align-items: center; gap: 10px; margin: 2px 0 10px; }
+.piatto-nome-riga > span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); flex: 0 0 auto; }
+.piatto-nome-riga input { flex: 1; min-width: 0; font-weight: 600; padding-right: 34px; }
+.piatto-nome-riga .pn-matita { position: absolute; right: 12px; font-style: normal; color: var(--lilla); pointer-events: none; }
+.piatto-switch { display: flex; align-items: center; gap: 12px; margin: 12px 0 4px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line2); border-radius: var(--r-m); cursor: pointer; }
+.piatto-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.ps-traccia { position: relative; flex: 0 0 46px; height: 28px; border-radius: 14px; background: #3a4852; transition: background .2s; }
+.ps-traccia::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.piatto-switch input:checked + .ps-traccia { background: var(--lilla); }
+.piatto-switch input:checked + .ps-traccia::after { transform: translateX(18px); }
+.ps-testo { font-size: 15px; font-weight: 600; }
+.piatto-nome-riga input { text-align: left; }
+/* cambio unità di misura (pz ⇄ g) */
+.lib-riga .lib-unita { background: var(--lilla-bg); border: 1px solid rgba(183,156,245,.45); color: var(--lilla); border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.lib-riga .lib-unita:active { background: var(--lilla); color: #1a1426; }
+.piatto-form.lib-add { margin: 6px 0 0; padding: 0; background: none; border: none; }
+/* menu pz / g come quello delle ricette */
+.lib-riga .lib-unita-sel { flex: 0 0 auto; width: 62px; padding-left: 10px; padding-right: 22px; text-align: left; }
+.lib-riga .lib-unita-sel { width: 76px; padding: 0 24px 0 12px; }
+/* "Già mangiato": stesso linguaggio di Oggi — lilla con linea continua = fatto; le proposte restano grigie con il ＋ */
+.pm-blocco { background: var(--lilla-bg); border: 1px solid var(--lilla); border-radius: var(--r-l); padding: 12px 12px 6px; margin-bottom: 22px; }
+.pm-blocco .pm-tot { margin: 0 0 6px; }
+.pm-blocco .pm-tot span { color: var(--lilla); }
+.pm-blocco .pm-tot b { color: var(--lilla); }
+.pm-blocco .pm-lista { background: none; border: none; border-radius: 0; margin: 0; }
+.pm-blocco .pm-lista .pm-piatto { gap: 12px; padding: 11px 2px; }
+.pm-blocco .pm-lista .sw + .sw .pm-piatto { border-top: 1px solid rgba(183,156,245,.25); }
+.pm-ck { flex: 0 0 22px; font-style: normal; }
+.pm-blocco .pr-kcal { color: var(--lilla); font-weight: 600; }
+.pm-blocco .pm-freccia { color: var(--lilla); }
+/* "Aggiungi" = da fare: lilla tratteggiato, senza riempimento (come i pasti ancora da mangiare) */
+.lib-box { border: 1px dashed rgba(183,156,245,.7); background: none; }
+.lib-riga .lib-unita-sel { width: 100px; padding: 0 22px 0 10px; font-size: 14px; }
+.lib-riga .lib-qta { width: 60px; }
+.lib-riga .lib-unita-sel { width: 112px; padding: 0 20px 0 9px; font-size: 13.5px; text-overflow: clip; }
+.lib-riga .lib-qta { width: 56px; padding-left: 4px; padding-right: 4px; }
+.lib-riga { gap: 5px; }
+.lib-riga .lib-unita-sel { width: 118px; padding: 0 17px 0 7px; font-size: 13px; background-position: right 5px center; }
+/* ingrediente su due righe: nome + cestino, poi quantità + unità + peso */
+.lib-riga { display: block; }
+.lib-r1 { display: flex; align-items: center; gap: 6px; }
+.lib-r1 .lib-alt { flex: 1; min-width: 0; width: auto; }
+.lib-r2 { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.lib-r2 .lib-qta { width: 92px; flex: 0 0 auto; padding-left: 8px; padding-right: 8px; }
+.lib-r2 .lib-unita-sel { flex: 0 0 auto; width: 150px; padding: 0 28px 0 12px; font-size: 16px; }
+.lib-r2 .lib-peso { flex: 1; margin: 0; padding: 0; text-align: right; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+/* ingrediente su UNA riga: nome · quantità · unità · cestino */
+.lib-riga { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; }
+.lib-riga .lib-alt { flex: 1 1 0; min-width: 0; width: auto; }
+.lib-riga .lib-qta { flex: 0 0 auto; width: 58px; padding-left: 4px; padding-right: 4px; text-align: center; }
+.lib-riga .lib-unita-sel { flex: 0 0 auto; width: 70px; padding: 0 18px 0 9px; font-size: 16px; }
+.lib-riga .lib-unita-sel.larga { width: 116px; }
+.lib-riga .lib-del { flex: 0 0 auto; }
+.lib-riga .lib-fisso { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 42px; padding-top: 0; padding-bottom: 0; font-size: 15px; }
+.lib-riga .lib-alt { font-size: 15px; }
+/* Idee e Dolci: il ＋ aggiunge subito; toccando la riga si sceglie prima quanti pezzi */
+.modal .sugg-ricette .riga-ricetta.con-piu::after { display: none; }
+.rr-piu { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: var(--lilla); border-radius: 50%; }
+.rr-piu::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--lilla-bg); z-index: -1; }
+.rr-piu:active::before { background: var(--lilla); }
+/* swipe: niente selezione di testo né menu di iOS mentre trascini la riga */
+.sw-corpo { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.sw-corpo input, .sw-corpo select, .sw-corpo textarea { -webkit-user-select: text; user-select: text; }
+/* sostituzione di un ingrediente */
+.sost-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--lilla-bg); border: 1px solid rgba(183,156,245,.45); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0 0; font-size: 13px; }
+.sost-banner b { color: var(--lilla); }
+.sost-banner button { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 4px 6px; }
+.lib-alt.sostituendo { border-color: var(--lilla); }
+/* nome dell'ingrediente = campo di testo: tocca e scrivi */
+.lib-righe { position: relative; }
+.lib-riga .lib-nome-in { font-size: 16px; text-align: left; text-overflow: ellipsis; }
+.lib-sost-lista { position: absolute; left: 0; right: 0; z-index: 30; display: flex; flex-direction: column; gap: 6px; background: var(--bg); border: 1px solid var(--lilla); border-radius: var(--r-m); padding: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.55); }
+/* avvisi sui macro */
+.oggi-avvisi { margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.oggi-avvisi p { margin: 0; padding: 10px 12px; font-size: 13.5px; line-height: 1.45; background: rgba(240,160,75,.12); border: 1px solid rgba(240,160,75,.4); border-radius: var(--r-m); }
+.lib-consiglio { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--text); }
+.oggi-avvisi p.avviso { display: flex; align-items: center; gap: 10px; transition: opacity .2s, transform .2s, max-height .2s; max-height: 120px; overflow: hidden; }
+.oggi-avvisi p.avviso > span { flex: 1; }
+.oggi-avvisi p.avviso.sparisce { opacity: 0; transform: translateX(30px); max-height: 0; padding-top: 0; padding-bottom: 0; }
+.avviso-ok { flex: 0 0 auto; background: none; border: 1px solid rgba(240,160,75,.7); color: #f0a04b; font: inherit; font-size: 14px; font-weight: 700; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.avviso-ok:active { background: rgba(240,160,75,.25); }
+/* elenco ricette: kcal e macro sempre visibili */
+.rr-macro { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; font-size: 13px; color: var(--text); margin-top: 3px; }
+.rr-macro b { font-weight: 700; }
+.rr-macro i { margin: 0 0 0 6px; }
+.rr-macro em { font-style: normal; color: var(--muted); font-size: 12px; margin-left: 4px; }
+/* oltre l'obiettivo: stesso segnale per tutti i macro (prima l'orlo giallo spariva sulla barra gialla dei carboidrati) */
+.mc-bar span.sopra, .prog-bar span.sopra { box-shadow: inset 0 0 0 2px rgba(255,255,255,.9); }
+.mc-top em.mc-piu { opacity: 1; color: #f0a04b; font-weight: 700; font-style: normal; }
+/* stile unico per kcal e macro */
+.rr-macro i:first-child { margin-left: 0; }
+.rr-macro b + i, .rr-macro i { margin-left: 8px; }
+.rr-macro i:first-child { margin-left: 0; }
+.rr-macro { line-height: 1.5; }
+.pm-piatto .rr-macro, .and-pasti .rr-macro { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.autoc-ricetta .rr-macro { font-size: 12.5px; }
+.lib-obiettivo .rr-macro { display: inline-flex; margin-left: 6px; font-size: 13px; color: var(--muted); }
+.r-macro .rr-macro { display: inline-flex; }
+/* elenco "Già mangiato": un alimento per riga */
+.pm-ing .pr-testo b { white-space: normal; }
+.pm-qta { font-style: normal; font-weight: 500; color: var(--muted); font-size: 13px; margin-left: 4px; }
+/* quantità con − / ＋ (uguale per pezzi, cucchiai e grammi) */
+.qstep { display: flex; align-items: center; flex: 0 0 auto; background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r-s); height: 44px; overflow: hidden; }
+.qstep-b { flex: 0 0 32px; width: 32px; height: 100%; background: none; border: none; color: var(--lilla); font-size: 20px; font-weight: 700; cursor: pointer; padding: 0; }
+.qstep-b:active { background: var(--lilla-bg); }
+.qstep .lib-qta { width: 44px; min-width: 0; height: 100%; border: none; background: none; border-radius: 0; padding: 0; text-align: center; }
+.lib-riga .qstep .lib-qta { width: 44px; padding: 0; }
+.qstep-b { flex: 0 0 28px; width: 28px; font-size: 19px; }
+.qstep .lib-qta, .lib-riga .qstep .lib-qta { width: 38px; font-size: 16px; }
+.lib-riga .lib-unita-sel { width: 64px; padding: 0 16px 0 8px; }
+.lib-riga .lib-unita-sel.larga { width: 112px; }
+.lib-riga { gap: 5px; }
+/* unità di misura: riquadro di larghezza fissa con sigla (g, pz, cucch., cucchin.); il menu nativo, invisibile, sta sopra */
+.unita-box { position: relative; flex: 0 0 74px; height: 44px; box-sizing: border-box; display: flex; align-items: center; padding: 0 20px 0 10px; background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r-s); }
+.unita-et { font-size: 14.5px; white-space: nowrap; }
+.unita-box::after { content: "▾"; position: absolute; right: 8px; top: 50%; transform: translateY(-52%); font-size: 12px; color: var(--muted); pointer-events: none; }
+.lib-riga .unita-box .lib-unita-sel, .unita-box .lib-unita-sel { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; margin: 0; font-size: 16px; background: none; }
+.unita-box { flex: 0 0 80px; width: 80px; min-width: 80px; max-width: 80px; padding: 0 18px 0 9px; overflow: hidden; }
+.unita-et { font-size: 14px; }
+.unita-et.lunga { font-size: 12.5px; letter-spacing: -.2px; }
+/* nome dell'ingrediente: testo che va a capo, si legge per intero */
+.lib-nome-txt { flex: 1 1 0; min-width: 0; min-height: 44px; display: flex; align-items: center; font-size: 15px; line-height: 1.25; padding: 2px 2px; color: var(--text); word-break: break-word; cursor: text; }
+.lib-riga { align-items: center; }
+.unita-box { flex: 0 0 76px; width: 76px; min-width: 76px; max-width: 76px; }
+/* il nome si può cambiare: matita lilla accanto al testo */
+.lib-nome-txt { gap: 6px; justify-content: space-between; }
+.lib-nome-txt::after { content: "✎"; flex: 0 0 auto; color: var(--lilla); font-size: 14px; opacity: .85; align-self: center; }
+/* matita in linea, dopo l'ultima parola (non toglie spazio al nome) */
+.lib-nome-txt { display: block; min-height: 0; padding: 2px; justify-content: initial; overflow-wrap: break-word; word-break: normal; }
+.lib-nome-txt::after { display: inline; margin-left: 5px; font-size: 13px; }
+/* nome come RIQUADRO (si capisce che si può cambiare), alto quanto serve: si legge per intero */
+.lib-nome-txt { display: flex; align-items: center; min-height: 44px; box-sizing: border-box; padding: 6px 9px; background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r-s); font-size: 15px; line-height: 1.25; }
+.lib-nome-txt::after { content: none; }
+.lib-nome-t { display: inline; overflow-wrap: break-word; }
+.lib-nome-t::after { content: "✎"; color: var(--lilla); font-size: 13px; margin-left: 5px; opacity: .85; }
+/* niente matita: il riquadro basta; unità più piccole */
+.lib-nome-t::after { content: none; }
+.unita-box { flex: 0 0 56px; width: 56px; min-width: 56px; max-width: 56px; padding: 0 14px 0 7px; }
+.unita-et { font-size: 14px; }
+.unita-et.lunga { font-size: 13px; letter-spacing: -.3px; }
+.unita-box::after { right: 5px; font-size: 10px; }
+.qstep-b { flex: 0 0 26px; width: 26px; font-size: 18px; }
+.qstep .lib-qta, .lib-riga .qstep .lib-qta { width: 34px; }
+.lib-riga { gap: 4px; }
+/* sotto la sigla, quanto pesa UN cucchiaio / cucchiaino / pezzo: se scegli quello sbagliato lo vedi subito */
+.unita-box { flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; }
+.unita-et { line-height: 1.1; }
+.unita-g { font-size: 10.5px; line-height: 1.1; color: var(--muted); white-space: nowrap; }
+/* riga del peso per unità tolta: sigla su una riga sola, al centro */
+.unita-box { flex-direction: row; align-items: center; justify-content: flex-start; }
+.pm-peso { font-style: normal; font-weight: 500; color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+/* Ricetta da foto o screenshot */
+.wiz-foto { cursor: pointer; }
+.foto-stato { font-size: 12.5px; color: var(--muted); min-height: 0; margin-top: 4px; }
+.foto-stato:empty { display: none; }
+.wiz-foto-tutto small { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.wiz-foto-tutto { margin: 0 0 10px; text-align: center; }
+.wiz-foto-tutto + .foto-stato { margin: -6px 0 8px; }
+
+/* Varianti e sostituzioni */
+.var-btn { margin-left: 6px; border: 1px solid var(--lilla, #b79cf5); background: transparent; color: var(--lilla, #b79cf5); border-radius: 50%; width: 24px; height: 24px; font-size: 13px; line-height: 1; padding: 0; cursor: pointer; }
+.var-tag { margin-left: 6px; color: var(--muted); font-size: 12px; }
+.ing-var strong { color: var(--lilla, #b79cf5); }
+.var-lista { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.var-lista[hidden] { display: none; }
+.var-opz, .sugg-riga { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--bordo, rgba(255,255,255,.12)); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.var-opz em, .sugg-riga em { font-style: normal; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.var-opz.attiva { border-color: var(--lilla, #b79cf5); background: rgba(183,156,245,.12); }
+.sugg-leggera { margin: 12px 0; padding: 10px; border-radius: 12px; border: 1px dashed var(--lilla, #b79cf5); display: flex; flex-direction: column; gap: 6px; }
+.sugg-riga em { color: #6cc08b; font-weight: 600; }
+.wiz-alt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 8px; font-size: 12.5px; color: var(--muted); }
+.chip-alt { border: 1px solid var(--lilla, #b79cf5); background: rgba(183,156,245,.12); color: inherit; border-radius: 999px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.wiz-alt-in { max-width: 190px; padding: 5px 8px; }
+.var-furbo { display: flex; flex-direction: column; gap: 3px; text-align: left; width: 100%; margin-top: 4px; padding: 9px 11px; border-radius: 10px; border: 1px dashed var(--lilla, #b79cf5); background: rgba(183,156,245,.08); color: inherit; font: inherit; font-size: 13.5px; cursor: pointer; }
+.var-furbo span { color: var(--muted); }
+.var-furbo em { font-style: normal; font-size: 12.5px; font-weight: 600; color: #6cc08b; }
+
+/* versione compatta */
+.sugg-leggera { display: block; padding: 0; border-style: solid; border-color: var(--bordo, rgba(255,255,255,.12)); }
+.sugg-leggera summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; }
+.sugg-leggera summary::-webkit-details-marker { display: none; }
+.sugg-leggera summary em { font-style: normal; font-size: 12.5px; color: #6cc08b; white-space: nowrap; }
+.sugg-leggera summary::after { content: "›"; color: var(--muted); margin-left: 4px; transition: transform .15s; }
+.sugg-leggera[open] summary::after { transform: rotate(90deg); }
+.sugg-leggera[open] { padding-bottom: 8px; gap: 6px; }
+.sugg-leggera .sugg-riga, .sugg-leggera .btn-link { margin: 0 8px; width: calc(100% - 16px); }
+.var-furbo { display: block; flex-direction: unset; padding: 8px 10px; border: 1px dashed var(--lilla, #b79cf5); font-size: 13px; }
+.var-furbo em { display: block; margin-top: 2px; font-weight: 500; }
+.lib-furbo { margin: 10px 0 4px; }
+.lib-furbo small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+.chips-ord { margin-top: 6px; }
+.chip-ord.attivo { background: rgba(183,156,245,.18); border-color: var(--lilla, #b79cf5); }
+/* Consigli furbi: riepilogo + mosse */
+.furbi { margin: 14px 0 6px; }
+.furbi h4 { margin: 0 0 4px; display: flex; align-items: center; justify-content: space-between; }
+.furbi .var-furbo .esito { color: var(--muted); }
+.furbi .var-furbo .esito.ok { color: var(--lilla); font-weight: 600; }
+.furbi-riep { margin: 0 0 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.furbi-riep b { color: var(--text); }
+.furbi .var-furbo { margin-top: 6px; }
+.furbi .var-furbo b { font-weight: 700; }
+.modal-indietro { display: inline-block; margin: 0 0 6px; padding-left: 0; font-weight: 600; }
+.agg-banner .btn-link[data-agg-torna] { margin-right: 6px; }
+.agg-banner { flex-wrap: wrap; }
+.agg-banner [data-agg-torna] { flex: 1 0 100%; text-align: left; padding-left: 0; font-weight: 600; }
+.torna-pasto { display: inline-block; margin: 0 0 8px; padding-left: 0; font-weight: 600; }
+
+/* pasti del giorno: si trascinano con una pressione lunga */
+.oggi-pasti [data-momento] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.oggi-pasti .sortable-chosen { opacity: .85; }
+
+.lib-crudo { margin: -4px 0 8px; padding-left: 4px; font-size: 12.5px; color: var(--muted, #8a8aa0); }
+
+/* lista della spesa: nome e quantità sulla stessa riga */
+#spesa .voce label { flex-wrap: nowrap; }
+#spesa .spesa-qta { flex-basis: auto; margin-left: 0; padding-left: 0; white-space: nowrap; }
+#spesa .voce label { gap: 6px; }
+#spesa .voce label span { flex: 0 1 auto; }
+#spesa .voce { padding-top: 2px; padding-bottom: 2px; }
+#spesa .dispensa { list-style: none; padding: 0; margin-top: 6px; }
+#spesa .dispensa > details > summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
+#spesa .dispensa > details > summary em { font-style: normal; font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 6px; }
+#spesa .dispensa ul { list-style: none; margin: 0; padding: 0; }
+
+
+/* giorni passati nella striscia: stessi colori dell'Andamento (classi gk-*) */
+.ss-barra span.gk-ok { background: var(--accent); }
+.ss-barra span.gk-warn { background: #f0a04b; }
+.ss-barra span.gk-bad { background: var(--bad); }
+.ss-barra span.gk-low { background: var(--neutro); }
+.ss-barra span.gk-parz { background: #3a4a55; }
+.ss-giorno.passato .ss-kcal { color: var(--text); }
+
+/* avviso proteine: due pulsanti */
+.oggi-avvisi p.avviso > span.avviso-bt { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.avviso-cosa { background: #f0a04b; border: 1px solid #f0a04b; color: #1b1308; font: inherit; font-size: 13px; font-weight: 700; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.avviso-cosa:active { opacity: .8; }
+
+/* torna indietro / ripeti */
+.storico { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 10px 0 0; }
+.storico .btn-link { font-size: 14px; text-align: center; }
+
+/* avviso proteine: tutta la riga si tocca, la freccia dice che si apre */
+.oggi-avvisi p.avviso.avviso-tocca { cursor: pointer; }
+.avviso-freccia { flex: 0 0 auto !important; font-size: 24px; color: #f0a04b; line-height: 1; }
+
+/* torna indietro nel pasto */
+.lib-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lib-storia { display: flex; gap: 6px; }
+.lib-st { background: var(--card2); border: 1px solid var(--lilla); color: var(--lilla); font: inherit; font-size: 18px; line-height: 1; font-weight: 700; border-radius: 999px; width: 38px; height: 32px; padding: 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.lib-st:active { background: var(--lilla-bg); }
+
+.storico { flex-direction: row; justify-content: center; gap: 14px; }
+.st-freccia { background: var(--card2); border: 1px solid var(--lilla); color: var(--lilla); font-size: 22px; line-height: 1; width: 52px; height: 40px; border-radius: 999px; cursor: pointer; }
+.st-freccia:active { background: var(--lilla-bg); }
+
+/* avvisi arancioni: stessa distanza dagli altri riquadri (12 px sopra e sotto, 8 px tra uno e l'altro) */
+.oggi-avvisi { margin: 0 0 12px; gap: 10px; }
+.oggi-avvisi p { padding: 12px 14px; }
+
+/* foglio "cosa aggiungo": l'intestazione del pasto si tocca (apre il pasto) e ↻ cambia idee */
+.cosa-testa { display: flex; align-items: center; justify-content: space-between; }
+.cosa-ic { display: flex; align-items: center; gap: 10px; }
+.cosa-ic b { font-size: 20px; color: var(--muted); line-height: 1; }
+.cosa-altre { background: var(--card2); border: 1px solid var(--lilla); color: var(--lilla); display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 26px; padding: 0; border-radius: 999px; cursor: pointer; }
+.cosa-altre:active { background: var(--lilla-bg); }
+
+/* gli avvisi stanno sotto i pasti (la lista dei pasti ha già 10 px di distanza tra gli elementi) */
+.oggi-pasti > .oggi-avvisi { margin: 0; }
+
+/* ✕ del pannello: stesso bordo destro dei pulsanti dentro il pannello (es. ↻): niente "right" fisso, vale il margine */
+.modal-close { right: auto; margin: 0 0 -32px auto; }
+
+/* swipe: secondo tasto ↻ accanto al cestino */
+.sw-azioni { position: absolute; top: 0; right: 0; bottom: 0; width: 0; overflow: hidden; display: none; flex-direction: row; justify-content: flex-end; border-radius: 0 var(--r-m) var(--r-m) 0; transition: width .22s ease; }
+.sw.sw-mov .sw-azioni, .sw.aperto .sw-azioni { display: flex; }
+.sw-azioni .sw-fondo { position: static; display: flex; flex: 0 0 84px; width: 84px; border-radius: 0; }
+.sw-cambia { background: #6d5bd0; color: #fff; font-size: 26px; line-height: 1; }
+.sw-cambia:active { background: #5a49b8; }
+
+
+/* zone da toccare più grandi (almeno ~44 px) */
+.btn-link { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 10px 8px; }
+.oggi-tipo, .tipo-btn { min-height: 40px; padding-top: 8px; padding-bottom: 8px; }
+.ss-kcal { font-size: 11px; }
+.nav-btn, .qstep-b, .lib-del { min-width: 40px; min-height: 40px; }
+.chip { min-height: 38px; }
+.oggi-azioni { gap: 6px 14px; margin-top: 0; }
+
+/* ===== Nuova ricetta: sezioni chiare, pasto a bottoni, riepilogo e Salva sempre in vista ===== */
+.wiz-sez { margin-top: 18px; }
+.wiz-sez-t { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 2px 8px; }
+.wiz-sez-t .hint-inline { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.wiz-conta { background: var(--card2); border-radius: 999px; padding: 1px 8px; font-size: 12px; color: var(--text); }
+.wiz-foto-ico { margin-left: auto; min-width: 44px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; background: var(--card2); border: 1px solid var(--line2); border-radius: 10px; font-size: 18px; cursor: pointer; text-transform: none; }
+.wiz-pasti { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.wiz-pasto { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 8px 10px; background: var(--card2); border: 2px solid transparent; border-radius: 12px; color: var(--muted); font: inherit; font-size: 15px; cursor: pointer; }
+.wiz-pasto .wp-ico { font-size: 20px; }
+.wiz-pasto.on { background: var(--lilla-bg); border: 2px solid var(--lilla); color: var(--text); font-weight: 700; }
+.wiz-pasto[data-idx="principale"] { grid-column: 1 / -1; }
+.wiz-extra { margin-top: 10px; justify-content: space-between; flex-wrap: wrap; }
+.wiz-extra .wiz-porzioni { flex: 1; min-width: 0; }
+.wiz-extra .wiz-porzioni input[data-campo="pezzo"] { flex: 1; min-width: 0; width: auto; text-align: left; }
+.wiz-ing.da-fare { box-shadow: inset 0 0 0 1px var(--warn); }
+.wiz-ing { grid-template-areas: "nome nome nome del" "qta unita kcal ." "alt alt alt alt"; }
+.wiz-ing .wiz-alt { grid-area: alt; margin: 0; }
+.wiz-ing .wiz-alt span:empty { display: none; }
+.wiz-ing .wiz-alt .btn-link { min-height: 32px; padding: 0 4px; font-size: 13px; }
+.wiz-fondo { position: sticky; bottom: 0; z-index: 4; margin: 18px -2px 0; padding: 10px 2px 2px; background: var(--card); box-shadow: 0 -14px 14px -4px var(--card); }
+.wiz-fondo .wiz-macro { margin: 0 0 8px; padding: 8px 10px; }
+.wiz-fondo .wiz-macro strong { font-size: 17px; }
+.wiz-fondo .wiz-salva { position: static; margin-top: 0; box-shadow: none; }
+.wiz-foto-tutto { margin: 0; }
+
+/* Nuova ricetta più compatta: pasto in una riga sola */
+.wiz-sez { margin-top: 12px; }
+.wiz-pasti { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.wiz-pasto { flex-direction: column; gap: 2px; min-height: 52px; padding: 6px 2px; font-size: 12.5px; border-radius: 10px; border-width: 1.5px; }
+.wiz-pasto .wp-ico { font-size: 18px; line-height: 1; }
+.wiz-pasto.on { border-width: 1.5px; }
+.wiz-pasto[data-idx="principale"] { grid-column: auto; }
+.wiz-titolo { font-size: 16px; padding: 8px 12px; }
+.wiz-foto-tutto { min-height: 40px; padding: 8px 12px; font-size: 14px; }
+.wiz-extra { margin-top: 8px; }
+.wiz-ing { padding: 6px 8px; margin-bottom: 6px; gap: 4px 6px; }
+.wiz-fondo .wiz-macro { padding: 6px 8px; }
+.wiz-fondo { padding-top: 8px; }
+.wiz-fondo .wiz-salva { min-height: 46px; font-size: 16px; }
+
+.wiz-extra { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0; }
+.wiz-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--card2); border-radius: 12px; padding: 4px 12px 4px 10px; color: var(--muted); font-size: 14px; }
+.wiz-pill-i { font-size: 16px; }
+.wiz-pill .qta-input { width: 52px; min-height: 36px; padding: 4px 6px; text-align: center; }
+.wiz-pezzo { flex: 1; min-width: 120px; text-align: left; }
+
+/* ingrediente su una riga: nome, quantità, unità, cestino; sotto kcal e varianti in piccolo */
+.wiz-ing { display: grid; grid-template-columns: 1fr 58px 78px 30px; grid-template-areas: "nome qta unita del" "sub sub sub sub"; gap: 2px 6px; padding: 6px 8px; margin-bottom: 6px; }
+.wiz-ing .ing-n { grid-area: nome; background: var(--card); border-color: var(--line2); padding: 6px 8px; font-size: 15px; min-width: 0; }
+.wiz-ing .ing-q { grid-area: qta; width: 100%; padding: 6px 4px; text-align: center; }
+.wiz-ing .ing-u { grid-area: unita; width: 100%; padding: 6px 2px; font-size: 14px; }
+.wiz-ing .lib-del { grid-area: del; }
+.wiz-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 18px; }
+.wiz-sub .ing-kcal { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.wiz-sub .wiz-alt { margin: 0; gap: 4px; }
+.wiz-sub .wiz-alt .btn-link { min-height: 36px; padding: 0 8px; font-size: 13px; }
+.wiz-sug { display: flex; flex-direction: column; gap: 4px; margin: -2px 0 8px; }
+
+.toast.tocca { cursor: pointer; }
+.wiz-fondo { box-shadow: 0 -14px 14px -4px var(--card), 0 60px 0 0 var(--card); }
+.lib-footer .lib-bilancia { flex: 0 0 auto; margin: 0; white-space: nowrap; }
+
+/* pasti di un giorno nella vista Settimana */
+
+/* «Già mangiato» sta sotto la sezione «Aggiungi a…» */
+.pm-sotto:not(:empty) { margin: 14px 0 18px; }
+.pm-sotto .pm-blocco { margin-bottom: 8px; }
+
+/* ---- pannello pasto semplificato ---- */
+.modal-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mt-testo { flex: 1; min-width: 0; }
+.mt-cambia { cursor: pointer; } .mt-cambia i { font-style: normal; font-size: 14px; color: var(--muted); }
+.lib-box { border: none !important; background: none !important; padding: 0 !important; }
+.pezzi-stepper { gap: 12px; margin: 0 0 8px; justify-content: flex-start; }
+.pezzi-stepper .nav-btn { width: 34px; height: 34px; font-size: 18px; }
+.pezzi-stepper b { font-size: 15px; min-width: 0; }
+.lib-righe { margin-top: 10px; }
+.lib-bil { margin-left: auto; background: var(--card2); border: none; border-radius: 10px; width: 34px; height: 30px; cursor: pointer; font-size: 15px; }
+.avv-post { color: var(--warn); font-weight: 600; }
+.lib-avv { background: none; border: none; color: var(--warn); font-size: 17px; width: 32px; height: 36px; cursor: pointer; padding: 0; }
+.lib-avv-lista { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.lib-avv-lista .var-furbo { margin-top: 0; width: auto; }
+
+.lib-add-ing { display: block; margin: 4px 0 8px; padding: 8px 2px; font-size: 15px; }
+.lib-risultato .r-macro em { font-style: normal; color: var(--muted); font-size: .9em; }
+.lib-righe + .lib-add, .lib-add-ing + .lib-ignoto { margin-top: 6px; }
+
+.pm-blocco .pm-piatto .pr-testo { min-width: 0; }
+
+.pezzi-stepper.grande { justify-content: center; gap: 18px; margin: 6px 0 12px; }
+.pezzi-stepper.grande .nav-btn { width: 46px; height: 46px; font-size: 24px; }
+.pezzi-stepper.grande b { font-size: 22px; min-width: 140px; text-align: center; }
+.pezzi-nome { margin: 4px 0 0; text-align: center; font-size: 14px; color: var(--muted); }
+.pezzi-nome + .pezzi-stepper.grande { margin-top: 6px; }
+
+.pm-ricetta { text-align: left; cursor: pointer; }
+.pm-contatore { display: flex; align-items: center; gap: 12px; padding: 6px 0 8px; }
+.pm-contatore .nav-btn { width: 32px; height: 32px; font-size: 18px; background: var(--card2); flex: 0 0 auto; }
+.pm-contatore b { min-width: 84px; text-align: center; font-size: 15px; }
+
+/* Già mangiato: un box per piatto, che si apre */
+.pm-sezione { margin: 14px 0 18px; }
+.pm-sezione .pm-tot span, .pm-sezione .pm-tot b { color: var(--lilla); }
+.pm-sezione .pm-card { margin-bottom: 10px; padding: 12px 12px 12px; }
+.pm-card .pm-testa { background: none; border: none; border-radius: 0; padding: 0; margin: 0; cursor: pointer; }
+.pm-card .pm-testa .pr-testo b { white-space: normal; }
+.pm-card .pm-freccia { transition: transform .15s; }
+.pm-card.aperto .pm-freccia { transform: rotate(90deg); }
+.pm-dett { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(183,156,245,.25); }
+.pm-ingr { list-style: none; margin: 0 0 10px; padding: 0; }
+.pm-ingr li { padding: 5px 0; font-size: 15px; font-weight: 600; }
+.pm-passi { margin: 0 0 8px; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.pm-passi li { margin-bottom: 6px; }
+.pm-dett-az { display: flex; justify-content: space-between; align-items: center; }
+.pm-tempo { color: var(--muted); font-size: 13px; }
+.pm-modifica { background: var(--card2); border: none; color: var(--lilla); border-radius: 10px; width: 38px; height: 34px; font-size: 18px; cursor: pointer; }
+
+.recupero { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.recupero p { margin: 0; flex: 1; font-size: 14px; }
+.recupero .nav-btn { width: 34px; height: 34px; font-size: 16px; flex: 0 0 auto; }
+.recupero .recupero-si { background: var(--accent); color: #fff; }
+.bs-warn { color: var(--warn); font-size: 14px; font-weight: 600; margin-left: 8px; }
+
+/* Già mangiato: box leggero, contatore sottile (check-up grafico) */
+.pm-sezione .pm-card { background: transparent; border: 1px solid var(--line2); box-shadow: none; }
+.pm-card .pr-check { background: none; border: 0; box-shadow: none; color: var(--lilla); width: 18px; height: auto; flex: 0 0 18px; font-size: 14px; }
+.pm-card .pm-contatore .nav-btn { background: transparent; border: 1px solid var(--line2); width: 30px; height: 30px; font-size: 16px; color: var(--text); }
+.pm-card .pm-contatore b { font-weight: 600; }
+.pm-card .rr-macro { font-size: 12px; }
+.pm-card .pr-kcal { color: var(--muted); font-weight: 400; font-size: 13px; }
+.pm-card .pm-freccia { color: var(--muted); }
+.pm-dett { border-top-color: var(--line); }
+.pm-ingr li { font-weight: 500; }
+.pm-modifica { background: transparent; border: 1px solid var(--line2); }
+
+/* tabella nutrizionale: per 100 g oppure per 1 pezzo (con il peso del pezzo) */
+.etic-per { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 6px; font-size: 12px; color: var(--muted); }
+.etic-per > input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
+.etic-per > label:not(.etic-pzg) { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line2, #33444f); color: var(--text); font-size: 13px; cursor: pointer; }
+.etic-per > input:checked + label { border-color: var(--accent); background: rgba(53,192,125,.16); }
+.etic-per .etic-pzg { display: none; align-items: center; gap: 4px; color: var(--muted); }
+.etic-per .etic-pzg .qta-input { width: 72px; }
+.etic-per input[value="pz"]:checked ~ .etic-pzg { display: inline-flex; }
+.lib-modifica-al { font-size: 12px; padding: 0 4px; }
+.avviso-cammina .avviso-freccia { color: var(--accent); }
+
+.avviso-muovi { display: flex; gap: 8px; margin-top: 8px; }
+.muovi-btn { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--accent); background: rgba(53,192,125,.1); color: var(--text); font: inherit; font-size: 15px; cursor: pointer; }
+.muovi-btn .muovi-ok { color: var(--accent); }
+
+.avviso-muovi { margin: 8px 0; } .avviso-muovi .lib-furbo { margin: 6px 0; }
+.avviso-muovi { display: block; } .avviso-muovi .var-furbo { display: block; width: 100%; margin: 6px 0; }
+
+/* nome dell'ingrediente: mai fuori dal riquadro (parola lunga = carattere più piccolo; se proprio non sta, va a capo) */
+.lib-nome-txt { overflow: hidden; min-width: 0; }
+.lib-nome-t { display: block; max-width: 100%; min-width: 0; overflow-wrap: anywhere; hyphens: none; }
+.lib-nome-txt.parola-lunga { font-size: 13.5px; padding-left: 6px; padding-right: 5px; }
+.lib-nome-txt.parola-lunga2 { font-size: 12px; padding-left: 5px; padding-right: 4px; }
+.lib-nome-txt.parola-lunga3 { font-size: 11px; padding-left: 5px; padding-right: 4px; }
+
+/* righe degli ingredienti: sempre su una sola linea (nome · − quantità + · unità); niente cestino, si elimina con lo swipe a sinistra */
+.lib-riga { flex-wrap: nowrap; }
+.lib-riga .lib-nome-txt { flex: 1 1 0; min-width: 0; }
+/* nome dell'ingrediente: resta nel suo riquadro (si capisce che si può toccare e cambiare); padding ridotto per far stare le parole lunghe */
+.lib-riga .lib-nome-txt { padding-left: 6px; padding-right: 4px; }
+.lib-riga .lib-nome-txt.parola-lunga, .lib-riga .lib-nome-txt.parola-lunga2, .lib-riga .lib-nome-txt.parola-lunga3 { padding-left: 5px; padding-right: 3px; }
+.lib-riga { gap: 3px; }
+.lib-riga > .lib-del { flex: 0 0 34px; width: 34px; min-width: 34px; }
+/* schermi molto stretti: il nome ha ~70 px, quindi le parole lunghe si riducono ancora un po' (restano su una riga e intere) */
+@container (max-width: 299px) {
+  .lib-riga .lib-nome-txt.parola-lunga { font-size: 11.5px; }
+  .lib-riga .lib-nome-txt.parola-lunga2 { font-size: 10.5px; }
+  .lib-riga .lib-nome-txt.parola-lunga3 { font-size: 10px; }
+  .lib-riga .unita-box { flex: 0 0 46px; width: 46px; min-width: 46px; max-width: 46px; padding: 0 12px 0 6px; }
+  .lib-riga .qstep-b { flex: 0 0 22px; width: 22px; }
+  .lib-riga .qstep .lib-qta { width: 30px; }
+  .lib-riga > .lib-del { flex: 0 0 30px; width: 30px; min-width: 30px; }
+}
+.lib-righe { container-type: inline-size; }
+/* righe degli sport (Profilo): su una linea anche con nomi lunghi su schermi stretti */
+.sport-riga:not(.nuovo) { gap: 5px; }
+.sport-riga:not(.nuovo) .sr-nome { flex: 1 1 0; min-width: 0; font-size: 14px; overflow-wrap: anywhere; line-height: 1.2; }
+.sport-riga:not(.nuovo) .sr-ico { flex: 0 0 26px; width: 26px; font-size: 20px; }
+.sport-riga:not(.nuovo) .sr-dur { width: 50px; }
+.sport-riga:not(.nuovo) .sr-kcal { font-size: 11.5px; }
+.sport-riga:not(.nuovo) > .lib-del { flex: 0 0 30px; width: 30px; min-width: 30px; }
+
+/* aree di tocco comode (almeno ~40 px) senza cambiare il disegno: il cerchietto resta piccolo, la zona toccabile è più grande */
+.modal-close::after, .modal-trash::after, .cosa-altre::after, .lib-avv::after, .chip-alt::after { content: ""; position: absolute; inset: -7px; }
+.cosa-altre, .lib-avv, .chip-alt { position: relative; }
+summary { min-height: 40px; display: flex; align-items: center; }
+.sport-riga:not(.nuovo) > .lib-del { flex-basis: 36px; width: 36px; min-width: 36px; }
+/* "↺ torna ai valori iniziali": solo icona, ma con una zona di tocco vera e un po' più grande */
+.btn-link[aria-label^="Torna ai valori"] { min-width: 48px; font-size: 22px; }
+/* cestino nelle righe ingredienti: sugli schermi stretti il disegno resta compatto ma la zona di tocco è più larga */
+.lib-riga > .lib-del { position: relative; }
+.lib-riga > .lib-del::after { content: ""; position: absolute; inset: 0 -4px; }
+
+/* nome molto lungo: al massimo 3 righe (il nome intero si vede toccandolo, che apre la modifica) */
+.lib-riga .lib-nome-t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+/* ⚠ prima dell'allenamento: più stretto (la zona di tocco resta larga) per lasciare spazio al nome */
+.lib-riga > .lib-avv { flex: 0 0 24px; width: 24px; min-width: 24px; padding: 0; font-size: 15px; }
+/* schermi stretti con il ⚠ nella riga: − e + un po' più stretti e carattere del nome più piccolo, così le parole restano intere */
+@container (max-width: 299px) {
+  .lib-riga .qstep-b { flex: 0 0 34px; width: 34px; min-width: 34px; }
+  .lib-riga:has(> .lib-avv) .lib-nome-txt { font-size: 12px; padding-left: 5px; padding-right: 3px; }
+  .lib-riga:has(> .lib-avv) .lib-nome-txt.parola-lunga { font-size: 11px; }
+  .lib-riga:has(> .lib-avv) .lib-nome-txt.parola-lunga2 { font-size: 10.5px; }
+  .lib-riga:has(> .lib-avv) .lib-nome-txt.parola-lunga3 { font-size: 10px; }
+}
+
+/* legenda sotto le righe: spiega il ⚠ (prima dell'allenamento meglio senza grassi) */
+.lib-legenda-avv { margin: 6px 0 2px; padding: 0 2px; font-size: 12.5px; line-height: 1.35; color: var(--warn, #e8b04a); }
+.lib-legenda-avv span { margin-right: 4px; }
+
+/* elenco con almeno un ⚠ su schermi stretti (fino a ~343 px): tutte le righe restringono − + e unità e allineano la colonna del ⚠, così i nomi stanno interi e le colonne restano in fila */
+@container (max-width: 340px) {
+  .lib-righe:has(.lib-avv) .lib-riga .qstep-b { flex: 0 0 34px; width: 34px; min-width: 34px; }
+  .lib-righe:has(.lib-avv) .lib-riga .qstep .lib-qta { width: 32px; }
+  .lib-righe:has(.lib-avv) .lib-riga .unita-box { flex: 0 0 46px; width: 46px; min-width: 46px; max-width: 46px; padding: 0 12px 0 6px; }
+  .lib-righe:has(.lib-avv) .lib-riga:not(:has(> .lib-avv))::after { content: ""; order: 1; flex: 0 0 24px; }
+  .lib-righe:has(.lib-avv) .lib-riga:not(:has(> .lib-avv)) > .lib-del { order: 2; }
+  .lib-righe:has(.lib-avv) .lib-riga .lib-nome-txt { font-size: 12px; padding-left: 5px; padding-right: 3px; }
+  .lib-righe:has(.lib-avv) .lib-riga .lib-nome-txt.parola-lunga { font-size: 11px; }
+  .lib-righe:has(.lib-avv) .lib-riga .lib-nome-txt.parola-lunga2 { font-size: 10.5px; }
+  .lib-righe:has(.lib-avv) .lib-riga .lib-nome-txt.parola-lunga3 { font-size: 10px; }
+}
+@container (max-width: 299px) {
+  .lib-righe:has(.lib-avv) .lib-riga .lib-nome-txt { padding-left: 4px; padding-right: 2px; }
+  .lib-righe:has(.lib-avv) .lib-riga .lib-nome-txt.parola-lunga2 { font-size: 10px; }
+  .lib-righe:has(.lib-avv) .lib-riga .lib-nome-txt.parola-lunga3 { font-size: 9.5px; }
+}
+
+/* "Già mangiato" nel pasto: schede uguali per ricette e ingredienti; aperte, gli ingredienti si modificano lì */
+.lib-grp-del, .lib-voce-del { display: none !important; }
+.lib-voce .pm-freccia { transition: transform 0.15s; }
+.lib-voce.aperta .pm-freccia { transform: rotate(90deg); }
+.pm-lista .lib-voce + .lib-voce { border-top: 1px solid var(--line); }
+.lib-voce .pm-piatto { background: none; border: none; border-radius: 0; }
+.lib-voce .pm-dett { margin: 0 14px 10px; padding-top: 8px; }
+.pm-ricetta .pm-dett .lib-riga { margin-bottom: 4px; }
+.pm-ricetta .pm-contatore { padding: 4px 0 6px; gap: 10px; }
+.pm-ricetta .pm-contatore b { min-width: 70px; font-size: 14px; }
+
+/* Andamento: elenco di tutte le pesate dentro la stessa schermata (niente pannello a parte) */
+.and-pesate { margin-top: 8px; }
+.and-pesate > summary { cursor: pointer; color: var(--lilla, #b79cf5); font-weight: 600; font-size: 14px; min-height: 40px; display: flex; align-items: center; gap: 8px; }
+.and-pesate > summary em { font-style: normal; font-weight: 400; font-size: 12px; color: var(--muted); }
+.and-pesate .lista-pesi li { display: flex; align-items: center; gap: 10px; }
+.and-pesate .lista-pesi li > span { flex: 1; }
+
+/* schede "Già mangiato" aperte: le righe si misurano sulla larghezza vera della scheda, e su schermi stretti la scheda ha meno margini */
+.pm-dett { container-type: inline-size; }
+@media (max-width: 360px) {
+  .pm-sezione .pm-card { padding: 10px 8px; }
+  .lib-voce .pm-dett { margin: 0 0 8px; }
+}
+
+/* schede "Già mangiato": contorno sottile viola; aperte, gli ingredienti non hanno la linea grigia sopra */
+.pm-sezione .pm-card { border: 1px solid rgba(183,156,245,.55); }
+.pm-dett, .lib-voce .pm-dett { border-top: none; padding-top: 4px; margin-top: 6px; }
+.pm-lista .lib-voce + .lib-voce { border-top-color: rgba(183,156,245,.25); }
+
+/* freccia: ⌄ chiusa, ⌃ aperta (come di solito) */
+.pm-card .pm-freccia { font-size: 20px; line-height: 1; }
+.pm-card.aperto .pm-freccia, .lib-voce.aperta .pm-freccia { transform: rotate(180deg); }
+
+/* spunta viola accanto al nome; tutto il resto allineato a sinistra */
+.pm-card .pr-testo b .pm-ck { display: inline; flex: none; width: auto; margin-right: 6px; font-size: 15px; color: var(--lilla); }
+.pm-card .pm-testa, .lib-voce .pm-piatto { gap: 0; padding-left: 0; }
+.lib-voce .pm-dett, .pm-ricetta .pm-dett { margin-left: 0; margin-right: 0; }
+
+/* ingrediente singolo = scheda come la ricetta */
+.lib-voce.pm-card { margin-bottom: 10px; }
+.lib-voce .pm-testa .lib-avv { flex: 0 0 24px; }
+
+/* kcal con la sigla; freccia proporzionata (angolo disegnato, non un carattere) e centrata con le kcal */
+.pm-card .pr-kcal { white-space: nowrap; font-size: 14px; }
+.pm-card .pr-kcal small { font-size: 11px; opacity: .8; }
+.pm-card .pm-freccia { font-size: 0; width: 8px; height: 8px; flex: 0 0 8px; margin: 0 5px 4px 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
+.pm-card.aperto .pm-freccia { transform: rotate(225deg); margin-bottom: -2px; }
+.pm-card .pm-testa { align-items: center; }
+.pr-kcal small{font-size:11px;opacity:.8}
+
+/* freccia = pulsantino rotondo viola con l'angolo dentro (si capisce che la scheda si apre) */
+.pm-card .pm-freccia { position: relative; flex: 0 0 28px; width: 28px; height: 28px; margin: 0 0 0 8px; border: 1.5px solid var(--lilla); border-radius: 50%; background: rgba(183,156,245,.14); transform: none; }
+.pm-card .pm-freccia::before { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--lilla); border-bottom: 2px solid var(--lilla); transform: translate(-50%, -75%) rotate(45deg); transition: transform .15s; }
+.pm-card.aperto .pm-freccia { transform: none; margin-bottom: 0; }
+.pm-card.aperto .pm-freccia::before { transform: translate(-50%, -25%) rotate(225deg); }
+
+.lib-legenda-avv p { margin: 0 0 6px; }
+.lib-legenda-avv b { color: var(--text); font-weight: 600; }
+.lib-legenda-avv b { color: inherit; }
+
+/* schede compatte: riga 1 = ✓ nome · kcal (⚠/freccia); riga 2 = contatore piccolo + P/C/G sulla stessa riga */
+.pm-sezione .pm-card { padding: 9px 12px; margin-bottom: 8px; }
+.pm-card .pm-testa { align-items: flex-start; }
+.pm-card .pm-testa .pr-testo { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 3px; min-width: 0; }
+.pm-card .pm-testa .pr-testo > b { flex: 1 0 100%; min-width: 0; }
+.pm-card .pm-contatore, .pm-ricetta .pm-contatore { padding: 0; gap: 6px; }
+.pm-card .pm-contatore .nav-btn { width: 26px; height: 26px; font-size: 15px; }
+.pm-card .pm-contatore b, .pm-ricetta .pm-contatore b { min-width: 0; padding: 0 2px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.pm-card .pr-kcal { padding-top: 1px; }
+.pm-card .pm-freccia { margin-top: -2px; }
+.pm-card .pm-testa .lib-avv { margin-top: -1px; }
+.pm-card .pm-testa .pr-testo { justify-content: flex-start; text-align: left; flex: 1 1 0; }
+.pm-card .pm-testa .pr-testo > b { text-align: left; }
+.pm-card .pm-testa .pr-testo { flex-direction: row; align-items: center; }
+/* kcal/⚠/freccia in alto a destra: il contenuto (nome, contatore, P/C/G) usa tutta la larghezza */
+.pm-card .pm-testa { position: relative; display: block; }
+.pm-card .pm-testa .pr-testo { padding-right: 0; }
+.pm-card .pm-testa .pr-testo > b { flex: 1 0 100%; padding-right: 96px; box-sizing: border-box; }
+.pm-card .pm-testa .pr-kcal, .pm-card .pm-testa .pm-freccia, .pm-card .pm-testa .lib-avv { position: absolute; top: 0; }
+.pm-card .pm-testa .pr-kcal { right: 0; }
+.pm-card .pm-testa .lib-avv { right: 0; }
+.pm-card .pm-testa .pr-kcal:has(+ .lib-avv), .pm-card .pm-testa .pr-kcal:has(+ .pm-freccia) { right: 34px; }
+.pm-card .pm-testa .pm-freccia { right: 0; margin: 0; top: -3px; }
+.pm-card .pm-testa .pr-testo { column-gap: 10px; }
+.pm-card .pm-contatore .nav-btn { width: 26px; min-width: 26px; padding: 0; position: relative; flex: 0 0 26px; }
+.pm-card .pm-contatore .nav-btn::after { content: ""; position: absolute; inset: -6px -4px; }
+.pm-card .rr-macro { font-size: 12px; }
+.pm-card .pm-contatore .nav-btn { height: 26px; min-height: 26px; }
+.pm-card .pm-testa .pr-testo { column-gap: 6px; }
+.pm-card .pm-contatore { margin-left: -2px; }
+.pm-card .pm-contatore { margin-left: 0; }
+
+/* ritocco spazi: stessi pulsanti nelle ricette e negli ingredienti; kcal e freccia sulla riga del nome */
+.pm-card .pm-contatore .nav-btn, .pm-ricetta .pm-contatore .nav-btn { width: 26px; height: 26px; min-width: 26px; min-height: 26px; flex: 0 0 26px; font-size: 15px; line-height: 1; }
+.pm-card .pm-testa .pr-kcal { line-height: 22px; padding-top: 0; top: 0; }
+.pm-card .pm-testa .pm-freccia { top: 0; width: 22px; height: 22px; flex: none; right: 0; }
+.pm-card .pm-testa .pm-freccia::before { width: 6px; height: 6px; }
+.pm-card .pm-testa .pr-kcal:has(+ .pm-freccia) { right: 30px; }
+.pm-card .pm-testa .lib-avv { top: 0; height: 22px; line-height: 22px; }
+.pm-card .pm-testa .pr-testo > b { line-height: 22px; padding-right: 92px; }
+.pm-card .pm-testa .pr-kcal:has(+ .lib-avv) { right: 28px; }
+
+/* ricetta aperta su schermi stretti (anche con ⚠): righe più compatte, così il nome ha ~70 px e le parole restano intere */
+@container (max-width: 275px) {
+  .lib-righe .pm-dett .lib-riga { gap: 2px; }
+  .lib-righe .pm-dett .lib-riga .qstep-b { flex: 0 0 29px; width: 29px; min-width: 29px; }
+  .lib-righe .pm-dett .lib-riga .qstep .lib-qta { width: 28px; padding: 0; }
+  .lib-righe .pm-dett .lib-riga .unita-box { flex: 0 0 40px; width: 40px; min-width: 40px; max-width: 40px; padding: 0 10px 0 5px; }
+  .lib-righe .pm-dett .lib-riga > .lib-del { flex: 0 0 28px; width: 28px; min-width: 28px; }
+  .lib-righe .pm-dett .lib-riga > .lib-avv { flex: 0 0 20px; width: 20px; min-width: 20px; }
+  .lib-righe:has(.lib-avv) .pm-dett .lib-riga:not(:has(> .lib-avv))::after { flex: 0 0 20px; }
+  .lib-righe .pm-dett .lib-riga .lib-nome-txt, .lib-righe:has(.lib-avv) .pm-dett .lib-riga .lib-nome-txt { font-size: 12px; padding-left: 5px; padding-right: 3px; }
+  .lib-righe .pm-dett .lib-riga .lib-nome-txt.parola-lunga, .lib-righe .pm-dett .lib-riga .lib-nome-txt.parola-lunga2, .lib-righe .pm-dett .lib-riga .lib-nome-txt.parola-lunga3 { font-size: 10.5px; }
+}
+
+/* zone di tocco che non si sovrappongono: il ⚠ non invade il cestino né l'unità */
+.lib-riga > .lib-avv::after { inset: -7px 0; }
+.lib-riga > .lib-del::after { inset: 0; }
+.pm-card .pm-testa .lib-avv::after { inset: -10px -6px -10px -8px; }
+
+/* al posto della spunta: un pallino viola piccolo accanto al nome */
+.pm-card .pr-testo b .pm-ck { display: inline-block; width: 7px; height: 7px; font-size: 0; margin: 0 8px 1px 1px; border-radius: 50%; background: var(--lilla); vertical-align: middle; }
+.pm-card .pm-testa .pm-freccia { box-sizing: border-box; right: 2px; top: 1px; }
+.pm-card .pm-testa .pr-kcal:has(+ .pm-freccia) { right: 32px; }
+
+.lib-conferma { margin: 14px 0 6px; }

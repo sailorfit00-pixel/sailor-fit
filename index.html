@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1417">
+  <title>Sailor Fit</title>
+  <meta name="apple-mobile-web-app-title" content="Sailor Fit">
+  <meta name="application-name" content="Sailor Fit">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>🌙 Sailor Fit</h1>
+  </header>
+
+  <main>
+    <section id="vista-oggi"><div id="oggi"></div></section>
+
+
+    <input id="file-csv" type="file" accept=".csv,text/csv" hidden>
+    <input id="file-backup" type="file" accept=".json,application/json" hidden>
+  </main>
+
+  <nav class="tabbar" aria-label="Sezioni">
+    <button id="tab-oggi" data-tab="oggi"><span class="tb-ico">🏠</span><span>Oggi</span></button>
+    <button id="tab-settimana" data-tab="settimana"><span class="tb-ico">📅</span><span>Settimana</span></button>
+    <button id="apri-andamento" data-tab="andamento"><span class="tb-ico">📊</span><span>Andamento</span></button>
+    <button id="apri-menu" data-tab="altro"><span class="tb-ico">☰</span><span>Altro</span></button>
+  </nav>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" data-chiudi></div>
+    <div class="modal-sheet" role="dialog" aria-modal="true">
+      <div class="modal-grip"></div>
+      <button class="modal-close" data-chiudi aria-label="Chiudi">✕</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script defer src="sortable.min.js"></script>
+  <script defer src="nutrition.js"></script>
+  <script defer src="recipes.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="libero.js"></script>
+  <script defer src="codice-barre.js"></script>
+  <script defer src="foto-ricetta.js"></script>
+  <script defer src="diario.js"></script>
+  <script defer src="settimana.js"></script>
+  <script defer src="andamento.js"></script>
+<script defer src="swipe.js"></script>
+</body>
+</html>
