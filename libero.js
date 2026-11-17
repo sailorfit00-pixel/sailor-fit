@@ -975,7 +975,7 @@ function anteprimaHTML(c) {
       <span class="ant-fit-t">${fitOn ? "✓ " : ""}🥗 Più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></span>
       <span class="ant-mosse">${a.mosse.map(m => m.tipo === "cambia" ? `${esc(m.r.nome)} → <b>${esc(m.a)}</b>` : `${esc(m.r.nome)}: ${Math.round(m.r.qta)} → <b>${m.nuova} g</b>`).join(" · ")}</span>
       <span class="ant-fit-nota">${fitOn ? "Applicato · tocca per tornare alla ricetta originale" : "Tocca per applicarlo"}</span>
-    </button>` : `<p class="hint">È già una scelta fit: niente da alleggerire.</p>`;
+    </button>` : "";   // niente da alleggerire: non compare niente
   return `<button class="btn-link modal-indietro" data-ant-chiudi>‹ Torna al pasto</button>
     <h3 class="modal-title">${esc(a.ps.nome || a.r.nome)}</h3>
     <div class="ant-box">${macroStileHTML(tot)}<ul class="pm-sola-lista">${items.map(riga).join("")}</ul></div>
