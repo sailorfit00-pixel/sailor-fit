@@ -1037,7 +1037,7 @@ function liberoHTML() {
     ? x.ks.forEach(k => schede.push({ t: quando(k), k, html: voceHTML(k) }))
     : schede.push({ t: Math.min(...x.ks.map(quando)), k: Math.min(...x.ks), html: ricettaHTML(x.grp, x.html) }));
   schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
-  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza && !c._creatoOra ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
+  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza && !c._creatoOra ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><span class="pm-tot-dx"><b>${kcalTot} kcal</b>${!bloccato && !c.bozza && c.vivo && c.items.length ? `<button class="cosa-altre pm-cambia" data-lib-cambia-pasto aria-label="Un altro piatto per questo pasto">${ICONA_ALTRE}</button>` : ""}</span></p>${schede.map(x => x.html).join("")}</div>`;
 
   const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto pagina${c.ignotoCodice ? " da-codice" : ""}">
       ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Codice ${esc(c.ignotoCodice)} · controlla i valori e salva.</p>`
@@ -1275,6 +1275,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.closest("[data-lib-sblocca]")) {
       const dataP = c.data, pastoP = c.pasto;
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
+      return;
+    }
+    if (e.target.closest("[data-lib-cambia-pasto]")) {   // ↻ un altro piatto per questo pasto, che stia nei valori del giorno (come lo swipe in Oggi)
+      const dataP = c.data, pastoP = c.pasto;
+      const r = rigeneraGiorno(dataP, pastoP, true);
+      if (typeof renderOggi === "function") renderOggi();
+      if (!r.messe) { avviso("Nessuna alternativa che stia nei tuoi valori", "", () => {}); return; }
+      apriPastoDiario(dataP, null, pastoP);
+      avviso("✓ Pasto cambiato", "Annulla", () => { annullaPianificazione(r.prima); renderOggi(); if (liberoCtx && liberoCtx.data === dataP && liberoCtx.pasto === pastoP) apriPastoDiario(dataP, null, pastoP); });
       return;
     }
     if (e.target.closest("[data-lib-riblocca]")) { pastiSbloccati.delete(c.data + "|" + c.pasto); rirenderLibero(); return; }
