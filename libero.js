@@ -357,26 +357,6 @@ function sostituisciIngrediente(k, nome, grammi) {
   rirenderLibero();
 }
 // «⚖️ Bilancia»: porta il pasto alle kcal che restano senza cambiare le proporzioni (una ricetta resta la ricetta):
-// tutte le quantità si moltiplicano per lo stesso fattore. Una ricetta a pezzi cambia numero di pezzi, come col − N ＋.
-function scalaPastoLibero() {
-  const c = liberoCtx; if (!c || !c.items.length) return;
-  const T = c.target(), m = macroDa(c.items);
-  if (!(T.kcal > 0) || !(m.kcal > 0)) return;
-  const k = Math.max(0.25, Math.min(2.5, T.kcal / m.kcal));
-  const r = c.ricetta && c.nPezzi && typeof ricettaAPezzi === "function" ? ricettaAPezzi(c.ricetta) : null;
-  if (r && !ricettaModificata(c)) {
-    const passo = passoPezzi(r._orig);
-    const n = Math.max(passo, Math.round(c.nPezzi * k / passo) * passo);
-    if (n !== c.nPezzi) cambiaPezzi(Math.round((n - c.nPezzi) / passo));
-    return;
-  }
-  c.items.forEach(it => {
-    const u = unitaDi(it), gu = grammiPerUnita(it.nome, u), v = it.qta * k;
-    it.qta = gu ? (v / gu < 0.25 ? Math.max(1, Math.round(v)) : Math.round(Math.round(v / gu * 4) / 4 * gu * 10) / 10) :   // sotto un quarto di pezzo si tengono i grammi: la proporzione resta giusta
-       (v < 20 ? Math.max(1, Math.round(v)) : Math.round(v / 5) * 5);
-    it.lock = true;
-  });
-}
 function ricalcolaLibero() {
   const c = liberoCtx;
   if (!c.items.length) return;
@@ -808,7 +788,7 @@ function mosseFit(c) {
   return out.sort((a, b) => b.v - a.v).slice(0, 4);
 }
 // Un'unica sezione «Consigli furbi»: prima quelli che rendono il piatto più fit (etichetta «più fit»), poi quelli che fanno tornare i numeri
-function consiglioFurboHTML(c, m, fitMosse = [], primaRiga = "") {
+function consiglioFurboHTML(c, m, fitMosse = []) {
   if (c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto)) return "";   // sui pasti passati niente consigli: solo su quelli ancora da venire
   const e = elencoConsigli(c, m);
   const giaFit = new Set(fitMosse.map(a => a.tipo === "cambia" ? `cambia|${a.r.nome}|${a.a}` : `porta|${a.r.nome}|${a.nuova}`));
@@ -817,7 +797,6 @@ function consiglioFurboHTML(c, m, fitMosse = [], primaRiga = "") {
     const testa = a.tipo === "cambia" ? `Cambia <b>${esc(a.r.nome.toLowerCase())}</b> (${Math.round(a.r.qta)} g) con <b>${esc(a.a.toLowerCase())}</b>` : `Porta <b>${esc(a.r.nome.toLowerCase())}</b> da ${Math.round(a.r.qta)} a <b>${a.nuova} g</b>`;
     return furbiScartati.has(testa) ? null : { a: { tipo: "fit" }, r: { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}><span class="tag-fit">più fit</span>${testa}</button>` } };
   }).filter(Boolean);
-  if (primaRiga) righeFit.unshift({ a: { tipo: "bil" }, r: { testa: "bilancia", html: primaRiga } });   // «porta il pasto a … kcal» per primo
   if (!e && !righeFit.length) return "";
   const riga = (a) => {
     let testa, attr;
@@ -1034,12 +1013,7 @@ function liberoHTML() {
   const T = c.target();
   const m = c.items.length ? macroDa(c.items) : null;
   const diff = m ? { kcal: T.kcal - m.kcal, proteine: T.proteine - m.proteine, carboidrati: T.carboidrati - m.carboidrati, grassi: T.grassi - m.grassi } : null;
-  // «porta il pasto alle sue kcal» (tutte le quantità in proporzione): il primo dei consigli furbi, solo se lo scarto è sensibile
-  const bilancia = (() => { if (bloccato || !(m && c.items.length && T.kcal > 0 && m.kcal > 0 && Math.abs(m.kcal - T.kcal) / T.kcal > 0.08)) return "";
-    const arr = Math.round(m.kcal * Math.max(0.25, Math.min(2.5, T.kcal / m.kcal)));   // le quantità cambiano al massimo di 2,5 volte: il consiglio promette solo quello che ottiene
-    const su = arr > m.kcal, diff = Math.abs(arr - Math.round(m.kcal));
-    return Math.abs(arr - m.kcal) / m.kcal > 0.08 ? `<button class="var-furbo lib-furbo" data-lib="bilancia">Porta il pasto a <b>${arr} kcal</b>: ${su ? "aumenta" : "riduci"} un po' tutte le quantità <em>${su ? "+" : "−"}${diff} kcal</em></button>` : ""; })();
-  const furboBlocco = m ? consiglioFurboHTML(c, m, [], bilancia) : "";   // dopo l'aggiunta: solo consigli per stare nei valori («Più fit» si sceglie prima, nell'anteprima della ricetta)      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
+  const furboBlocco = m ? consiglioFurboHTML(c, m) : "";   // (niente più «aumenta / riduci tutte le quantità»: bastano i consigli furbi, o lo fai a mano)   // dopo l'aggiunta: solo consigli per stare nei valori («Più fit» si sceglie prima, nell'anteprima della ricetta)      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
 
   const { pre, post } = contestoAllenamento(c);
   const righeK = c.items.map((it, k) => {
@@ -1347,7 +1321,6 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (a === "mostra-add") { c.addAperto = true; rirenderLibero(); const i2 = document.getElementById("lib-input"); if (i2) i2.focus(); }
       else if (a === "salva-modifiche") { closeModal(); avviso("✓ Modifiche salvate"); }   // erano già nel diario: si conferma e si torna a Oggi
       else if (a === "conferma-bozza") { c._conferma = true; c.bozza = false; try { rirenderLibero(); } finally { c._conferma = false; } if (liberoCtx === c) rirenderLibero(); }   // ora il pasto è nel diario: si vede il riepilogo
-      else if (a === "bilancia") { scalaPastoLibero(); rirenderLibero(); }   // stesse proporzioni, kcal del pasto
       else if (a === "al-modifica") { c.modificaAl = b.dataset.nome; c.ignotoNuovo = true; c.ignoto = null; c.ignotoCodice = null; rirenderLibero(); }
       else if (a === "ignoto-annulla") { c.modificaAl = null; c.ignotoNuovo = false; c.ignoto = null; c.ignotoCodice = null; c.ricercaOFF = null; rirenderLibero(); }
       else if (a === "ignoto-salva") {
