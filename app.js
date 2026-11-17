@@ -1202,6 +1202,43 @@ function leggiInCasa() {
 const GIORNI_SPESA = 28;
 // Consumo per alimento nei giorni indicati: contano solo i giorni con almeno 3 pasti scritti (un giorno dimenticato non abbassa la media).
 // `g` è già «a settimana» (grammi totali / giorni validi × 7); `giorni` = in quanti dei giorni validi l'hai mangiato.
+// Piatti → ingredienti da comprare, con quanti grammi di ingrediente ci sono in 1 g di piatto (vale anche per gli alimenti che hai aggiunto tu con quel nome)
+function lattePiatto(n) {
+  return /scremat/.test(n) && !/parzial/.test(n) ? "Latte scremato" : /parzial/.test(n) ? "Latte parzialmente scremato" : /intero/.test(n) ? "Latte intero"
+    : /soia/.test(n) ? "Bevanda di soia" : /avena/.test(n) ? "Bevanda di avena" : /mandorl/.test(n) ? "Bevanda di mandorla" : /riso/.test(n) ? "Bevanda di riso" : "Latte parzialmente scremato";
+}
+const PIATTI_SPESA = [
+  [/^(cappuccino|caff[eè] ?latte|latte macchiato|caff[eè] macchiato)/, (n) => [[lattePiatto(n), 0.8]]],
+  [/^(frittata di albumi|omelette? di albumi)/, () => [["Albume", 0.95]]],
+  [/^(omelette?|frittata|uova (strapazzate|al tegamino|in camicia|sode|alla coque)|uovo (sodo|alla coque|in camicia))/, () => [["Uova", 0.9]]],
+  [/^porridge/, (n) => [["Fiocchi d'avena", 0.25], [lattePiatto(n.replace(/^porridge|avena col|d'avena|di avena/g, "")), 0.7]]],   // «avena» qui sono i fiocchi, non la bevanda
+  [/^pancake/, () => [["Fiocchi d'avena", 0.35], ["Uova", 0.25], ["Latte parzialmente scremato", 0.35]]],
+  [/^(pur[eèé] di patate|purea di patate)/, () => [["Patate", 0.85], ["Latte parzialmente scremato", 0.15]]],
+  [/^(patate (lesse|al forno|arrosto|bollite)|crocchette di patate|hash brown)/, () => [["Patate", 1]]],
+  [/^spremuta d'aranc/, () => [["Arancia", 2]]],
+  [/^frullato proteico/, (n) => [["Proteine in polvere", 0.1], [lattePiatto(n), 0.85]]],
+  [/^(smoothie|frullato)/, () => [["Banana", 0.4], ["Frutti rossi", 0.4]]],
+  [/^toast/, () => [["Pane in cassetta (toast)", 0.55], ["Prosciutto cotto", 0.2], ["Formaggio a fette (sottiletta)", 0.2]]],
+  [/^pasta al pomodoro/, () => [["Pasta di semola", 0.35], ["Passata di pomodoro", 0.4]]],
+  [/^pasta al pesto/, () => [["Pasta di semola", 0.35], ["Pesto", 0.12]]],
+  [/^insalata di riso/, () => [["Riso crudo", 0.3], ["Tonno in scatola al naturale", 0.1], ["Mais", 0.1]]],
+  [/^(verdure (grigliate|al forno))/, () => [["Zucchine", 0.4], ["Melanzane", 0.3], ["Peperoni", 0.3]]],
+  [/^(polpette di manzo)/, () => [["Manzo magro macinato", 0.8]]],
+  [/^(polpette di (pollo|tacchino)|polpette di pollo o tacchino)/, () => [["Fesa di tacchino macinata", 0.8]]],
+  [/^(pollo arrosto|straccetti di pollo)/, () => [["Petto di pollo", 1]]],
+  [/^arrosto di tacchino/, () => [["Fesa di tacchino", 1]]],
+  [/^(tartare|carpaccio) di manzo/, () => [["Manzo magro", 1]]],
+  [/^(tartare|sashimi) di salmone/, () => [["Salmone fresco", 1]]],
+  [/^caprese/, () => [["Mozzarella", 0.5], ["Pomodoro", 0.5]]],
+  [/^(sugo al pomodoro)/, () => [["Passata di pomodoro", 0.9]]],
+  [/^(vellutata di zucca)/, () => [["Zucca", 0.8], ["Patate", 0.15]]],
+];
+function ingredientiSpesa(nome) {
+  const n = String(nome).toLowerCase().trim();
+  const r = PIATTI_SPESA.find(([re]) => re.test(n));
+  if (!r) return null;
+  return r[1](n).filter(([x]) => (window.ALIMENTI || {})[x]);
+}
 function consumiPerAlimento(giorniISO) {
   const d = typeof leggiDiario === "function" ? leggiDiario() : {};
   const validi = giorniISO.filter(x => d[x] && (d[x].pasti || []).length >= 3);
@@ -1210,9 +1247,13 @@ function consumiPerAlimento(giorniISO) {
     const visti = new Set();
     d[x].pasti.forEach(p => (p.ingredienti || []).forEach(i => {
       if (!(window.ALIMENTI || {})[i.nome] || i.unita === "q.b.") return;
-      const e = st[i.nome] ||= { giorni: 0, g: 0 };
-      e.g += grammiIng(i);
-      if (!visti.has(i.nome)) { visti.add(i.nome); e.giorni++; }
+      // un piatto (cappuccino, omelette, porridge…) in lista diventa i suoi ingredienti: si compra il latte, non il cappuccino
+      const parti = ingredientiSpesa(i.nome) || [[i.nome, 1]];
+      parti.forEach(([nome, fr]) => {
+        const e = st[nome] ||= { giorni: 0, g: 0 };
+        e.g += grammiIng(i) * fr;
+        if (!visti.has(nome)) { visti.add(nome); e.giorni++; }
+      });
     }));
   });
   const k = validi.length ? 7 / validi.length : 0;
