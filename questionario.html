@@ -346,13 +346,28 @@ function manca(){
   return "";
 }
 
+// dati compatti: finiscono nel link che apre la scheda (risposte.html)
+function dati(){
+  var d={n:txt("nome"),s:val("sesso")[0]||"",e:txt("eta"),a:txt("altezza"),p:txt("peso"),po:txt("pesoObiettivo"),
+    ob:val("obiettivo"),t:val("tempo")[0]||"",sp:val("sport"),spa:txt("sportAltro"),g:val("giorni")[0]||"",oa:val("oraAll"),l:val("lavoro")[0]||"",
+    pa:val("pasti"),dv:val("dove"),c:val("cucina")[0]||"",di:val("dieta"),al:val("allergie"),ala:txt("allergieAltro"),
+    nm:val("noMangio"),nma:txt("noMangioAltro"),db:val("debolezze"),u:val("uso")[0]||"",tel:val("tel")[0]||"",rg:val("registra"),note:txt("note"),
+    fn:FUNZIONI.map(function(f,i){ return {si:"s",forse:"f",no:"n"}[val("fn"+i)[0]]||"-"; }).join("")};
+  return d;
+}
+function link(){
+  var b=btoa(unescape(encodeURIComponent(JSON.stringify(dati())))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  return location.href.replace(/[#?].*$/,"").replace(/[^\/]*$/,"")+"risposte.html#"+b;
+}
+function messaggio(){ return riepilogo()+"\n\n🔎 Scheda pronta:\n"+link(); }
+
 document.getElementById("wa").addEventListener("click", function(){
   if(manca()){ var e=form.elements.nome; e.scrollIntoView({block:"center"}); e.focus(); e.style.borderColor="#e06a5a"; return; }
-  var url = "https://wa.me/"+NUMERO+"?text="+encodeURIComponent(riepilogo());
+  var url = "https://wa.me/"+NUMERO+"?text="+encodeURIComponent(messaggio());
   window.location.href = url;
 });
 document.getElementById("copia").addEventListener("click", function(){
-  var t = riepilogo(), b=this;
+  var t = messaggio(), b=this;
   function ok(){ b.textContent="✅"; setTimeout(function(){ b.textContent="📋"; },1500); }
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok,function(){});
   else { var a=document.createElement("textarea"); a.value=t; document.body.appendChild(a); a.select(); try{document.execCommand("copy");ok();}catch(x){} a.remove(); }

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Scheda risposte</title>
+<style>
+:root{--bg:#0f1417;--card:#1a2228;--card2:#222d35;--line:#2f3d47;--ok:#35c07d;--warn:#e0b341;--bad:#e06a5a;--text:#e8eef2;--muted:#8ea0ad}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.35;padding:0 16px 40px}
+main{max-width:640px;margin:0 auto}
+h1{font-size:22px;margin:18px 0 2px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+section{background:var(--card);border-radius:16px;padding:14px 16px;margin:0 0 12px}
+h2{margin:0 0 10px;font-size:16px}
+.v{border-left:6px solid var(--ok)}
+.v.w{border-color:var(--warn)}.v.b{border-color:var(--bad)}
+.v big{display:block;font-size:19px;font-weight:700;margin-bottom:2px}
+ul{list-style:none;margin:0;padding:0}
+li{padding:8px 0;border-top:1px solid var(--line);font-size:15px;display:flex;gap:8px}
+li:first-child{border-top:0}
+li i{font-style:normal;flex:0 0 22px}
+.num{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.num div{background:var(--card2);border-radius:12px;padding:10px;min-width:0}
+.num b{display:block;font-size:19px}
+.num small{color:var(--muted);font-size:12.5px}
+.num h3{margin:0 0 4px;font-size:13px;color:var(--muted);font-weight:600}
+.tag{display:inline-block;background:var(--card2);border-radius:999px;padding:5px 11px;margin:3px 3px 0 0;font-size:14px}
+.tag.s{background:rgba(53,192,125,.22)}.tag.f{background:rgba(224,179,65,.22)}.tag.n{background:rgba(224,106,90,.22)}
+.copia{display:block;width:100%;background:#35c07d;color:#06210f;border:0;border-radius:14px;padding:16px;font:700 17px inherit;font-family:inherit;margin:0 0 10px;cursor:pointer}
+.brief{background:var(--card);border-radius:16px;padding:12px 16px;margin:0 0 12px}
+.brief summary{cursor:pointer;font-size:15px}
+.brief pre{white-space:pre-wrap;word-break:break-word;font:13px/1.45 ui-monospace,Menlo,monospace;margin:10px 0 0;color:var(--muted)}
+.vuoto{text-align:center;color:var(--muted);padding:60px 0}
+</style>
+</head>
+<body>
+<main id="m"></main>
+<script>
+var FUNZIONI=["Segnare cosa mangio","Settimana già pronta","Consigli furbi","Allenamento che cambia le calorie","Avvisi prima/dopo allenamento","Codice a barre","Foto di una ricetta","Ricettario","Lista della spesa","Andamento","Diario del peso","Ricettario in PDF","Tutto in italiano, semplice"];
+// funzioni centrali: se dice no a queste, l'app così com'è non le serve
+var CORE=[0,1,2,3];
+var m=document.getElementById("m");
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+var d;
+try{ var h=location.hash.slice(1).replace(/-/g,"+").replace(/_/g,"/"); while(h.length%4)h+="="; d=JSON.parse(decodeURIComponent(escape(atob(h)))); }catch(x){}
+if(!d){ m.innerHTML='<p class="vuoto">Nessuna risposta qui.</p>'; }
+else {
+  var num=function(x){var v=parseFloat(String(x).replace(",","."));return isNaN(v)?0:v;};
+  var peso=num(d.p),alt=num(d.a),eta=num(d.e),po=num(d.po);
+  var fatti=[]; // [icona, testo, classe]
+  var R=[];     // righe del verdetto: [livello 0 ok/1 attenzione/2 serve lavoro, icona, testo]
+  var ob=d.ob||[], di=d.di||[], al=(d.al||[]).filter(function(x){return x!=="Nessuna";}), nm=d.nm||[], sp=d.sp||[], pa=d.pa||[];
+  var dimagrire=ob.indexOf("Dimagrire")>-1, massa=ob.indexOf("Mettere massa")>-1, mant=ob.indexOf("Mantenere il peso")>-1;
+
+  // ---- numeri (stessa formula dell'app) ----
+  var NUM="";
+  if(peso&&alt&&eta&&d.s){
+    var bmr=Math.round(10*peso+6.25*alt-5*eta+(d.s==="Uomo"?5:-161));
+    var fab=bmr*1.2;
+    var def=dimagrire&&!massa?0.15:(massa?-0.08:0);
+    var riposo=Math.round(fab*(1-def));
+    var kcalAll=0.075*peso*60;                  // ~1 ora di allenamento medio
+    var allen=Math.round(Math.max(bmr,fab*(1-def)+kcalAll*0.8));
+    riposo=Math.max(bmr,riposo);
+    var prot=Math.round(peso*2.4), gr=Math.round(peso*0.6);
+    function carbo(k){return Math.max(0,Math.round((k-prot*4-gr*9)/4));}
+    var persa=((fab-riposo)*4+(fab+kcalAll-allen)*3)/7*7/7700;   // kg a settimana con 3 allenamenti
+    NUM='<section><h2>🔢 Calorie e macro (con i valori dell\'app)</h2><div class="num">'+
+      '<div><h3>Basale</h3><b>'+bmr+' kcal</b><small>fabbisogno ~'+Math.round(fab)+'</small></div>'+
+      '<div><h3>Peso</h3><b>'+peso+(po?' → '+po:'')+' kg</b>'+(po&&peso>po&&persa>0.05?'<small>~'+Math.ceil((peso-po)/persa)+' settimane</small>':'')+'</div>'+
+      '<div><h3>Giorno di riposo</h3><b>'+riposo+' kcal</b><small>P '+prot+' · C '+carbo(riposo)+' · G '+gr+'</small></div>'+
+      '<div><h3>Giorno di allenamento</h3><b>'+allen+' kcal</b><small>P '+prot+' · C '+carbo(allen)+' · G '+gr+'</small></div>'+
+      '</div></section>';
+    if(eta<18) R.push([2,"🔴","Minorenne: niente deficit, serve il parere del medico"]);
+    else if(dimagrire&&!massa){
+      R.push([0,"🟢","Obiettivo dimagrire: l'app va bene così (deficit 15%)"]);
+      if(po&&po>=peso) R.push([1,"🟡","Peso obiettivo non più basso dell'attuale: controlla"]);
+      if(po&&peso-po>0 && persa>0 && (peso-po)/persa<4) R.push([1,"🟡","Meta molto vicina: ritmo prudente"]);
+      var bmi=peso/Math.pow(alt/100,2);
+      if(po&&po/Math.pow(alt/100,2)<18.5) R.push([2,"🔴","Peso obiettivo sotto la normalità (BMI<18,5): meglio parlarne"]);
+    }
+    else if(massa) R.push([1,"🟡","Obiettivo massa: nel Profilo il deficit va messo a 0 (anzi, un piccolo surplus)"]);
+    else if(mant) R.push([1,"🟡","Mantenimento: nel Profilo il deficit va messo a 0%"]);
+    else R.push([0,"🟢","Nessun obiettivo di peso: l'app va bene, con deficit a 0%"]);
+  }
+  else R.push([1,"🟡","Mancano sesso, età, altezza o peso: non si possono calcolare le calorie"]);
+
+  // ---- alimentazione ----
+  if(di.indexOf("Vegana")>-1) R.push([2,"🔴","Vegana: le ricette sono con carne, uova e latticini → da adattare molto"]);
+  else if(di.indexOf("Vegetariana")>-1) R.push([1,"🟡","Vegetariana: carne e pesce da togliere o sostituire nelle ricette"]);
+  var al2=al.concat(d.ala?[d.ala]:[]);
+  if(al2.length) R.push([1,"🟡","Allergie/intolleranze: "+al2.join(", ")+" → controllare ricette e consigli"]);
+  if(di.indexOf("Senza glutine")>-1||al.indexOf("Celiachia")>-1||al.indexOf("Glutine")>-1) R.push([1,"🟡","Senza glutine: pasta, pane e cereali da sostituire"]);
+  if(di.indexOf("Senza lattosio")>-1||al.indexOf("Lattosio")>-1) R.push([1,"🟡","Senza lattosio: yogurt e formaggi da sostituire"]);
+  var nm2=nm.concat(d.nma?[d.nma]:[]);
+  if(nm2.length>=4) R.push([1,"🟡","Molti cibi esclusi ("+nm2.length+"): meno scelta nei suggerimenti"]);
+  else if(nm2.length) R.push([0,"🟢","Cibi esclusi: "+nm2.join(", ")+" → si tolgono"]);
+
+  // ---- movimento ----
+  var fuori=sp.filter(function(x){return ["CrossFit","Sala pesi","Allenamento funzionale","Corsa","Camminata","Bici","Ballo"].indexOf(x)<0&&x!=="Nessuno";});
+  if(d.spa) fuori.push(d.spa);
+  if(fuori.length) R.push([0,"🟢","Sport da aggiungere nel Profilo: "+fuori.join(", ")]);
+  if(d.g==="6-7") R.push([1,"🟡","6–7 giorni di sport: poco riposo, i giorni «riposo» saranno pochi"]);
+  if((d.oa||[]).indexOf("Cambia ogni giorno")>-1||(d.oa||[]).length>2) R.push([1,"🟡","Orario di allenamento variabile: gli avvisi pre/post vanno scelti ogni volta"]);
+  else if((d.oa||[]).length) R.push([0,"🟢","Allenamento "+d.oa.join(", ").toLowerCase()+": orari dei pasti da adattare"]);
+
+  // ---- abitudini ----
+  if((d.dv||[]).indexOf("Mensa/bar/ristorante")>-1) R.push([1,"🟡","Mangia spesso fuori: serve il «pasto libero»"]);
+  if((d.db||[]).indexOf("Fame nervosa")>-1||(d.db||[]).indexOf("Salto i pasti")>-1) R.push([1,"🟡","Fame nervosa / salta i pasti: pasti più sazianti e spuntini pronti"]);
+  if(d.c==="Poco tempo, cose veloci") R.push([0,"🟢","Poco tempo: ricette veloci in primo piano"]);
+
+  // ---- funzioni dell'app ----
+  var fn=d.fn||"", si=[],fo=[],no=[];
+  for(var i=0;i<FUNZIONI.length;i++){ var c=fn[i]; if(c==="s")si.push(i); else if(c==="f")fo.push(i); else if(c==="n")no.push(i); }
+  var coreNo=no.filter(function(i){return CORE.indexOf(i)>-1;});
+  if(coreNo.length) R.push([2,"🔴","Dice no a funzioni centrali: "+coreNo.map(function(i){return FUNZIONI[i];}).join(", ")]);
+  else if(si.length) R.push([0,"🟢","Le funzioni che vuole ci sono già ("+si.length+" su "+FUNZIONI.length+")"]);
+  if(d.u==="Solo per i consigli") R.push([0,"🟢","La userebbe soprattutto per i consigli"]);
+  if(d.tel==="Android") R.push([1,"🟡","Android: va installata dal browser (Chrome → Aggiungi a schermata Home)"]);
+
+  var liv=Math.max.apply(null,R.map(function(r){return r[0];}));
+  var V=[["v","🟢 Va bene così","Cambiano solo i numeri nel Profilo."],["v w","🟡 Con piccoli aggiustamenti","Va bene, ma guarda i punti gialli."],["v b","🔴 Da adattare","Ci sono punti che l'app non copre ancora."]][liv];
+  var tags=function(a,c){return a.map(function(i){return '<span class="tag '+c+'">'+esc(FUNZIONI[i])+'</span>';}).join("")||'<span class="tag">—</span>';};
+
+  // ================= BRIEF PER CLAUDE =================
+  var SPORTK={"CrossFit":["🏋️",0.1,"60 min"],"Sala pesi":["💪",0.068,"60 min"],"Allenamento funzionale":["🤸‍♀️",0.093,"60 min"],"Corsa":["🏃","1 kcal/kg per km","5 km"],"Camminata":["🚶",0.05,"30 min"],"Bici":["🚴",0.075,"45 min"],"Nuoto":["🏊",0.1,"45 min"],"Yoga/Pilates":["🧘",0.05,"60 min"],"Padel/Tennis":["🎾",0.075,"60 min"],"Sport di squadra":["🏐",0.08,"60 min"],"Ballo":["💃",0.065,"30 min"]};
+  var SPORT_APP=["CrossFit","Equitazione","Kitesurf","Corsa","Allenamento funzionale","Sala pesi","Camminata","Bici","Ballo","Corpo libero"];
+  var nome=d.n||"Senza nome", slug=(nome.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""))||"persona";
+  var gg=d.g||"";
+  var protK=massa?2.0:(gg==="0-1"?1.6:(gg==="2-3"?1.8:2.2)), grK=(massa||mant)?0.8:0.6;
+  var defPct=massa?-8:(dimagrire?(d.t==="Senza fretta"?10:15):0);
+  var sportScelti=sp.filter(function(x){return x!=="Nessuno";});
+  var B=[];
+  B.push("# Brief: Sailor Fit su misura per "+nome);
+  B.push("");
+  B.push("Claude, parti dall'app Sailor Fit di Serena (cartella `/Users/pedago/Desktop/SERENA/sailor-fit`). NON modificarla: fai una COPIA in una nuova cartella `sailor-fit-"+slug+"` e personalizzala con quanto segue. Gli stessi standard di sempre: interfaccia con icone e frecce e quasi senza testi, test da beta-tester dopo ogni modifica, mobile 320–430 px senza overflow, e pubblica solo quando te lo dico io («pubblica»). Se un punto è ambiguo, scegli la soluzione più semplice e dimmelo a fine lavoro.");
+  B.push("");
+  B.push("## 1. Persona");
+  B.push("- Nome: "+nome+" · "+(d.s||"sesso non indicato")+" · "+(d.e||"?")+" anni · "+(d.a||"?")+" cm · "+(d.p||"?")+" kg"+(d.po?" → obiettivo "+d.po+" kg":""));
+  B.push("- Obiettivo: "+(ob.join(", ")||"non indicato")+(d.t?" · tempo: "+d.t:""));
+  B.push("- Lavoro: "+(d.l||"—")+" · Telefono: "+(d.tel||"—")+" · Uso previsto: "+(d.u||"—"));
+  B.push("- Testi dell'app: "+(d.s==="Uomo"?"forma MASCHILE":(d.s==="Donna"?"forma FEMMINILE":"forma neutra"))+", titolo/nome app con il suo nome o uno a scelta.");
+  B.push("");
+  B.push("## 2. Profilo da impostare (`PROFILO_DEFAULT` in app.js)");
+  B.push("- peso: "+(d.p||"?")+(typeof bmr!=="undefined"?" · bmr: "+bmr+" (Mifflin-St Jeor)":" · bmr: DA CALCOLARE (mancano dati)"));
+  B.push("- deficit: "+defPct+"%"+(defPct<0?" (surplus per mettere massa)":"")+" · recupero allenamento: 80%");
+  B.push("- proteine: "+protK+" g/kg · grassi: "+grK+" g/kg · carboidrati = il resto (valori PROPOSTI in base a obiettivo e giorni di sport; Serena usa 2,4 e 0,6: non copiarli alla cieca)");
+  if(typeof riposo!=="undefined") B.push("- Obiettivi attesi: riposo ~"+riposo+" kcal · allenamento ~"+allen+" kcal (verifica che l'app dia numeri simili)");
+  if(po&&po>=peso&&dimagrire) B.push("- ⚠️ peso obiettivo non più basso dell'attuale: chiedimi conferma prima di fissare il deficit");
+  if(eta&&eta<18) B.push("- ⚠️ MINORENNE: nessun deficit, nessun obiettivo di calo peso senza parere medico");
+  B.push("");
+  B.push("## 3. Sport (`SPORT_DEFAULT`)");
+  B.push("TENERE / AGGIUNGERE (kcal al minuto per kg · durata di partenza):");
+  if(sportScelti.length||d.spa){
+    sportScelti.forEach(function(x){var k=SPORTK[x]; B.push("- "+(k?k[0]+" "+x+" · "+k[1]+" · "+k[2]:x+" (da definire)"));});
+    if(d.spa) B.push("- "+d.spa+" (altro: scegli tu l'intensità e dimmela)");
+  } else B.push("- nessuno sport indicato: solo «Camminata» come base");
+  var daTogliere=SPORT_APP.filter(function(x){return sportScelti.indexOf(x)<0&&x!=="Corpo libero"&&x!=="Camminata"&&x!=="Bici"&&x!=="Ballo";});
+  B.push("TOGLIERE (sport di Serena non scelti): "+(daTogliere.join(", ")||"—")+". Equitazione e Kitesurf sono solo di Serena: via sempre. Attenzione: camminata, bici, ballo e corpo libero rientrano da soli se non sono in `sportTolti`.");
+  B.push("- Giorni di sport a settimana: "+(gg||"—")+" → imposta la settimana tipo di conseguenza; orario: "+((d.oa||[]).join(", ")||"—"));
+  B.push("");
+  B.push("## 4. Pasti e orari");
+  B.push("- Pasti che fa ogni giorno: "+(pa.join(", ")||"non indicati")+". Orari di Serena (colazione 8, spuntino 11, pranzo 13:30, pre-allenamento 16, allenamento 18, cena 20:30) da adattare al suo allenamento ("+((d.oa||[]).join(", ")||"orario non indicato")+"): avvisi pre/post-allenamento e orari devono seguire quello.");
+  B.push("- Dove mangia: "+((d.dv||[]).join(", ")||"—")+" · In cucina: "+(d.c||"—"));
+  B.push("");
+  B.push("## 5. Alimentazione (da applicare a ricettario `recipes.js`, `nutrition.js`, suggerimenti e consigli furbi)");
+  B.push("- Dieta: "+(di.join(", ")||"mangia di tutto"));
+  B.push("- Allergie/intolleranze: "+(al2.join(", ")||"nessuna")+(al2.length?"  → NIENTE di questi nei consigli, ricette e varianti; segnala le ricette da togliere o riscrivere":""));
+  B.push("- NON mangia: "+(nm2.join(", ")||"—")+(nm2.length?" → togli ingredienti e ricette che li contengono, e proponi alternative nelle varianti":""));
+  B.push("- Punti deboli: "+((d.db||[]).join(", ")||"—")+((d.db||[]).length?" → pensa a suggerimenti mirati (es. spuntini saziante pronti, alternative leggere ai dolci)":""));
+  B.push("- Le regole alimentari di Serena (es. niente tonno per il mercurio) sono SUE: riguardale una a una e tieni solo quelle valide anche per "+nome+".");
+  B.push("");
+  B.push("## 6. Funzioni dell'app");
+  var nf=function(a){return a.map(function(i){return FUNZIONI[i];}).join(", ")||"—";};
+  B.push("- ✅ TENERE (le vuole): "+nf(si));
+  B.push("- 🤔 FORSE (tienile ma discrete, nascoste se possibile): "+nf(fo));
+  B.push("- ❌ TOGLIERE o nascondere (ha detto no): "+nf(no));
+  B.push("- Non scelte (decidi tu, restano com'è): "+nf(fn.split("").map(function(c,i){return c==="-"?i:-1;}).filter(function(i){return i>-1;})));
+  B.push("- Come preferisce registrare: "+((d.rg||[]).join(", ")||"—"));
+  B.push("");
+  if(d.note){ B.push("## 7. Richieste sue"); B.push(d.note); B.push(""); }
+  B.push("## "+(d.note?"8":"7")+". Punti d'attenzione emersi dal questionario");
+  R.slice().sort(function(a,b){return b[0]-a[0];}).forEach(function(r){B.push("- "+r[1]+" "+r[2]);});
+  B.push("");
+  B.push("## Consegna");
+  B.push("1. Prima dimmi in 10 righe cosa cambi e cosa ti serve da me (dubbi, valori da confermare). 2. Poi realizza la copia. 3. Beta-test su mobile e riassunto. 4. Pubblica solo se scrivo «pubblica»"+(d.tel==="Android"?"; la persona ha Android: indica come installarla (Chrome → Aggiungi a schermata Home)":"")+".");
+  var BRIEF=B.join("\n");
+  window.copiaBrief=function(btn){
+    var ok=function(){btn.textContent="✅ Copiato";setTimeout(function(){btn.textContent="📋 Copia il brief per Claude";},1800);};
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(BRIEF).then(ok,function(){});
+    else{var a=document.createElement("textarea");a.value=BRIEF;document.body.appendChild(a);a.select();try{document.execCommand("copy");ok();}catch(x){}a.remove();}
+  };
+
+  m.innerHTML='<h1>'+esc(d.n||"Senza nome")+'</h1><p class="sub">'+[d.s,d.e&&d.e+" anni",d.a&&d.a+" cm",peso&&peso+" kg"].filter(Boolean).join(" · ")+'</p>'+
+    '<button class="copia" onclick="copiaBrief(this)">📋 Copia il brief per Claude</button>'+
+    '<details class="brief"><summary>👁️ Vedi il brief</summary><pre>'+esc(BRIEF)+'</pre></details>'+
+    '<section class="'+V[0]+'"><big>'+V[1]+'</big>'+V[2]+'</section>'+
+    NUM+
+    '<section><h2>✅ Cosa fare</h2><ul>'+R.sort(function(a,b){return b[0]-a[0];}).map(function(r){return '<li><i>'+r[1]+'</i><span>'+esc(r[2])+'</span></li>';}).join("")+'</ul></section>'+
+    '<section><h2>📱 Funzioni</h2><b>👍 Sì</b><br>'+tags(si,"s")+'<br><br><b>🤔 Forse</b><br>'+tags(fo,"f")+'<br><br><b>👎 No</b><br>'+tags(no,"n")+'</section>'+
+    (d.note?'<section><h2>💬 Note</h2>'+esc(d.note)+'</section>':'')+
+    '<section><h2>🍽️ Il resto</h2><ul>'+
+      [["🎯","Obiettivo",(ob.join(", ")||"—")+(d.t?" · "+d.t:"")],["🏃","Sport",(sp.concat(d.spa?[d.spa]:[]).join(", ")||"—")+" · "+(d.g||"—")+" gg/sett"],["🍽️","Pasti",pa.join(", ")||"—"],["🥦","Alimentazione",di.join(", ")||"—"],["🚫","Non mangia",nm2.join(", ")||"—"],["⚠️","Punti deboli",(d.db||[]).join(", ")||"—"]]
+      .map(function(r){return '<li><i>'+r[0]+'</i><span><b>'+r[1]+':</b> '+esc(r[2])+'</span></li>';}).join("")+'</ul></section>';
+}
+</script>
+</body>
+</html>
