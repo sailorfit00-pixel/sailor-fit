@@ -1561,6 +1561,7 @@ function closeModal() {
   document.body.classList.remove("no-scroll");
   editCtx = null;
   contestoAgg = null;   // il "dove aggiungere le ricette" non sopravvive alla chiusura del pannello
+  if (typeof salvaBozzaAperta === "function") salvaBozzaAperta();   // chiudere con ✕ o toccando fuori salva la bozza del pasto, non la butta
   if (typeof liberoCtx !== "undefined") liberoCtx = null;
   if (typeof ribloccaPasti === "function") ribloccaPasti();   // chiuso il pasto, il lucchetto si rimette da solo
 }

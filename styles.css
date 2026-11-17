@@ -439,7 +439,8 @@ ul.pasti li.libero .pasto-nome { color: var(--accent); }
 .wiz-tempo .qta-input { width: 58px; }
 .wiz-salva { margin-top: 18px; }
 .lib-add .lib-piu { font-size: 22px; padding: 0 18px; }
-.lib-add .lib-piu { font-size: 22px; padding: 0 18px; }
+/* il ＋ accanto al campo è secondario (lilla): il solo tasto verde del pasto è «✓ Salva pasto» */
+.lib-add .lib-piu, .lib-add .lib-piu:active { background: var(--lilla-bg); color: var(--lilla); border: 1px solid var(--lilla); }
 .modal-trash { position: absolute; top: 12px; right: 56px; width: 32px; height: 32px; border-radius: 50%; background: var(--card2); border: none; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .modal-trash:active { background: rgba(224,106,90,.25); }
 

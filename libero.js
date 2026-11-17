@@ -200,6 +200,13 @@ function leggiNumero(t) {
 function macroDa(items) {
   return calcolaMacro({ ingredienti: items.map(it => ({ nome: it.nome, qta: it.qta, unita: "g" })) });
 }
+// Macro di g grammi di un alimento, contati come calcolaMacro (kcal = 4P + 4C + 9G, più l'alcol) ma senza arrotondare:
+// così i "+114 kcal" promessi da un consiglio sono quelli che il diario registra davvero (le kcal di etichetta a volte differiscono)
+function macroAlimento(nome, g) {
+  const a = (window.ALIMENTI || {})[nome]; if (!a) return { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 };
+  const q = g / 100, p = a[1] * q, c = a[2] * q, gr = a[3] * q, manca = a[0] - (4 * a[1] + 4 * a[2] + 9 * a[3]);
+  return { kcal: 4 * p + 4 * c + 9 * gr + (manca >= 20 ? manca * q : 0), proteine: p, carboidrati: c, grassi: gr };
+}
 
 // Quanto resta per questo pasto: target del giorno meno gli altri pasti
 function targetPasto(i, j) {
@@ -230,10 +237,11 @@ function suggerimentiMacro(diff, esclusi = []) {
       let g = diff[k] / (a[kk] / 100);
       // non sforare troppo le calorie che restano (tolleranza 100 kcal)
       const maxKcal = Math.max(diff.kcal, 0) + 100;
-      if (a[0] * g / 100 > maxKcal) g = maxKcal / (a[0] / 100);
+      const k100 = macroAlimento(n, 100).kcal;   // kcal come le conta il diario
+      if (k100 * g / 100 > maxKcal) g = maxKcal / (k100 / 100);
       const p = profiloAlimento(n);
       g = Math.max(p.lo, Math.min(p.hi, Math.round(g / 5) * 5));
-      return { nome: n, g, kcal: Math.round(a[0] * g / 100) };
+      return { nome: n, g, kcal: Math.round(macroAlimento(n, g).kcal) };
     });
     out.push({ macro: k, manca: Math.round(diff[k]), opz });
   });
@@ -594,7 +602,7 @@ function elencoConsigli(c, m) {
     grassi: !righe.some(r => A[r.nome] && g100(r, 3) >= 5),
     fibre: !righe.some(r => VERDURE_CONSIGLI.includes(r.nome) || /verdur|insalata/i.test(r.nome) || ((X[r.nome] || [])[2] || 0) * r.qta / 100 >= 6),   // fibre vere (legumi, tanta verdura): le patate o un po' di pane integrale non bastano
   };
-  const mac = (n, g) => ({ kcal: A[n][0] * g / 100, proteine: A[n][1] * g / 100, carboidrati: A[n][2] * g / 100, grassi: A[n][3] * g / 100 });
+  const mac = macroAlimento;   // stesse kcal che finiscono nel diario
   const meno = (a, b) => ({ kcal: a.kcal - b.kcal, proteine: a.proteine - b.proteine, carboidrati: a.carboidrati - b.carboidrati, grassi: a.grassi - b.grassi });
   const valore = (d) => base - distanzaPasto(meno(gap, d));                      // quanto la mossa avvicina all'obiettivo
   const azioni = [];
@@ -783,7 +791,7 @@ function mosseFit(c) {
   const A = window.ALIMENTI || {}, X = window.NUTRIENTI_EXTRA || {}, out = [];
   const items = (c.items || []).map((it, k) => ({ nome: it.nome, qta: it.qta, k })).filter(r => A[r.nome] && r.qta > 0 && !MAI_CONSIGLIATI.test(r.nome));
   const dentro = new Set(items.map(r => r.nome));
-  const mac = (n, g) => ({ kcal: A[n][0] * g / 100, proteine: A[n][1] * g / 100, carboidrati: A[n][2] * g / 100, grassi: A[n][3] * g / 100 });
+  const mac = macroAlimento;   // stesse kcal che finiscono nel diario
   const meno = (a, b) => ({ kcal: a.kcal - b.kcal, proteine: a.proteine - b.proteine, carboidrati: a.carboidrati - b.carboidrati, grassi: a.grassi - b.grassi });
   items.forEach(r => {
     const cur = mac(r.nome, r.qta);
@@ -880,8 +888,39 @@ function campoAggiungiHTML(c) {
 // 🔓 lo richiude, e quando chiudi il pasto si richiude da solo. Anche bloccato le schede si aprono, in sola lettura, per vedere cosa e quanto hai mangiato.
 const pastiSbloccati = new Set();
 const chiavePastoSbl = (c) => c.data + "|" + c.pasto;
-const pastoBloccato = (c) => !!(c && c.vivo && c.items && c.items.length && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto) && !pastiSbloccati.has(chiavePastoSbl(c)));
+// Il lucchetto vale solo quando RIAPRI un pasto passato: mentre lo stai componendo (bozza) o subito dopo averlo salvato resta modificabile
+// (_creatoOra: il pasto era vuoto quando hai aperto il pannello, quindi lo stai scrivendo adesso)
+const pastoBloccato = (c) => !!(c && c.vivo && c.items && c.items.length && !c.bozza && !c._creatoOra && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto) && !pastiSbloccati.has(chiavePastoSbl(c)));
 function ribloccaPasti() { pastiSbloccati.clear(); }
+// Annulla di un ingrediente tolto: lo rimette direttamente nel diario (anche se il pannello è chiuso)
+// - riga libera: nel piatto libero del pasto (si crea se non c'è più)
+// - riga di una ricetta: nella sua ricetta, o la ricetta intera com'era se è sparita
+function rimettiNelDiario(c, tolto, primaPasti) {
+  if (!(+tolto.qta > 0)) return;
+  const g = giornoDiario(c.data);
+  const riga = Object.assign({ nome: tolto.nome, qta: Math.round(tolto.qta * 10) / 10, unita: "g", lock: true, cercato: tolto.cercato || tolto.nome }, tolto.unita && tolto.unita !== "g" ? { vis: tolto.unita } : {}, tolto.t ? { t: tolto.t } : {});
+  if (tolto.grp == null) {
+    let p = g.pasti.find(x => x.pasto === c.pasto && !x.ricetta);
+    if (!p) { p = { nome: "", pasto: c.pasto, passaggi: [], ingredienti: [] }; g.pasti.push(p); }
+    aggiungiIngredienteA(p, riga); rinominaLibero(p);
+  } else {
+    const prima = (primaPasti || []).filter(x => x.ricetta)[tolto.grp];
+    if (!prima) return;
+    const ora = g.pasti.filter(x => x.pasto === c.pasto && x.ricetta)[tolto.grp];
+    if (ora && ora.ricetta === prima.ricetta) { aggiungiIngredienteA(ora, riga); rinominaLibero(ora); }
+    else g.pasti.push(clone(prima));
+  }
+  scriviGiorno(c.data, g);
+  if (typeof renderOggi === "function") renderOggi();
+}
+// Chiudendo il pannello (✕, sfondo, Esc) la bozza con quantità valide si salva come con «✓ Salva pasto»: ciò che hai scritto non si perde
+function salvaBozzaAperta() {
+  const c = liberoCtx;
+  if (!c || !c.vivo || !c.bozza || typeof c.commit !== "function" || !c.items.some(x => +x.qta > 0)) return false;
+  c.bozza = false; c.commit(c);   // commit scrive nel diario e aggiorna Oggi
+  if (typeof renderOggi === "function") renderOggi();
+  return true;
+}
 // elenco in sola lettura degli ingredienti (pasto bloccato): nome e quantità, niente pulsanti
 function righeSolaLetturaHTML(items) {
   return `<ul class="pm-sola-lista">${items.map(it => {
@@ -959,7 +998,9 @@ function liberoHTML() {
     const u = unitaDi(it), gu = grammiPerUnita(it.nome, u), conta = gu ? it.qta / gu : 0;
     const liq = UNITA_LIQUIDI.test(it.nome), ug = liq ? "ml" : "g", nm = /.[A-ZÀ-Ý]/.test(it.nome) ? it.nome.charAt(0).toLowerCase() + it.nome.slice(1) : it.nome.toLowerCase();   // le marche (Lidl) restano con la maiuscola
     // plurale semplice per i frutti e simili in una sola parola che finisce in -a: pesca → pesche, banana → banane
-    const pl = (conta > 1 && /^[a-zà-ù]+a$/.test(nm) && nm !== "uova") ? nm.replace(/cia$/, "ce").replace(/gia$/, "ge").replace(/ca$/, "che").replace(/ga$/, "ghe").replace(/a$/, "e") : nm;   // «uova» è già plurale; arancia → arance
+    // con le forme note (uovo/uova, galletta/gallette…) si usa quelle: «1 uovo», «2 uova»
+    const pl = typeof FORME_PEZZI !== "undefined" && FORME_PEZZI[it.nome] ? FORME_PEZZI[it.nome][conta > 1 ? 1 : 0]
+      : (conta > 1 && /^[a-zà-ù]+a$/.test(nm) && nm !== "uova") ? nm.replace(/cia$/, "ce").replace(/gia$/, "ge").replace(/ca$/, "che").replace(/ga$/, "ghe").replace(/a$/, "e") : nm;   // «uova» è già plurale; arancia → arance
     // riepilogo: «1 pesca», «150 g di yogurt greco», «2 cucchiai di burro di arachidi»; dentro la scheda c'è il contatore
     const riepilogo = !gu ? `${Math.round(it.qta)} ${ug} di ${nm}`
       : u === "pz" ? `${fmtQta(conta)} ${pl}`
@@ -991,7 +1032,7 @@ function liberoHTML() {
     ? x.ks.forEach(k => schede.push({ t: quando(k), k, html: voceHTML(k) }))
     : schede.push({ t: Math.min(...x.ks.map(quando)), k: Math.min(...x.ks), html: ricettaHTML(x.grp, x.html) }));
   schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
-  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
+  const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza && !c._creatoOra ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
 
   const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto pagina${c.ignotoCodice ? " da-codice" : ""}">
       ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Codice ${esc(c.ignotoCodice)} · controlla i valori e salva.</p>`
@@ -1032,7 +1073,7 @@ function liberoHTML() {
       </div>
       ${pastoPassatoC(c) ? "" : (furboBlocco || consigliFitHTML(c))}
     ` : c.idee()}
-    ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Aggiungi</button>` : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
+    ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button>` : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
   `;
 }
 // Nome automatico con le parole che hai scritto (es. "Pollo, zucca, riso")
@@ -1093,11 +1134,21 @@ function aggiungiDaTesto(testo) {
     const r = leggiRigaIngrediente(p);
     if (!r) continue;
     if (!r.nome) { c.ignoto = r.cercato || p; continue; }
-    if (c.items.some(x => x.grp == null && x.nome === r.nome)) continue;
     let qta = 0, lock = false;
     if (r.unita !== "q.b.") { qta = Math.round(grammiIng(r)); lock = qta > 0; }
     else if ((window.PORZIONE_INTERA || /$^/).test(r.nome) && (window.PESO_PZ || {})[r.nome]) { qta = window.PESO_PZ[r.nome]; lock = true; }
     if (!qta && r.unita === "q.b.") { const u = quantitaUsuale(r.nome); if (u > 0) { qta = u; lock = true; } }   // niente quantità scritta: quella che usi di solito, poi la cambi tu
+    const gia = c.items.find(x => x.grp == null && x.nome === r.nome);
+    if (gia) {   // c'è già nel pasto: le quantità si sommano (come nel diario) e te lo diciamo, invece di ignorarlo in silenzio
+      if (!qta) qta = (window.PESO_PZ || {})[r.nome] || 0;   // senza quantità: un pezzo in più, se si conta a pezzi
+      if (!qta) { avviso(`${r.nome} c'è già: cambia la quantità nella sua riga`); continue; }
+      const prima = +gia.qta || 0;
+      gia.qta = Math.round((prima + qta) * 10) / 10; gia.lock = true;
+      const u = unitaDi(gia), gu = grammiPerUnita(gia.nome, u), ug = UNITA_LIQUIDI.test(gia.nome) ? "ml" : "g";
+      const f = (q) => gu ? fmtQta(q / gu) : Math.round(q);
+      avviso(`${gia.nome}: ${f(prima)} → ${f(gia.qta)} ${gu ? (u === "cucchiaio" ? "cucc." : u === "cucchiaino" ? "c.ino" : u) : ug}`);
+      continue;
+    }
     const unita = ["g", "ml"].includes(r.unita) ? "g" : ["pz", "cucchiaio", "cucchiaino"].includes(r.unita) ? r.unita : undefined; // l'unità che hai scritto
     c.items.push({ nome: r.nome, cercato: r.cercato, qta, lock, unita });
   }
@@ -1289,11 +1340,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.closest("[data-lib-avanti]")) { vaiStoria("avanti"); return; }
     const del = e.target.closest("[data-lib-del]");
     if (del) {
-      const k = +del.dataset.libDel, tolto = c.items[k];
+      const k = +del.dataset.libDel, tolto = c.items[k], eraBozza = !!c.bozza;
+      const primaPasti = c.vivo && !eraBozza ? clone(giornoDiario(c.data).pasti.filter(p => p.pasto === c.pasto)) : [];   // com'era il pasto nel diario, per l'Annulla
       c.items.splice(k, 1); ricalcolaLibero(); rirenderLibero();
       if (c.vivo && tolto && typeof mostraToast === "function") mostraToast(`Tolto: ${String(tolto.nome).toLowerCase()}`, "Annulla", () => {   // salvataggio immediato: togliere per sbaglio si rimedia con un tocco
-        if (liberoCtx !== c) return;
-        c.items.splice(Math.min(k, c.items.length), 0, tolto); rirenderLibero();
+        if (eraBozza && liberoCtx === c) { c.items.splice(Math.min(k, c.items.length), 0, tolto); rirenderLibero(); return; }   // era ancora una bozza: torna nella bozza
+        // pasto salvato (o pannello già chiuso): si rimette nel diario, così l'Annulla non lo lascia come bozza da perdere
+        rimettiNelDiario(c, tolto, primaPasti);
+        if (liberoCtx === c) ricaricaViva(c);
       });
       return;
     }
@@ -1366,5 +1420,5 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   // chiudendo il modale si esce dal pasto libero
-  document.getElementById("modal").addEventListener("click", (e) => { if (e.target.closest("[data-chiudi]")) liberoCtx = null; });
+  document.getElementById("modal").addEventListener("click", (e) => { if (e.target.closest("[data-chiudi]")) { salvaBozzaAperta(); liberoCtx = null; } });   // (di solito closeModal l'ha già fatto)
 });
