@@ -460,9 +460,8 @@ function rinominaAlimentoTuo(vecchio, nuovo) {
     });
   };
   ["mp_ricette_custom", "mp_ricette", "mp_piano"].forEach(k => { const v = leggi(k, null); if (!v) return; const prima = JSON.stringify(v); rinominaIngr(v); if (JSON.stringify(v) !== prima) localStorage.setItem(k, JSON.stringify(v)); });
-  if (Array.isArray(settimana)) rinominaIngr(settimana);   // il piano già in memoria
-  // varianti scelte nelle ricette { ricetta: { indice: alimento } }, voci aggiunte a mano e spuntate nella spesa
-  try { const v = leggi("mp_varianti", {}); let ok = false; Object.values(v).forEach(m => Object.keys(m || {}).forEach(i => { if (m[i] === vecchio) { m[i] = nuovo; ok = true; } })); if (ok) salvaVarianti(v); } catch (e) {}
+  // varianti scelte nelle ricette { ricetta: { ingrediente: alimento } }: il nome cambia sia come ingrediente sostituito sia come sostituto
+  try { const v = leggi("mp_varianti", {}); let ok = false; Object.values(v).forEach(m => { if (!m) return; Object.keys(m).forEach(k => { if (m[k] === vecchio) { m[k] = nuovo; ok = true; } if (k === vecchio) { m[nuovo] = m[k]; delete m[k]; ok = true; } }); }); if (ok) salvaVarianti(v); } catch (e) {}
   ["mp_spesa_extra", "mp_spesa_presi"].forEach(k => { const a = leggi(k, []); if (Array.isArray(a) && a.includes(vecchio)) localStorage.setItem(k, JSON.stringify([...new Set(a.map(x => x === vecchio ? nuovo : x))])); });
   if (window.ALIMENTI[vecchio]) { window.ALIMENTI[nuovo] = window.ALIMENTI[vecchio]; delete window.ALIMENTI[vecchio]; }
   if (window.NUTRIENTI_EXTRA && window.NUTRIENTI_EXTRA[vecchio]) { window.NUTRIENTI_EXTRA[nuovo] = window.NUTRIENTI_EXTRA[vecchio]; delete window.NUTRIENTI_EXTRA[vecchio]; }
