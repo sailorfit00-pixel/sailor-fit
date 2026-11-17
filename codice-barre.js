@@ -161,7 +161,6 @@ async function cercaCodice(codice) {
     liberoCtx.scansione = null;
     liberoCtx.ignoto = "Prodotto " + codice; liberoCtx.ignotoCodice = codice;
     rirenderLibero();
-    avviso("Prodotto non trovato: inserisci i valori dall'etichetta");
   } catch (e) {
     if (!liberoCtx) return;
     liberoCtx.scansione = { stato: "manuale", codice, messaggio: "Serve la connessione a internet per cercare un prodotto nuovo." };

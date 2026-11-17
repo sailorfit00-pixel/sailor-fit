@@ -990,15 +990,15 @@ function liberoHTML() {
   schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
   const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
 
-  const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto">
-      ${c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Prodotto <b>${esc(c.ignotoCodice)}</b> nuovo: valori per 100 g</p>`
+  const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto${c.ignotoCodice ? " da-codice" : ""}">
+      ${c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<div class="nota non-trovato"><b>⚠️ Prodotto non trovato</b><br>Il codice ${esc(c.ignotoCodice)} non è nell'archivio. Aggiungilo tu: <b>scatta una foto della tabella nutrizionale</b> e i valori si compilano da soli. Poi controllali e tocca «Salva alimento».</div>`
         : `<p class="hint">Non trovo <b>${esc(c.ignoto)}</b> tra gli alimenti.</p>
           ${ricetteTestoHTML(c.ignoto, "data-ignoto-ricetta") ? `<div class="autoc-lista">${ricetteTestoHTML(c.ignoto, "data-ignoto-ricetta")}</div>` : ""}
           <button class="btn-sec block" data-lib="off-cerca">🔎 Cercalo tra i prodotti confezionati</button>
           ${typeof ricercaOFFHTML === "function" ? ricercaOFFHTML(c) : ""}
           `}
       <label class="wiz-l">Nome</label>
-      <input id="ignoto-nome" class="qta-input wiz-full" autocomplete="off" placeholder="${c.ignotoNuovo && !c.ignoto ? "es. Budino proteico Lidl" : ""}" value="${esc(c.modificaAl || ((c.ignoto || "").charAt(0).toUpperCase() + (c.ignoto || "").slice(1)))}"${c.modificaAl ? " readonly" : ""}>
+      <input id="ignoto-nome" class="qta-input wiz-full" autocomplete="off" placeholder="${(c.ignotoNuovo && !c.ignoto) || c.ignotoCodice ? "es. Budino proteico Lidl" : ""}" value="${esc(c.modificaAl || (c.ignotoCodice ? "" : (c.ignoto || "").charAt(0).toUpperCase() + (c.ignoto || "").slice(1)))}"${c.modificaAl ? " readonly" : ""}>
       <div class="etic-box">${campiEtichettaHTML("etic-libero", c.modificaAl ? valoriAlimento(c.modificaAl) : null)}</div>
       <div class="wiz-nav"><button class="btn-sec" data-lib="ignoto-annulla">Annulla</button><button class="btn" data-lib="ignoto-salva">✓ Salva alimento</button></div>
     </div>` : "";
