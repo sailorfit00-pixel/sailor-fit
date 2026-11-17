@@ -1824,7 +1824,10 @@ input[type=number] { -moz-appearance: textfield; }
 
 /* anteprima di una ricetta scelta dalle idee */
 .ant-box { background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r-l); padding: 12px 14px; margin: 6px 0 12px; }
-.ant-fit { border: 1px dashed var(--accent); border-radius: var(--r-l); padding: 12px 14px; margin-bottom: 14px; background: rgba(53,192,125,.06); }
+.ant-fit { border: 1px dashed var(--lilla); border-radius: var(--r-l); padding: 12px 14px; margin-bottom: 14px; background: var(--lilla-bg); }
 .ant-fit-t { font-weight: 700; margin: 0 0 6px; display: flex; justify-content: space-between; }
-.ant-fit-t span { color: var(--accent); }
+.ant-fit-t span { color: var(--lilla); }
 .ant-mosse { margin: 0 0 8px; padding-left: 18px; font-size: 14px; line-height: 1.5; }
+
+/* etichetta «più fit» dentro i consigli furbi */
+.tag-fit { display: inline-block; font-size: 11px; font-weight: 700; color: var(--lilla); border: 1px solid var(--lilla); border-radius: 999px; padding: 0 7px; margin-right: 8px; vertical-align: 1px; text-transform: none; }

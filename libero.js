@@ -807,20 +807,17 @@ function mosseFit(c) {
   });
   return out.sort((a, b) => b.v - a.v).slice(0, 4);
 }
-function consigliFitHTML(c) {
-  if (!c.items || !c.items.length || ricettaATeglia(c)) return "";
-  const mosse = mosseFit(c);
-  if (!mosse.length) return "";   // niente da migliorare: non compare niente
-  return `<div class="furbi fit"><h4>🥗 Più fit</h4>${mosse.map(a => {
-    const attr = a.tipo === "cambia" ? `data-sost-scegli="${a.r.k}" data-nome="${esc(a.a)}" data-fit="${esc(`cambia|${a.r.nome}|${a.a}`)}"` : `data-lib-setq="${a.r.k}|${a.nuova}" data-fit="${esc(`porta|${a.r.nome}|${a.nuova}|${Math.round(a.r.qta)}`)}"`;
-    const testa = a.tipo === "cambia" ? `Cambia <b>${esc(a.r.nome.toLowerCase())}</b> (${Math.round(a.r.qta)} g) con <b>${esc(a.a.toLowerCase())}</b>` : `Porta <b>${esc(a.r.nome.toLowerCase())}</b> da ${Math.round(a.r.qta)} a <b>${a.nuova} g</b>`;
-    return `<button class="var-furbo lib-furbo" ${attr}>${testa}</button>`;
-  }).join("")}</div>`;
-}
-function consiglioFurboHTML(c, m, giaFit) {
+// Un'unica sezione «Consigli furbi»: prima quelli che rendono il piatto più fit (etichetta «più fit»), poi quelli che fanno tornare i numeri
+function consiglioFurboHTML(c, m, fitMosse = []) {
   if (c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto)) return "";   // sui pasti passati niente consigli: solo su quelli ancora da venire
   const e = elencoConsigli(c, m);
-  if (!e) return "";
+  const giaFit = new Set(fitMosse.map(a => a.tipo === "cambia" ? `cambia|${a.r.nome}|${a.a}` : `porta|${a.r.nome}|${a.nuova}`));
+  const righeFit = fitMosse.map(a => {
+    const attr = a.tipo === "cambia" ? `data-sost-scegli="${a.r.k}" data-nome="${esc(a.a)}" data-fit="${esc(`cambia|${a.r.nome}|${a.a}`)}"` : `data-lib-setq="${a.r.k}|${a.nuova}" data-fit="${esc(`porta|${a.r.nome}|${a.nuova}|${Math.round(a.r.qta)}`)}"`;
+    const testa = a.tipo === "cambia" ? `Cambia <b>${esc(a.r.nome.toLowerCase())}</b> (${Math.round(a.r.qta)} g) con <b>${esc(a.a.toLowerCase())}</b>` : `Porta <b>${esc(a.r.nome.toLowerCase())}</b> da ${Math.round(a.r.qta)} a <b>${a.nuova} g</b>`;
+    return furbiScartati.has(testa) ? null : { a: { tipo: "fit" }, r: { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}><span class="tag-fit">più fit</span>${testa}</button>` } };
+  }).filter(Boolean);
+  if (!e && !righeFit.length) return "";
   const riga = (a) => {
     let testa, attr;
     if (a.tipo === "pezzi") {
@@ -843,7 +840,7 @@ function consiglioFurboHTML(c, m, giaFit) {
     return { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}>${testa}</button>` };   // solo la mossa: il box si tocca per applicarla
   };
   // fino a tre idee (con ↻ per altre); nei pasti principali in più la verdura, se manca
-  const tutte = e.scelte.map(a => ({ a, r: riga(a) })).filter(x => x.r);
+  const tutte = righeFit.concat(e ? e.scelte.map(a => ({ a, r: riga(a) })).filter(x => x.r) : []);
   const altre = tutte.filter(x => x.a.tipo !== "verdura"), verd = tutte.find(x => x.a.tipo === "verdura");
   const posti = verd ? 2 : 3;   // al massimo tre idee in tutto; ↻ mostra le tre successive
   // ↻ mostra le idee a «pagine» senza ripetere quelle appena viste; finite, si ricomincia dalle prime
@@ -1007,8 +1004,8 @@ function liberoHTML() {
   const T = c.target();
   const m = c.items.length ? macroDa(c.items) : null;
   const diff = m ? { kcal: T.kcal - m.kcal, proteine: T.proteine - m.proteine, carboidrati: T.carboidrati - m.carboidrati, grassi: T.grassi - m.grassi } : null;
-  const giaFit = new Set((c.items && c.items.length && !ricettaATeglia(c) ? mosseFit(c) : []).map(a => a.tipo === "cambia" ? `cambia|${a.r.nome}|${a.a}` : `porta|${a.r.nome}|${a.nuova}`));
-  const furboBlocco = m ? consiglioFurboHTML(c, m, giaFit) : "";      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
+  const fitMosse = c.items && c.items.length && !ricettaATeglia(c) ? mosseFit(c) : [];
+  const furboBlocco = m ? consiglioFurboHTML(c, m, fitMosse) : "";      // i consigli furbi e "Per completare il pasto" dicono quasi la stessa cosa: se ci sono i primi, i secondi non si mostrano
 
   const { pre, post } = contestoAllenamento(c);
   const righeK = c.items.map((it, k) => {
@@ -1146,7 +1143,7 @@ function liberoHTML() {
           const arr = Math.round(m.kcal * Math.max(0.25, Math.min(2.5, T.kcal / m.kcal)));   // le quantità cambiano al massimo di 2,5 volte: la scheda promette solo quello che ottiene
           const su = arr > m.kcal; return Math.abs(arr - m.kcal) / m.kcal > 0.08 ? `<button class="var-furbo lib-furbo lib-bil-furbo" data-lib="bilancia">⚖️ <b>${su ? "Aumenta" : "Riduci"} tutte le quantità</b><em>${Math.round(m.kcal)} → ${arr} kcal · ${su ? "+" : "−"}${Math.abs(arr - Math.round(m.kcal))}</em></button>` : ""; })()}
       </div>
-      ${pastoPassatoC(c) ? "" : consigliFitHTML(c) + furboBlocco}
+      ${pastoPassatoC(c) ? "" : furboBlocco}
       ${bloccato ? "" : altreIdeeHTML(c)}
     ` : c.idee()}
     ${c.bozza ? `<button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button>` : bloccato ? "" : `${pastoModificato(c) ? `<button class="btn block lib-conferma" data-lib="salva-modifiche">✓ Salva modifiche</button>` : ""}<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
