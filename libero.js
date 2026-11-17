@@ -968,19 +968,23 @@ function anteprimaRicetta(c, nomeRicetta) {
 }
 function anteprimaHTML(c) {
   const a = anteprimaRicetta(c, c.anteprima); if (!a) { c.anteprima = null; return ""; }
-  const riga = (it) => `<li><span>${esc(it.nome)}</span><b>${Math.round(it.qta)} g</b></li>`;
-  const fit = a.mosse.length ? `<div class="ant-fit"><p class="ant-fit-t">🥗 Versione più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></p>
-      <ul class="ant-mosse">${a.mosse.map(m => `<li>${m.tipo === "cambia" ? `${esc(m.r.nome)} → <b>${esc(m.a)}</b>` : `${esc(m.r.nome)}: ${Math.round(m.r.qta)} → <b>${m.nuova} g</b>`}</li>`).join("")}</ul>
-      ${macroStileHTML(a.totFit)}</div>` : `<p class="hint">È già una scelta fit: niente da alleggerire.</p>`;
+  const fitOn = !!(c.anteprimaFit && a.mosse.length), items = fitOn ? a.fit : a.items, tot = fitOn ? a.totFit : a.tot;
+  const riga = (it, k) => `<li><span>${esc(it.nome)}</span><b>${Math.round(it.qta)} g</b></li>`;
+  // «Più fit»: un tocco lo applica alla ricetta qui sopra, un altro lo toglie
+  const fit = a.mosse.length ? `<button class="ant-fit${fitOn ? " on" : ""}" data-ant-fit aria-pressed="${fitOn}">
+      <span class="ant-fit-t">${fitOn ? "✓ " : ""}🥗 Più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></span>
+      <span class="ant-mosse">${a.mosse.map(m => m.tipo === "cambia" ? `${esc(m.r.nome)} → <b>${esc(m.a)}</b>` : `${esc(m.r.nome)}: ${Math.round(m.r.qta)} → <b>${m.nuova} g</b>`).join(" · ")}</span>
+      <span class="ant-fit-nota">${fitOn ? "Applicato · tocca per tornare alla ricetta originale" : "Tocca per applicarlo"}</span>
+    </button>` : `<p class="hint">È già una scelta fit: niente da alleggerire.</p>`;
   return `<button class="btn-link modal-indietro" data-ant-chiudi>‹ Torna al pasto</button>
     <h3 class="modal-title">${esc(a.ps.nome || a.r.nome)}</h3>
-    <div class="ant-box">${macroStileHTML(a.tot)}<ul class="pm-sola-lista">${a.items.map(riga).join("")}</ul></div>
+    <div class="ant-box">${macroStileHTML(tot)}<ul class="pm-sola-lista">${items.map(riga).join("")}</ul></div>
     ${fit}
-    <div class="wiz-nav">${a.mosse.length ? `<button class="btn-sec" data-ant-aggiungi="normale">Aggiungi questa</button><button class="btn" data-ant-aggiungi="fit">✓ Aggiungi più fit</button>` : `<button class="btn-sec" data-ant-chiudi>Indietro</button><button class="btn" data-ant-aggiungi="normale">✓ Aggiungi</button>`}</div>`;
+    <button class="btn block" data-ant-aggiungi="${fitOn ? "fit" : "normale"}">✓ Aggiungi</button>`;
 }
 // aggiunge la ricetta dell'anteprima (normale o più fit) al pasto e torna al pasto
 function aggiungiDaAnteprima(c, versione) {
-  const a = anteprimaRicetta(c, c.anteprima); c.anteprima = null;
+  const a = anteprimaRicetta(c, c.anteprima); c.anteprima = null; c.anteprimaFit = false;
   if (!a) { rirenderLibero(); return; }
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
   const i = aggiungiRicettaIn(c.data, c.pasto, a.r.nome); if (i < 0) { rirenderLibero(); return; }
@@ -1345,7 +1349,8 @@ document.addEventListener("DOMContentLoaded", () => {
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
       return;
     }
-    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; rirenderLibero(); return; }
+    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; c.anteprimaFit = false; rirenderLibero(); return; }
+    if (e.target.closest("[data-ant-fit]")) { c.anteprimaFit = !c.anteprimaFit; rirenderLibero(); return; }
     const antA = e.target.closest("[data-ant-aggiungi]"); if (antA) { aggiungiDaAnteprima(c, antA.dataset.antAggiungi); return; }
     const sost = e.target.closest("[data-lib-sostituisci]");
     if (sost) { sostituisciPastoCon(c, sost.dataset.libSostituisci); return; }

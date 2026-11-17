@@ -1594,7 +1594,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const ric = e.target.closest("[data-oggi-ricetta]");
     if (ric) {   // ＋ = aggiungi subito; tocco sulla ricetta = anteprima con la versione più fit
       if (e.target.closest(".rr-piu")) { usaRicettaNellEditor(ric.dataset.oggiRicetta); return; }
-      liberoCtx.anteprima = ric.dataset.oggiRicetta; rirenderLibero(); return;
+      liberoCtx.anteprima = ric.dataset.oggiRicetta; liberoCtx.anteprimaFit = false; rirenderLibero(); return;
     }
     const pz = e.target.closest("[data-pezzi]");
     if (pz) { cambiaPezzi(+pz.dataset.pezzi); return; }
