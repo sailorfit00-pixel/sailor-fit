@@ -69,7 +69,9 @@ function targetPastoDiario(data, pasto, escludiIdx = null) {
   const g = giornoDiario(data);
   const manca = mancaData(data, escludiIdx);
   const fatti = new Set(g.pasti.filter((_, k) => !esclusoIdx(escludiIdx, k)).map(p => p.pasto));
-  const restanti = momentiGiorno(data).filter(p => p !== pasto && !fatti.has(p));
+  // un pasto di oggi già passato e vuoto è saltato: la sua quota va ai pasti che restano (non "ruba" calorie)
+  const saltato = (p) => data === oggiISO() && pastoPassato(data, p);
+  const restanti = momentiGiorno(data).filter(p => p !== pasto && !fatti.has(p) && !saltato(p));
   const r = {};
   MACRO_K.forEach(k => {
     const w = (QUOTA_PASTO[pasto] || 0.2) * pesoMacro(data, pasto, k);
@@ -314,6 +316,7 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
   };
   const r = caricaItemiVivi(data, pastoIniz);
   ctx.gruppi = r.gruppi;
+  ctx._creatoOra = !r.items.length;   // aperto vuoto: quello che salvi ora non si blocca subito (il 🔒 arriva quando lo riapri)
   apriEditorPasto(ctx, r.items, "", false);
 }
 // − / ＋ delle porzioni di una ricetta, nell'intestazione del suo gruppo: cambia le quantità nel diario e ridisegna sul posto
@@ -343,10 +346,9 @@ function togliRicettaViva(n) {
   const copia = clone(p), nome = nomeVisibile(p);
   c.items = c.items.filter(x => x.grp !== n);
   rirenderLibero();   // il salvataggio toglie il piatto e ricarica i gruppi
-  mostraToast(`Tolta: ${nome}`, "Annulla", () => {
-    if (liberoCtx !== c) return;
+  mostraToast(`Tolta: ${nome}`, "Annulla", () => {   // anche a pannello chiuso: la ricetta torna nel diario
     const g2 = giornoDiario(c.data); g2.pasti.push(copia); scriviGiorno(c.data, g2); renderOggi();
-    ricaricaViva(c);
+    if (liberoCtx === c) ricaricaViva(c);
   });
 }
 
@@ -429,6 +431,7 @@ function ingredientiRicettaInGrammi(r, target) { return porzioneSuMisura(r, targ
 function usaRicettaNellEditor(nomeRicetta) {
   const c = liberoCtx;
   if (!c || !c.vivo) return;
+  if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();   // prima si salva la bozza: ricaricando dal diario le righe non confermate andrebbero perse
   if (aggiungiRicettaIn(c.data, c.pasto, nomeRicetta) < 0) return;   // la ricetta entra nel pasto: le sue righe compaiono nell'elenco
   renderOggi(); ricaricaViva(c);
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
@@ -480,6 +483,7 @@ function ripetiPasto(rif) {
   const [dataOrig, idx] = rif.split("|");
   const orig = (leggiDiario()[dataOrig] || {}).pasti?.[+idx];
   if (!orig) return;
+  if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();   // la bozza non si perde ricaricando dal diario
   const g = giornoDiario(c.data);
   const copia = clone(orig);
   copia.pasto = c.pasto;
@@ -732,7 +736,7 @@ function mosseCosaAggiungere(data, p, m) {
     const ridu = [];
     try { ingredientiPastoTutti(data, p).forEach(r => {
       if (!A[r.nome] || r.qta < 15) return;
-      const mac = (g) => ({ kcal: A[r.nome][0] * g / 100, proteine: A[r.nome][1] * g / 100, carboidrati: A[r.nome][2] * g / 100, grassi: A[r.nome][3] * g / 100 });
+      const mac = (g) => macroAlimento(r.nome, g);   // kcal 4/4/9 come nel diario
       const cur = mac(r.qta);
       let best = null;
       const eccTot = (oC ? -m.carboidrati * 1.5 : 0) + (oG ? -m.grassi * 3 : 0) + (oK ? -m.kcal * 0.15 : 0);
@@ -762,7 +766,7 @@ function mosseCosaAggiungere(data, p, m) {
     if (righe.length && !righe.some(r => /zucchin|spinac|brocc|insalat|pomodor|carot|finocch|peperon|cetriol|rucola|asparag|fagiolin|cavol|melanzan|funghi|zucca|radicchio|bietol|cipoll|lattuga|verdur|ceci|lentic|fagioli|piselli|edamame|carciof|porri|sedano|rapa|spugnole|bimi/i.test(r.nome))) {
       const liberi = VERDURE_CONSIGLI.filter(v => A2[v] && !righe.some(r => r.nome === v));
       const n = liberi.length ? liberi[hashStr(data + p) % liberi.length] : null;
-      if (n) out.push({ key: `${p}|agg|${n}|150`, testa: `Aggiungi <b>150 g di ${esc(n.toLowerCase())}</b>`, d: { kcal: A2[n][0] * 1.5, proteine: A2[n][1] * 1.5, carboidrati: A2[n][2] * 1.5, grassi: A2[n][3] * 1.5 }, verdura: true });
+      if (n) out.push({ key: `${p}|agg|${n}|150`, testa: `Aggiungi <b>150 g di ${esc(n.toLowerCase())}</b>`, d: macroAlimento(n, 150), verdura: true });
     }
   }
   (e ? e.scelte : []).filter(a => a.tipo !== "verdura" && utile(a.d)).forEach(a => {
@@ -1083,7 +1087,7 @@ const FONTI_PROT_PASTO = {
   principale: [["Petto di pollo", 200], ["Fesa di tacchino", 200], ["Gamberi", 250], ["Merluzzo", 250], ["Nasello", 250], ["Albume", 250], ["Tofu", 200], ["Manzo magro", 150], ["Bresaola", 80]],
 };
 const tipoFontiPasto = (data, p) => p === "colazione" ? "colazione" : p === "mattina" ? "spuntino" : p === "spuntino" ? (preSera(data) ? "pre" : "spuntino") : "principale";
-const macroDi = (nome, g) => { const a = (window.ALIMENTI || {})[nome]; return { kcal: a[0] * g / 100, proteine: a[1] * g / 100, carboidrati: a[2] * g / 100, grassi: a[3] * g / 100 }; };
+const macroDi = (nome, g) => macroAlimento(nome, g);   // le kcal promesse = quelle registrate (4/4/9, come calcolaMacro)
 // quanti grammi di un alimento stanno in ciò che resta (grassi e carboidrati mai oltre; le calorie di poco)
 function grammiCheCi(nome, voluti, massimo, m) {
   const kcalMax = m.kcal + KCAL_EXTRA, cMax = Math.max(0, m.carboidrati) + 1, gMax = Math.max(0, m.grassi) + 0.5;
@@ -1343,7 +1347,7 @@ function renderOggi() {
     ${typeof recuperoHTML === "function" ? recuperoHTML(data) : ""}
     <div class="oggi-nav">
       <button class="nav-btn" data-oggi-giorno="-1" aria-label="Giorno precedente">‹</button>
-      <div class="oggi-data"><b>${isOggi ? "Oggi" : data === addGiorniISO(oggiISO(), -1) ? "Ieri" : fmtGiornoLungo(data)}</b>
+      <div class="oggi-data"><b>${isOggi ? "Oggi" : data === addGiorniISO(oggiISO(), -1) ? "Ieri" : data === addGiorniISO(oggiISO(), 1) ? "Domani" : fmtGiornoLungo(data)}</b>
         <button class="tipo-btn" data-scegli-allen-data="${data}">${TIPI_GIORNATA[g.tipo].icone} ${esc(TIPI_GIORNATA[g.tipo].label)} <span class="caret">▾</span></button></div>
       <button class="nav-btn" data-oggi-giorno="1" aria-label="Giorno successivo">›</button>
     </div>
