@@ -358,6 +358,7 @@ async function leggiEtichettaDaFile(id, files) {
   if (!files || !files.length) return;
   const stato = document.getElementById("foto-stato-" + id);
   const mostra = t => { if (stato) stato.textContent = t; };
+  if (stato) stato.classList.remove("ok");
   mostra("Apro l'immagine…");
   try {
     const testo = await leggiTestoDaImmagini(files, mostra, "nome");
@@ -375,8 +376,9 @@ async function leggiEtichettaDaFile(id, files) {
     if (nomeEl && (!nomeEl.value.trim() || /^\d+$/.test(nomeEl.value.trim())) && /[A-Za-zÀ-ù]{4}/.test(tit) && !/valori|nutriz|energia|dichiarazione|per 100/i.test(tit)) {
       const t = tit.toLowerCase(); nomeEl.value = t.charAt(0).toUpperCase() + t.slice(1);
     }
-    mostra("");
-    avviso("📷 Valori letti: controlla che siano giusti");
+    if (stato) stato.classList.add("ok");
+    mostra("✓ Valori letti dalla foto: controllali qui sotto");
+    const altri = box.querySelector(".et-altri"); if (altri && v.slice(4).some(x => x)) altri.open = true;
   } catch (err) {
     mostra(navigator.onLine === false || String(err.message) === "libreria"
       ? "Serve internet la prima volta per scaricare il lettore. Riprova quando sei connessa."

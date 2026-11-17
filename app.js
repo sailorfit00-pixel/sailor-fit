@@ -369,17 +369,31 @@ function salvaAlimentoPersonale(nome, base4, extra4, pesoPz) {
   }
 }
 // Campi dell'etichetta (per 100 g) per un alimento nuovo: i primi 4 servono, gli altri sono facoltativi
-const CAMPI_ETICHETTA = ["kcal", "prot.", "carbo", "grassi", "zuccheri", "fibre", "sale"];
-function campiEtichettaHTML(id, valori) {
+const CAMPI_ETICHETTA = ["Calorie (kcal)", "Proteine (g)", "Carboidrati (g)", "Grassi (g)", "Zuccheri (g)", "Fibre (g)", "Sale (g)"];
+// La foto della tabella: due tasti normali (non colorati: nessuno dei due è «scelto»), e sotto lo stato della lettura
+function fotoEtichettaHTML(id) {
+  return `<div class="et-foto"><p class="et-sez">Foto della tabella nutrizionale</p>
+    <div class="foto-due"><label class="et-btn">📸 Scatta foto<input type="file" accept="image/*" capture="environment" hidden data-foto-etic="${id}"></label><label class="et-btn">🖼️ Dalla galleria<input type="file" accept="image/*" hidden data-foto-etic="${id}"></label></div>
+    <div class="foto-stato" id="foto-stato-${id}"></div></div>`;
+}
+// Campi dell'etichetta per un alimento nuovo: i primi 4 servono, gli altri (zuccheri, fibre, sale) sono facoltativi e stanno in una parte che si apre
+function campiEtichettaHTML(id, valori, opz = {}) {
   const v = valori || [];
-  return `<p class="wiz-l">Foto della tabella nutrizionale</p><div class="foto-due"><label class="btn-sec wiz-foto">📸 Scatta foto<input type="file" accept="image/*" capture="environment" hidden data-foto-etic="${id}"></label><label class="btn-sec wiz-foto">🖼️ Carica foto<input type="file" accept="image/*" hidden data-foto-etic="${id}"></label></div><div class="foto-stato" id="foto-stato-${id}"></div>
+  const campo = (k) => `<label class="et-campo"><span>${CAMPI_ETICHETTA[k]}</span><input class="qta-input" type="number" inputmode="decimal" min="0" step="0.1" data-etic="${k}"${v[k] !== undefined && v[k] !== null && !(k >= 4 && !v.length) ? ` value="${v[k]}"` : ""}></label>`;
+  const extraPieni = v.length > 4 && [4, 5, 6].some(k => v[k]);
+  return `${opz.senzaFoto ? "" : fotoEtichettaHTML(id)}
+    <p class="et-sez">Valori nutrizionali</p>
     <div class="etic-per" data-etic-per-for="${id}">
-      <span>La tabella è per</span>
-      <input type="radio" name="per-${id}" id="per100-${id}" value="100" checked><label for="per100-${id}">100 g</label>
-      <input type="radio" name="per-${id}" id="perpz-${id}" value="pz"><label for="perpz-${id}">1 pezzo</label>
-      <label class="etic-pzg"><input class="qta-input" type="number" inputmode="decimal" min="1" step="0.1" data-etic-pzg placeholder="peso" aria-label="Grammi di un pezzo o porzione"> g</label>
+      <div class="et-seg">
+        <input type="radio" name="per-${id}" id="per100-${id}" value="100" checked><label for="per100-${id}">Per 100 g</label>
+        <input type="radio" name="per-${id}" id="perpz-${id}" value="pz"><label for="perpz-${id}">Per 1 pezzo</label>
+      </div>
+      <label class="etic-pzg"><span>Peso di 1 pezzo</span><input class="qta-input" type="number" inputmode="decimal" min="1" step="0.1" data-etic-pzg placeholder="es. 35" aria-label="Grammi di un pezzo o porzione"><span>g</span></label>
     </div>
-    <div class="lib-nuovo" id="${id}">${CAMPI_ETICHETTA.map((l, k) => `<label><span>${l}${k >= 4 ? " <i>(facolt.)</i>" : ""}</span><input class="qta-input" type="number" inputmode="decimal" min="0" step="0.1" data-etic="${k}"${v[k] !== undefined && v[k] !== null && !(k >= 4 && !v.length) ? ` value="${v[k]}"` : ""}></label>`).join("")}</div>`;
+    <div class="lib-nuovo" id="${id}">
+      <div class="et-griglia">${[0, 1, 2, 3].map(campo).join("")}</div>
+      <details class="et-altri"${extraPieni ? " open" : ""}><summary>Altri valori&nbsp;<i>(facoltativi)</i></summary><div class="et-griglia et-tre">${[4, 5, 6].map(campo).join("")}</div></details>
+    </div>`;
 }
 // legge i campi: { base4, extra4 } (extra4 null se zuccheri, fibre e sale sono tutti vuoti)
 function leggiCampiEtichetta(id) {

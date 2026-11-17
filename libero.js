@@ -414,9 +414,11 @@ function rirenderLibero() {
   if (cb && cb.vivo && !cb.bozza && typeof cb.commit === "function") cb.commit(cb);   // dopo la conferma ogni modifica è già nel diario
   const sheet = document.querySelector(".modal-sheet");
   const sc = sheet ? sheet.scrollTop : 0;
+  const pagina = !!(cb && (cb.ignoto || cb.ignotoNuovo || cb.scansione)), cambiata = !!cb && cb._pagina !== pagina;   // entrando o uscendo dal nuovo alimento si riparte dall'alto
+  if (cb) cb._pagina = pagina;
   document.getElementById("modal-content").innerHTML = liberoHTML();
   const s2 = document.querySelector(".modal-sheet");
-  if (s2) s2.scrollTop = sc;
+  if (s2) s2.scrollTop = cambiata ? 0 : sc;
 }
 // -------- Consiglio furbo mentre componi il pasto: cosa cambiare, in base a come sta andando la giornata --------
 // Oltre agli scambi "più leggeri" delle ricette, qui ci sono anche quelli che spostano i macro: più proteine, meno grassi, meno carboidrati.
@@ -990,16 +992,17 @@ function liberoHTML() {
   schede.sort((p, q) => (q.t === p.t ? 0 : q.t > p.t ? 1 : -1) || (q.k - p.k));
   const righe = `<div class="pm-sezione${bloccato ? " bloccato" : ""}"><p class="pm-tot"><span>Già mangiato${bloccato ? ` <button class="pm-lucchetto" data-lib-sblocca aria-label="Pasto passato: tocca per sbloccare">🔒</button>` : pastoPassatoC(c) && c.items.length && !c.bozza ? ` <button class="pm-lucchetto aperto" data-lib-riblocca aria-label="Pasto sbloccato: tocca per bloccarlo di nuovo">🔓</button>` : ""}</span><b>${kcalTot} kcal</b></p>${schede.map(x => x.html).join("")}</div>`;
 
-  const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto${c.ignotoCodice ? " da-codice" : ""}">
-      ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="scan-ok-titolo">Nuovo alimento</p><p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="scan-ok-titolo">Nuovo alimento</p><p class="hint">Codice ${esc(c.ignotoCodice)} · controlla i valori e salva.</p>`
+  const ignoto = (c.ignoto || c.ignotoNuovo) ? `<div class="lib-ignoto pagina${c.ignotoCodice ? " da-codice" : ""}">
+      ${c.ignotoNuovo && !c.ignoto && !c.modificaAl ? `<p class="hint">Fotografa la tabella nutrizionale: i valori si compilano da soli. Controllali e salva.</p>` : c.ignotoNuovo && !c.ignoto ? "" : c.ignotoCodice ? `<p class="hint">Codice ${esc(c.ignotoCodice)} · controlla i valori e salva.</p>`
         : `<p class="hint">Non trovo <b>${esc(c.ignoto)}</b> tra gli alimenti.</p>
           ${ricetteTestoHTML(c.ignoto, "data-ignoto-ricetta") ? `<div class="autoc-lista">${ricetteTestoHTML(c.ignoto, "data-ignoto-ricetta")}</div>` : ""}
           <button class="btn-sec block" data-lib="off-cerca">🔎 Cercalo tra i prodotti confezionati</button>
           ${typeof ricercaOFFHTML === "function" ? ricercaOFFHTML(c) : ""}
           `}
-      <label class="wiz-l">Nome</label>
+      ${fotoEtichettaHTML("etic-libero")}
+      <p class="et-sez">Nome</p>
       <input id="ignoto-nome" class="qta-input wiz-full" autocomplete="off" placeholder="${(c.ignotoNuovo && !c.ignoto) || c.ignotoCodice ? "es. Budino proteico Lidl" : ""}" value="${esc(c.modificaAl || (c.ignotoCodice ? (c.nomeArchivio || "") : (c.ignoto || "").charAt(0).toUpperCase() + (c.ignoto || "").slice(1)))}"${c.modificaAl ? " readonly" : ""}>
-      <div class="etic-box">${campiEtichettaHTML("etic-libero", c.modificaAl ? valoriAlimento(c.modificaAl) : null)}</div>
+      <div class="etic-box">${campiEtichettaHTML("etic-libero", c.modificaAl ? valoriAlimento(c.modificaAl) : null, { senzaFoto: true })}</div>
       <div class="wiz-nav"><button class="btn-sec" data-lib="ignoto-annulla">Annulla</button><button class="btn" data-lib="ignoto-salva">✓ Salva alimento</button></div>
     </div>` : "";
 
@@ -1008,6 +1011,9 @@ function liberoHTML() {
   const righeBozza = ordine.map(k => righeK[k]).join("");
   const ingrLive = `<div class="lib-righe">${c.bozza ? righeBozza : righe}</div>
       ${avvPre.length ? `<div class="lib-legenda-avv" role="note">${avvPre.map(it => `<p><span aria-hidden="true">⚠</span> <b>${esc(it.nome)}</b>: ${fmtG(grassiAlimento(it.nome, it.qta))} g di grassi. Prima di allenarti meglio senza grassi: rallentano la digestione.</p>`).join("")}</div>` : ""}`;
+  // inserendo un alimento nuovo si vede solo quello: niente idee né consigli; salvato o annullato, si torna al pasto
+  if (ignoto) return `<button class="btn-link modal-indietro" data-lib="ignoto-annulla">‹ Torna al pasto</button>
+    <h3 class="modal-title">${c.modificaAl ? "Modifica alimento" : "Nuovo alimento"}</h3>${ignoto}`;
   return `
     <h3 class="modal-title"><span class="mt-testo">${c.titolo()}</span></h3>
     ${bloccato ? "" : `<div class="lib-box">
