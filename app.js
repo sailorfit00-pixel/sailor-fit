@@ -61,7 +61,8 @@ function leggiProfilo() {
   return pf;
 }
 function salvaProfilo(p) { localStorage.setItem("mp_profilo", JSON.stringify(p)); calcolaTarget(); }
-const leggiSport = () => leggiProfilo().sport;
+// gli sport tra cui scegliere: quelli «tolti» restano salvati (nascosto: true) perché i giorni passati li usano ancora
+const leggiSport = () => leggiProfilo().sport.filter(sp => !sp.nascosto);
 
 // -------- Tipo di giornata = gli sport che fai quel giorno --------
 // La chiave è l'elenco degli sport separati da "+", con la durata di quel giorno:
@@ -80,7 +81,7 @@ function durateDelTipo(chiave) {
 }
 const kmDelTipo = (chiave) => durateDelTipo(chiave).corsa ?? null;
 function chiaveTipo(ids, durate = {}) {
-  const ordine = leggiSport().map(sp => sp.id);
+  const ordine = leggiProfilo().sport.map(sp => sp.id);   // anche i nascosti: l'ordine di un giorno passato non cambia
   const v = [...new Set(ids)].sort((a, b) => ordine.indexOf(a) - ordine.indexOf(b));
   return v.length ? v.map(id => durate[id] ? `${id}:${durate[id]}` : id).join("+") : "riposo";
 }
@@ -398,36 +399,107 @@ function apriMioAlimento(nome) {
       <input id="mio-nome" class="qta-input wiz-full" autocomplete="off" value="${esc(nome)}" data-orig="${esc(nome)}">
       <div class="etic-box">${campiEtichettaHTML("etic-mio", v, { senzaFoto: true, pesoPz: pesoPzTuo(nome) })}</div>
       <div class="wiz-nav"><button class="btn-sec" data-mio-lista>Annulla</button><button class="btn" data-mio-salva>✓ Salva alimento</button></div>
+      <button class="btn-link mio-elimina" data-mio-elimina>${ICONA_CESTINO} Elimina alimento</button>
     </div>`);
 }
-// rinominare un alimento: cambia dappertutto (pasti del diario, codici a barre, pezzi), così nulla resta «orfano»
+// Modificando un alimento già salvato: i campi che non hai toccato tengono il valore salvato (niente arrotondamenti
+// per pezzo ⇄ per 100 g, es. sale 0,3 → 0,31) e gli zuccheri aggiunti (che il modulo non mostra) restano quelli di prima.
+// Se hai cambiato «per 100 g / per pezzo» o il peso del pezzo, valgono i numeri scritti (tranne gli zuccheri aggiunti).
+function conservaValoriAlimento(id, nome, et) {
+  const orig = alimentiTuoi()[nome]; if (!orig || !et || et.errore) return et;
+  const box = document.getElementById(id), per = document.querySelector(`[data-etic-per-for="${id}"]`);
+  const stessoModo = !!per && (+per.dataset.pz0 || 0) === (et.pesoPz || 0);
+  const intatto = (k) => { const el = box && box.querySelector(`[data-etic="${k}"]`); return stessoModo && !!el && el.dataset.v !== undefined && String(el.value).trim() === el.dataset.v; };
+  const conExtra = orig.length >= 8;
+  const base4 = [0, 1, 2, 3].map(k => intatto(k) ? orig[k] : et.base4[k]);
+  let extra4 = et.extra4;
+  if (extra4) extra4 = [intatto(4) && conExtra ? orig[4] : extra4[0], conExtra ? orig[5] : 0, intatto(5) && conExtra ? orig[6] : extra4[2], intatto(6) && conExtra ? orig[7] : extra4[3]];
+  return Object.assign({}, et, { base4, extra4 });
+}
+// Corretti i valori di un alimento: tutti i pasti del diario che lo contengono (di tutti i giorni) si ricalcolano
+function ricalcolaPastiCon(nome) {
+  if (typeof leggiDiario !== "function") return 0;
+  const d = leggiDiario(); let n = 0;
+  Object.values(d).forEach(g => (g && g.pasti || []).forEach(p => {
+    if (p && Array.isArray(p.ingredienti) && p.ingredienti.some(i => i && i.nome === nome)) { aggiornaMacro(p); n++; }
+  }));
+  if (n) salvaDiario(d);
+  return n;
+}
+// rinominare un alimento: cambia dappertutto (pasti del diario, ricette tue, piano, codici a barre, pezzi, unità, spesa, in casa), così nulla resta «orfano»
 function rinominaAlimentoTuo(vecchio, nuovo) {
+  const leggi = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) || def; } catch (e) { return def; } };
   const sposta = (chiave) => { try { const o = JSON.parse(localStorage.getItem(chiave)) || {}; if (vecchio in o) { o[nuovo] = o[vecchio]; delete o[vecchio]; localStorage.setItem(chiave, JSON.stringify(o)); } } catch (e) {} };
   sposta("mp_alimenti_custom"); sposta("mp_alimenti_pz");
+  sposta("mp_unita"); sposta("mp_incasa"); sposta("mp_incasa_q");   // { nome: unità preferita / data in cui l'hai preso / grammi della scorta }
   try { const c = JSON.parse(localStorage.getItem("mp_codici")) || {}; Object.keys(c).forEach(k => { if (c[k] === vecchio) c[k] = nuovo; }); localStorage.setItem("mp_codici", JSON.stringify(c)); } catch (e) {}
   try { const d = JSON.parse(localStorage.getItem("mp_diario")) || {};
     Object.values(d).forEach(g => (g.pasti || []).forEach(p => { if (p.nome === vecchio) p.nome = nuovo; (p.ingredienti || []).forEach(i => { if (i.nome === vecchio) i.nome = nuovo; if (i.cercato === vecchio) i.cercato = nuovo; }); }));
     localStorage.setItem("mp_diario", JSON.stringify(d)); } catch (e) {}
+  // ricette tue, ricettario importato e piano: si cambiano gli ingredienti (in qualsiasi «ingredienti» dentro, anche le versioni originali _orig)
+  const rinominaIngr = (x) => {
+    if (Array.isArray(x)) { x.forEach(rinominaIngr); return; }
+    if (!x || typeof x !== "object") return;
+    Object.keys(x).forEach(k => {
+      if (k === "ingredienti" && Array.isArray(x[k])) x[k].forEach(i => { if (i && i.nome === vecchio) i.nome = nuovo; if (i && i.cercato === vecchio) i.cercato = nuovo; });
+      else rinominaIngr(x[k]);
+    });
+  };
+  ["mp_ricette_custom", "mp_ricette", "mp_piano"].forEach(k => { const v = leggi(k, null); if (!v) return; const prima = JSON.stringify(v); rinominaIngr(v); if (JSON.stringify(v) !== prima) localStorage.setItem(k, JSON.stringify(v)); });
+  if (Array.isArray(settimana)) rinominaIngr(settimana);   // il piano già in memoria
+  // varianti scelte nelle ricette { ricetta: { indice: alimento } }, voci aggiunte a mano e spuntate nella spesa
+  try { const v = leggi("mp_varianti", {}); let ok = false; Object.values(v).forEach(m => Object.keys(m || {}).forEach(i => { if (m[i] === vecchio) { m[i] = nuovo; ok = true; } })); if (ok) salvaVarianti(v); } catch (e) {}
+  ["mp_spesa_extra", "mp_spesa_presi"].forEach(k => { const a = leggi(k, []); if (Array.isArray(a) && a.includes(vecchio)) localStorage.setItem(k, JSON.stringify([...new Set(a.map(x => x === vecchio ? nuovo : x))])); });
   if (window.ALIMENTI[vecchio]) { window.ALIMENTI[nuovo] = window.ALIMENTI[vecchio]; delete window.ALIMENTI[vecchio]; }
   if (window.NUTRIENTI_EXTRA && window.NUTRIENTI_EXTRA[vecchio]) { window.NUTRIENTI_EXTRA[nuovo] = window.NUTRIENTI_EXTRA[vecchio]; delete window.NUTRIENTI_EXTRA[vecchio]; }
   if (window.PESO_PZ && window.PESO_PZ[vecchio]) { window.PESO_PZ[nuovo] = window.PESO_PZ[vecchio]; delete window.PESO_PZ[vecchio]; }
+  try { caricaRicette(); } catch (e) {}   // l'elenco delle ricette in memoria si ricostruisce con il nome nuovo
+}
+// Eliminare un alimento tuo: sparisce dagli alimenti, dai pezzi e dai codici a barre; i pasti già registrati tengono le kcal salvate (non si ricalcolano)
+function eliminaAlimentoTuo(nome) {
+  const leggi = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const custom = leggi("mp_alimenti_custom"), pz = leggi("mp_alimenti_pz"), cod = leggi("mp_codici");
+  const prima = { v: custom[nome], pz: pz[nome], codici: Object.keys(cod).filter(k => cod[k] === nome) };
+  delete custom[nome]; localStorage.setItem("mp_alimenti_custom", JSON.stringify(custom));
+  if (nome in pz) { delete pz[nome]; localStorage.setItem("mp_alimenti_pz", JSON.stringify(pz)); }
+  if (prima.codici.length) { prima.codici.forEach(k => delete cod[k]); localStorage.setItem("mp_codici", JSON.stringify(cod)); }
+  if (window.ALIMENTI) delete window.ALIMENTI[nome];
+  if (window.NUTRIENTI_EXTRA) delete window.NUTRIENTI_EXTRA[nome];
+  if (window.PESO_PZ) delete window.PESO_PZ[nome];
+  return prima;
+}
+function ripristinaAlimentoTuo(nome, prima) {
+  if (!prima || !prima.v) return;
+  salvaAlimentoPersonale(nome, prima.v.slice(0, 4), prima.v.length >= 8 ? prima.v.slice(4, 8) : null, prima.pz || 0);
+  if (prima.codici.length) { let cod = {}; try { cod = JSON.parse(localStorage.getItem("mp_codici")) || {}; } catch (e) {} prima.codici.forEach(k => { cod[k] = nome; }); localStorage.setItem("mp_codici", JSON.stringify(cod)); }
 }
 document.addEventListener("click", (e) => {
   if (!e.target.closest || !e.target.closest("#modal-content")) return;
   if (e.target.closest("[data-mio-menu]")) { apriMenu(); return; }
   if (e.target.closest("[data-mio-lista]")) { apriMieiAlimenti(); return; }
   const ap = e.target.closest("[data-mio-apri]"); if (ap) { apriMioAlimento(ap.dataset.mioApri); return; }
+  if (e.target.closest("[data-mio-elimina]")) {
+    const n = (document.getElementById("mio-nome") || {}).dataset.orig; if (!n) return;
+    chiediConferma(`Eliminare «${n}»?`, "Sparisce dai tuoi alimenti. I pasti già registrati tengono le loro calorie.", "Elimina", () => {
+      const prima = eliminaAlimentoTuo(n);
+      apriMieiAlimenti();
+      avviso(`Eliminato: ${n}`, "Annulla", () => { ripristinaAlimentoTuo(n, prima); if (document.querySelector("#modal-content .mio-lista, #modal-content [data-mio-menu]")) apriMieiAlimenti(); });
+    }, () => apriMioAlimento(n));
+    return;
+  }
   const sv = e.target.closest("[data-mio-salva]"); if (!sv) return;
-  const et = leggiCampiEtichetta("etic-mio");
+  const inp = document.getElementById("mio-nome"), vecchio = inp.dataset.orig;
+  let et = leggiCampiEtichetta("etic-mio");
   if (et && et.errore) { avviso(et.errore); return; }
   if (!et || !et.base4[0]) { avviso("Inserisci almeno le kcal."); return; }
-  const inp = document.getElementById("mio-nome"), vecchio = inp.dataset.orig;
+  et = conservaValoriAlimento("etic-mio", vecchio, et);   // i campi non toccati restano come erano salvati
   let nome = inp.value.trim(); if (!nome) { avviso("Scrivi il nome dell'alimento."); return; }
   nome = nome.charAt(0).toUpperCase() + nome.slice(1);
   if (nome !== vecchio && (window.ALIMENTI || {})[nome]) { avviso("Esiste già un alimento con questo nome."); return; }
   if (!verificaEtichetta("etic-mio", sv, et)) return;
   if (nome !== vecchio) rinominaAlimentoTuo(vecchio, nome);
   salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz, true);
+  ricalcolaPastiCon(nome);   // i pasti già registrati con questo alimento prendono i valori corretti
   if (typeof renderOggi === "function") renderOggi();
   apriMieiAlimenti(); avviso("✓ Alimento aggiornato");
 });
@@ -480,10 +552,10 @@ function fotoEtichettaHTML(id) {
 function campiEtichettaHTML(id, valori, opz = {}) {
   const pz = opz.pesoPz > 0 ? opz.pesoPz : 0, r = (x) => Math.round(x * 100) / 100;
   const v = (valori || []).map(x => (x === null || x === undefined) ? x : pz ? r(x * pz / 100) : x);   // per pezzo: si mostrano i numeri della tabella com'era (per 1 pezzo)
-  const campo = (k) => `<label class="et-campo"><span>${CAMPI_ETICHETTA[k]}</span><input class="qta-input" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${k ? "g" : "kcal"}" data-etic="${k}"${v[k] !== undefined && v[k] !== null && !(k >= 4 && !v.length) ? ` value="${v[k]}"` : ""}></label>`;
+  const campo = (k) => `<label class="et-campo"><span>${CAMPI_ETICHETTA[k]}</span><input class="qta-input" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${k ? "g" : "kcal"}" data-etic="${k}"${v[k] !== undefined && v[k] !== null && !(k >= 4 && !v.length) ? ` value="${v[k]}" data-v="${v[k]}"` : ""}></label>`;   // data-v: il valore mostrato, per capire poi quali campi hai cambiato
   return `${opz.senzaFoto ? "" : fotoEtichettaHTML(id)}
     <p class="et-sez">Valori nutrizionali</p>
-    <div class="etic-per" data-etic-per-for="${id}">
+    <div class="etic-per" data-etic-per-for="${id}" data-pz0="${pz}">
       <div class="et-seg">
         <input type="radio" name="per-${id}" id="per100-${id}" value="100"${pz ? "" : " checked"}><label for="per100-${id}">Per 100 g</label>
         <input type="radio" name="per-${id}" id="perpz-${id}" value="pz"${pz ? " checked" : ""}><label for="perpz-${id}">Per 1 pezzo</label>
@@ -1979,7 +2051,7 @@ const ICONE_SPORT = ["🏃‍♀️", "🚴‍♀️", "🏊‍♀️", "🧘‍
 const CAMPI_PROFILO = [
   ["peso", "Peso (kg)", 0.1], ["bmr", "Basale (kcal)", 10],
   ["deficit", "Deficit (%)", 1],
-  ["recupero", "Allenamento reintegrato (%)", 5, "Calorie bruciate che rimangi (100% = tutte)"],
+  ["recupero", "Allenamento reintegrato (%)", 5, "% delle calorie dell'allenamento che puoi mangiare (100% = tutte)"],
   ["protKg", "Proteine (g/kg)", 0.1], ["grassiKg", "Grassi (g/kg)", 0.1],
 ];
 // Perdita di peso attesa a settimana con la settimana tipo attuale (7700 kcal ≈ 1 kg)
@@ -1987,11 +2059,20 @@ function perditaSettimanale() {
   const deficit = leggiTipi().reduce((s, t) => s + TIPI_GIORNATA[t].fabbisogno - TIPI_GIORNATA[t].target.kcal, 0);
   return deficit / 7700;
 }
+// Riassunto degli obiettivi: una riga (media della settimana tipo e kg a settimana) e una tabellina
+// con i soli tipi di giornata della settimana tipo (+ Riposo), non una scheda per ogni sport
 function anteprimaProfiloHTML() {
-  return `<ul class="tipi">${Object.entries(TIPI_GIORNATA).map(([id, tg]) => { const t = tg.target; return `<li class="tipo-card">
-    <div class="tipo-riga"><span class="dot ${id}"></span><span class="tipo-nome">${tg.label}</span><strong>${t.kcal} kcal</strong></div>
-    <div class="tipo-macro">P ${t.proteine}g · C ${t.carboidrati}g · G ${t.grassi}g</div>${barraMacroHTML(t)}</li>`; }).join("")}</ul>
-    <p class="hint">−${perditaSettimanale().toFixed(2).replace(".", ",")} kg/sett</p>`;
+  const tipi = leggiTipi().map(t => VECCHI_TIPI[t] || t || "riposo");
+  const media = Math.round(tipi.reduce((s, t) => s + TIPI_GIORNATA[t].target.kcal, 0) / tipi.length / 10) * 10;
+  const kg = perditaSettimanale(), kgTxt = `${kg >= 0 ? "−" : "+"}${Math.abs(kg).toFixed(2).replace(".", ",")} kg a settimana`;
+  const chiavi = [...new Set(tipi)]; if (!chiavi.includes("riposo")) chiavi.push("riposo");
+  const quanti = (k) => tipi.filter(t => t === k).length;
+  return `<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno · <b>${kgTxt}</b></p>
+    <table class="pf-tabella"><thead><tr><th>Giornata</th><th>kcal</th><th>P</th><th>C</th><th>G</th></tr></thead><tbody>
+    ${chiavi.map(k => { const tg = TIPI_GIORNATA[k], t = tg.target, n = quanti(k);
+      return `<tr><td><span class="pf-ico">${tg.icone}</span> ${esc(tg.label)}${n ? ` <em>×${n}</em>` : ""}</td><td><b>${t.kcal}</b></td><td>${t.proteine}</td><td>${t.carboidrati}</td><td>${t.grassi}</td></tr>`; }).join("")}
+    </tbody></table>
+    <p class="hint">P, C, G in grammi · ×N = quante volte a settimana nella settimana tipo</p>`;
 }
 function apriProfilo() {
   editCtx = null;
@@ -2000,10 +2081,11 @@ function apriProfilo() {
     <h3 class="modal-title">👤 Profilo</h3>
     <div id="form-profilo">
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
-        <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" data-profilo="${k}" value="${pf[k]}">`).join("")}
+        <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" data-profilo="${k}" value="${pf[k]}">${k === "bmr" ? `
+        <button class="btn-link bmr-link" data-bmr-apri>Non lo sai? Calcolalo ›</button><div id="bmr-calc" hidden></div>` : ""}`).join("")}
     </div>
     <h4>I tuoi sport</h4>
-    <div class="sport-lista">${pf.sport.map(sp => `<div class="sport-riga">
+    <div class="sport-lista">${pf.sport.filter(sp => !sp.nascosto).map(sp => `<div class="sport-riga">
         <span class="sr-ico">${sp.icona}</span><span class="sr-nome">${esc(sp.nome)}</span>
         <input class="qta-input sr-dur" type="text" inputmode="decimal" autocomplete="off" data-sport-dur="${sp.id}" value="${sp.perKm ? fmtKm(sp.km || 5) : (sp.min || 60)}"><em>${sp.perKm ? "km" : "min"}</em><em class="sr-kcal">≈ ${kcalSport(sp, 0, pf)} kcal</em>
         <button class="lib-del" data-sport-del="${sp.id}" aria-label="Togli ${esc(sp.nome)}">${ICONA_CESTINO}</button></div>`).join("")}
@@ -2021,8 +2103,10 @@ function apriProfilo() {
 `);
 }
 // ridisegna il profilo restando allo stesso punto della pagina
-function riapriProfilo() {
-  const sheet = document.querySelector(".modal-sheet"), sc = sheet ? sheet.scrollTop : 0;
+// (sc: la posizione da ritrovare, se il profilo era già stato chiuso, es. da una richiesta di conferma)
+function riapriProfilo(sc) {
+  const sheet = document.querySelector(".modal-sheet");
+  if (typeof sc !== "number") sc = sheet ? sheet.scrollTop : 0;
   apriProfilo();
   const s2 = document.querySelector(".modal-sheet"); if (s2) s2.scrollTop = sc;
 }
@@ -2030,7 +2114,8 @@ function leggiFormProfilo() {
   const pf = leggiProfilo();
   document.querySelectorAll("[data-profilo]").forEach(inp => {
     const v = parseFloat(String(inp.value).replace(",", "."));
-    if (!isNaN(v) && v > 0) pf[inp.dataset.profilo] = v;
+    const k = inp.dataset.profilo, puoZero = k === "deficit" || k === "recupero";   // deficit e reintegro possono essere 0 (mantenimento, niente kcal dall'allenamento); mai negativi
+    if (!isNaN(v) && (v > 0 || (puoZero && v === 0))) pf[k] = v;
   });
   return pf;
 }
@@ -2048,6 +2133,82 @@ function salvaProfiloForm() {
 
   if (typeof renderOggi === "function") renderOggi();
 }
+
+// ===== Calcolo del basale (Mifflin-St Jeor) dal Profilo: sesso, età, altezza e il peso del campo Peso =====
+// donna: 10·kg + 6,25·cm − 5·età − 161 · uomo: stessa formula + 5. Sesso, età e altezza si ricordano nel profilo.
+function pesoDelForm() {
+  const inp = document.querySelector('[data-profilo="peso"]'), v = inp ? parseFloat(String(inp.value).replace(",", ".")) : NaN;
+  return v > 0 ? v : leggiProfilo().peso;
+}
+function basaleCalcolato() {
+  const box = document.getElementById("bmr-calc"); if (!box) return null;
+  const uomo = !!box.querySelector('input[value="uomo"]:checked');
+  const num = (k) => parseFloat(String((box.querySelector(`[data-bmr="${k}"]`) || {}).value || "").replace(",", "."));
+  const eta = num("eta"), cm = num("altezza"), kg = pesoDelForm();
+  if (!(eta >= 10 && eta <= 100 && cm >= 100 && cm <= 230 && kg > 0)) return { uomo, eta, cm, kg, kcal: 0 };
+  return { uomo, eta, cm, kg, kcal: Math.round((10 * kg + 6.25 * cm - 5 * eta + (uomo ? 5 : -161)) / 10) * 10 };
+}
+function bmrCalcHTML() {
+  const pf = leggiProfilo(), uomo = pf.sesso === "uomo";
+  return `<div class="bmr-calc">
+    <div class="et-seg">
+      <input type="radio" name="bmr-sesso" id="bmr-donna" value="donna"${uomo ? "" : " checked"}><label for="bmr-donna">Donna</label>
+      <input type="radio" name="bmr-sesso" id="bmr-uomo" value="uomo"${uomo ? " checked" : ""}><label for="bmr-uomo">Uomo</label>
+    </div>
+    <div class="bmr-griglia">
+      <label class="et-campo"><span>Età (anni)</span><input class="qta-input" type="number" inputmode="numeric" min="10" max="100" step="1" data-bmr="eta" placeholder="es. 30"${pf.eta ? ` value="${pf.eta}"` : ""}></label>
+      <label class="et-campo"><span>Altezza (cm)</span><input class="qta-input" type="number" inputmode="numeric" min="100" max="230" step="1" data-bmr="altezza" placeholder="es. 165"${pf.altezza ? ` value="${pf.altezza}"` : ""}></label>
+    </div>
+    <p class="bmr-ris" id="bmr-ris"></p>
+    <div class="wiz-nav"><button class="btn-sec" data-bmr-chiudi>Annulla</button><button class="btn" data-bmr-usa>Usa questo valore</button></div>
+  </div>`;
+}
+function aggiornaBasaleCalcolato() {
+  const r = basaleCalcolato(), out = document.getElementById("bmr-ris"), usa = document.querySelector("[data-bmr-usa]");
+  if (!r || !out) return;
+  const fk = String(Math.round(r.kg * 10) / 10).replace(".", ",");
+  out.innerHTML = r.kcal ? `Il tuo basale è circa <b>${r.kcal} kcal</b><small>con il peso del Profilo: ${fk} kg</small>` : `<small>Scrivi età e altezza: il peso è quello del Profilo (${fk} kg).</small>`;
+  if (usa) usa.disabled = !r.kcal;
+}
+function ricordaDatiBasale(r) {
+  const pf = leggiProfilo();
+  pf.sesso = r.uomo ? "uomo" : "donna";
+  if (r.eta >= 10 && r.eta <= 100) pf.eta = Math.round(r.eta);
+  if (r.cm >= 100 && r.cm <= 230) pf.altezza = Math.round(r.cm);
+  salvaProfilo(pf);
+}
+function chiudiCalcoloBasale() {
+  const box = document.getElementById("bmr-calc"), link = document.querySelector("[data-bmr-apri]");
+  if (box) { box.hidden = true; box.innerHTML = ""; }
+  if (link) link.hidden = false;
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest || !e.target.closest("#modal-content")) return;
+  if (e.target.closest("[data-bmr-apri]")) {
+    const box = document.getElementById("bmr-calc"); if (!box) return;
+    box.innerHTML = bmrCalcHTML(); box.hidden = false; e.target.closest("[data-bmr-apri]").hidden = true;
+    aggiornaBasaleCalcolato();
+    const vuoto = box.querySelector('[data-bmr="eta"]:placeholder-shown') || box.querySelector('[data-bmr="altezza"]:placeholder-shown'); if (vuoto) vuoto.focus();
+    return;
+  }
+  if (e.target.closest("[data-bmr-chiudi]")) { chiudiCalcoloBasale(); return; }
+  if (e.target.closest("[data-bmr-usa]")) {
+    const r = basaleCalcolato(); if (!r || !r.kcal) return;
+    ricordaDatiBasale(r);
+    const inp = document.querySelector('[data-profilo="bmr"]');
+    if (inp) { inp.value = r.kcal; inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new Event("change", { bubbles: true })); }   // come se l'avessi scritto: si salva e l'anteprima si aggiorna
+    chiudiCalcoloBasale();
+    avviso(`Basale: ${r.kcal} kcal`);
+  }
+});
+document.addEventListener("input", (e) => {
+  if (!e.target.closest || !e.target.closest("#bmr-calc")) {
+    if (e.target.matches && e.target.matches('[data-profilo="peso"]') && document.getElementById("bmr-ris")) aggiornaBasaleCalcolato();   // cambia il peso: il calcolo segue
+    return;
+  }
+  aggiornaBasaleCalcolato();
+  const r = basaleCalcolato(); if (r) ricordaDatiBasale(r);
+});
 
 // ================== Diario del peso ==================
 function leggiPesi() { try { return JSON.parse(localStorage.getItem("mp_pesi")) || []; } catch (e) { return []; } }
@@ -2104,26 +2265,47 @@ function graficoPesoSVG(pesi) {
   </svg>
   <div class="macro-pct"><span><i class="leg-pt"></i>pesate</span><span><i class="leg-line"></i>media 7 giorni</span></div>`;
 }
+// Il peso del Profilo segue la media degli ultimi 7 giorni (per le proteine in g/kg); senza pesate resta com'è
+function aggiornaPesoProfilo() {
+  const mm = mediaMobile(leggiPesi());
+  if (!mm.length) return;
+  const pf = leggiProfilo();
+  pf.peso = Math.round(mm[mm.length - 1].kg * 10) / 10;
+  salvaProfilo(pf);
+  if (typeof renderOggi === "function") renderOggi();
+}
 function salvaPesata() {
   const data = document.getElementById("peso-data").value || oggiISO();
   const kg = parseFloat(String(document.getElementById("peso-kg").value).replace(",", "."));
   if (isNaN(kg) || kg < 30 || kg > 200) { avviso("Inserisci un peso valido in kg."); return; }
-  const pesi = leggiPesi().filter(p => p.data !== data); // una pesata per giorno
-  pesi.push({ data, kg: Math.round(kg * 10) / 10 });
-  salvaPesi(pesi);
-  // Il profilo segue la media degli ultimi 7 giorni (per le proteine in g/kg)
-  const mm = mediaMobile(leggiPesi());
-  const pf = leggiProfilo();
-  pf.peso = Math.round(mm[mm.length - 1].kg * 10) / 10;
-  salvaProfilo(pf);
-  rirenderAndamento();
-  avviso(`Peso salvato: ${fmtKg(kg)} kg`);
+  const kg1 = Math.round(kg * 10) / 10;
+  const registra = () => {
+    const pesi = leggiPesi().filter(p => p.data !== data); // una pesata per giorno
+    pesi.push({ data, kg: kg1 });
+    salvaPesi(pesi);
+    aggiornaPesoProfilo();
+    rirenderAndamento();
+    avviso(`Peso salvato: ${fmtKg(kg1)} kg`);
+  };
+  // più di 3 kg di differenza dall'ultima pesata: quasi sempre una cifra sbagliata, si chiede prima di salvare
+  const altre = leggiPesi().filter(p => p.data !== data), ultima = altre[altre.length - 1];
+  const diff = ultima ? Math.round((kg1 - ultima.kg) * 10) / 10 : 0;
+  if (Math.abs(diff) > 3) {
+    const sheet = document.querySelector(".modal-sheet"), sc = sheet ? sheet.scrollTop : 0;
+    const torna = () => { apriAndamento(); const s2 = document.querySelector(".modal-sheet"); if (s2) s2.scrollTop = sc; };
+    const f = (x) => String(x).replace(".", ",");
+    chiediConferma(`${f(kg1)} kg: ${diff > 0 ? "+" : "−"}${f(Math.abs(diff))} kg dall'ultima pesata. È giusto?`, `L'ultima pesata (${fmtData(ultima.data)}) era ${fmtKg(ultima.kg)} kg.`, "Sì, salva",
+      () => { torna(); registra(); }, torna);
+    return;
+  }
+  registra();
 }
 function eliminaPesata(data) {
   const prima = leggiPesi();
   salvaPesi(prima.filter(p => p.data !== data));
+  aggiornaPesoProfilo();   // il peso del Profilo si ricalcola dalle pesate rimaste
   rirenderAndamento();
-  avviso(`Pesata del ${fmtData(data)} eliminata`, "Annulla", () => { salvaPesi(prima); rirenderAndamento(); });
+  avviso(`Pesata del ${fmtData(data)} eliminata`, "Annulla", () => { salvaPesi(prima); aggiornaPesoProfilo(); rirenderAndamento(); });
 }
 
 // ================== Backup ==================
@@ -2359,10 +2541,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (wiz) { azioneWizard(wiz.dataset.wiz, wiz.dataset.idx, wiz.dataset.k); return; }
     const sdel = e.target.closest("[data-sport-del]");
     if (sdel) {
+      // lo sport non si cancella: diventa «nascosto» (sparisce dalle scelte), così i giorni passati tengono obiettivi e statistiche
       const idSport = sdel.dataset.sportDel, nomeSport = (leggiProfilo().sport.find(x => x.id === idSport) || {}).nome || "lo sport";
-      chiediConferma(`Togliere ${nomeSport}?`, "", "Togli", () => {
-        const pf = leggiProfilo(); pf.sport = pf.sport.filter(x => x.id !== idSport); pf.sportTolti = [...new Set((pf.sportTolti || (pf.corsaTolta ? ["corsa"] : [])).concat(idSport))]; salvaProfilo(pf); apriProfilo(); if (typeof renderOggi === "function") renderOggi();
-      }, () => apriProfilo());
+      const sheet = document.querySelector(".modal-sheet"), sc = sheet ? sheet.scrollTop : 0;
+      const tipi = leggiTipi(), senza = (t) => { const parti = String(VECCHI_TIPI[t] || t).split("+").filter(x => x && x.split(":")[0] !== idSport); return parti.length ? parti.join("+") : "riposo"; };
+      const giorniUsa = tipi.map((t, i) => sportDelTipo(t).includes(idSport) ? i : -1).filter(i => i >= 0);
+      // nella settimana tipo quei giorni diventano riposo (se c'era anche un altro sport, resta quello)
+      const cosaDiventa = giorniUsa.map(i => { const k = senza(tipi[i]); return `${GIORNI[i].toLowerCase()} ${k === "riposo" ? "diventa riposo" : `resta ${TIPI_GIORNATA[k].label}`}`; });
+      const nota = (giorniUsa.length ? `Nella settimana tipo: ${cosaDiventa.join(", ")}. ` : "") + "I giorni passati non cambiano.";
+      chiediConferma(`Togliere ${nomeSport}?`, nota, "Togli", () => {
+        const pf = leggiProfilo(), sp = pf.sport.find(x => x.id === idSport); if (sp) sp.nascosto = true;
+        if (giorniUsa.length) {
+          // i giorni passati senza tipo salvato seguivano la settimana tipo: si fissano com'erano prima di cambiarla
+          const oggi = oggiISO(), d = leggiDiario(); let cambiato = false;
+          Object.keys(d).forEach(data => { if (data < oggi && d[data] && !d[data].tipo && giorniUsa.includes(indiceSettimana(data))) { d[data].tipo = tipi[indiceSettimana(data)]; cambiato = true; } });
+          if (cambiato) salvaDiario(d);
+          salvaTipi(tipi.map((t, i) => giorniUsa.includes(i) ? senza(t) : t));
+        }
+        salvaProfilo(pf); riapriProfilo(sc); if (typeof renderOggi === "function") renderOggi();
+      }, () => riapriProfilo(sc));
       return;
     }
     const sd = e.target.closest("[data-spesa-del]");
@@ -2392,7 +2589,9 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "sport-aggiungi") {
         const nome = (document.getElementById("nuovo-sport-nome").value || "").trim();
         if (!nome) { avviso("Scrivi il nome dello sport."); return; }
-        const pf = leggiProfilo();
+        const pf = leggiProfilo(), uguale = pf.sport.find(x => String(x.nome).trim().toLowerCase() === nome.toLowerCase());
+        if (uguale && !uguale.nascosto) { avviso("C'è già uno sport con questo nome"); return; }
+        if (uguale) { delete uguale.nascosto; salvaProfilo(pf); riapriProfilo(); avviso(`${uguale.nome} è di nuovo tra i tuoi sport`); return; }   // era stato tolto: torna com'era (stesso id, i giorni passati restano collegati)
         let id = slug(nome) || "sport"; while (pf.sport.some(x => x.id === id)) id += "2";
         pf.sport.push({ id, nome: nome.charAt(0).toUpperCase() + nome.slice(1), icona: document.getElementById("nuovo-sport-icona").value, kMin: +document.getElementById("nuovo-sport-intensita").value || 0.075, min: 60 });
         salvaProfilo(pf); riapriProfilo();
