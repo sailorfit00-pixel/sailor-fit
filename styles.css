@@ -1220,6 +1220,8 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .wiz-fondo .wiz-macro { margin: 0 0 8px; padding: 8px 10px; }
 .wiz-fondo .wiz-macro strong { font-size: 17px; }
 .wiz-fondo .wiz-salva { position: static; margin-top: 0; box-shadow: none; }
+.wiz-fondo .wiz-annulla { display: block; margin: 6px auto 0; color: var(--muted); font-size: 13px; }   /* butta la bozza della ricetta nuova */
+.wiz-ing.wiz-errore { box-shadow: inset 0 0 0 2px var(--bad); }   /* ingrediente che non conosco: si salva solo coi valori o togliendolo */
 .wiz-foto-tutto { margin: 0; }
 
 /* Nuova ricetta più compatta: pasto in una riga sola */

@@ -208,14 +208,6 @@ function macroAlimento(nome, g) {
   return { kcal: 4 * p + 4 * c + 9 * gr + (manca >= 20 ? manca * q : 0), proteine: p, carboidrati: c, grassi: gr };
 }
 
-// Quanto resta per questo pasto: target del giorno meno gli altri pasti
-function targetPasto(i, j) {
-  const T = targetGiorno(i);
-  const altri = sommaMacro(settimana[i].pasti.filter((_, k) => k !== j));
-  const r = {};
-  MACRO_K.forEach(k => { r[k] = Math.max(0, Math.round(T[k] - altri[k])); });
-  return r;
-}
 
 // -------- Suggerimenti --------
 // Alimenti "jolly" per colmare un macro mancante
@@ -977,12 +969,18 @@ function liberoHTML() {
   // "Già mangiato": schede tutte uguali (nome, P/C/G, kcal, freccia). Ricetta = una scheda; gli ingredienti scritti a mano = una scheda ciascuno in un unico riquadro.
   // Toccando una scheda si apre e gli ingredienti si modificano lì (− quantità +, unità, cestino); lo swipe a sinistra su una scheda la toglie.
   const frecciaHTML = () => `<span class="pm-freccia"></span>`;   // la freccia gira da sola quando la scheda è aperta (CSS)
+  // valori di una ricetta del pasto: k pezzi di una ricetta a porzioni intatta = k × 1 pezzo (come nell'elenco ricette), altrimenti dagli ingredienti
+  const macroGruppo = (n) => {
+    const gr = (c.gruppi || []).find(x => x.n === n), it = c.items.filter(x => x.grp === n && x.qta > 0);
+    const esatti = gr && gr.intatta && typeof macroPastoRicetta === "function" && macroPastoRicetta({ ricetta: gr.ricetta, nPezzi: gr.nPezzi, ingredienti: it.map(x => ({ nome: x.nome, qta: x.qta, unita: "g" })) });
+    return esatti || macroDa(it);
+  };
   const ricettaHTML = (n, htmlRighe) => {
     const gr = (c.gruppi || []).find(x => x.n === n); if (!gr) return htmlRighe;
     const aperta = !!(c.gruppiAperti && c.gruppiAperti.has(n));
     const rp = gr.intatta && typeof ricettaAPezzi === "function" ? ricettaAPezzi(gr.ricetta) : null;
     const cont = rp ? `<span class="pm-contatore pm-cont-grande"><button class="nav-btn" data-grp-pz="${n}|-1" aria-label="Meno porzioni">−</button><b>${esc(String(etichettaPezzi(rp._orig, gr.nPezzi)))}</b><button class="nav-btn" data-grp-pz="${n}|1" aria-label="Più porzioni">＋</button></span>` : "";
-    const m = macroDa(c.items.filter(x => x.grp === n && x.qta > 0));
+    const m = macroGruppo(n);
     const r0 = typeof ricettaDaNome === "function" ? ricettaDaNome(gr.ricetta) : null, o = r0 ? (r0._orig || r0) : null, passi = o && Array.isArray(o.passaggi) ? o.passaggi : [];
     return `<div class="pm-blocco pm-card pm-piatto pm-ricetta${aperta ? " aperto" : ""}" data-grp-box="${n}">
       <div class="pasto-riga pm-testa${bloccato ? " sola-lettura" : ""}" data-grp-t="${n}" data-grp-toggle="${n}" role="button" tabindex="0" aria-expanded="${aperta}">
@@ -1024,7 +1022,7 @@ function liberoHTML() {
   };
   const parti = [];
   ordine.forEach(k => { const gp = c.items[k].grp == null ? null : c.items[k].grp; const ult = parti[parti.length - 1]; if (!ult || ult.grp !== gp) parti.push({ grp: gp, html: "", ks: [] }); const u = parti[parti.length - 1]; u.html += righeK[k]; u.ks.push(k); });
-  const kcalTot = Math.round(macroDa(c.items.filter(x => x.qta > 0)).kcal);
+  const kcalTot = Math.round(macroDa(c.items.filter(x => x.qta > 0 && x.grp == null)).kcal + [...new Set(c.items.filter(x => x.grp != null).map(x => x.grp))].reduce((s, n) => s + macroGruppo(n).kcal, 0));
   // un riquadro per ogni cosa mangiata, dall'ultima aggiunta alla prima (la riga appena aggiunta non ha ancora l'ora: è la più nuova)
   const quando = (k) => c.items[k].t == null ? Infinity : c.items[k].t;
   const schede = [];
@@ -1229,65 +1227,11 @@ function aggiornaRicettaDaFit(nome, mods) {
   return () => { localStorage.setItem("mp_ricette_custom", primaC); localStorage.setItem("mp_ricette_nascoste", primaN); caricaRicette(); };
 }
 // Toccando un consiglio furbo il pasto si salva subito e il foglio resta aperto sul pasto salvato (niente secondo "✓ Aggiungi")
-// -------- Suggerimenti per la giornata --------
-function diffGiorno(i) {
-  const T = targetGiorno(i), t = settimana[i].totali;
-  const d = {};
-  MACRO_K.forEach(k => { d[k] = Math.round(T[k] - t[k]); });
-  return d;
-}
-function giornoFuoriTarget(i) {
-  if (!settimana[i]) return false;
-  const T = targetGiorno(i), d = diffGiorno(i);
-  return Math.abs(d.kcal) > T.kcal * 0.05 || d.proteine > T.proteine * 0.1;
-}
-// Pasti del giorno ancora "adattabili" (quelli del piano, non i pasti liberi)
-function pastiAdattabili(i) {
-  return settimana[i].pasti.map((p, k) => ({ p, k })).filter(x => !x.p.libero);
-}
-function apriSuggerimentiGiorno(i) {
-  editCtx = null; liberoCtx = null;
-  const T = targetGiorno(i), t = settimana[i].totali, d = diffGiorno(i);
-  const adatt = pastiAdattabili(i);
-  const sugg = suggerimentiMacro(d);
-  const stato = d.kcal > 0 ? `Mancano <b>${d.kcal} kcal</b>` : d.kcal < 0 ? `Sei sopra di <b>${-d.kcal} kcal</b>` : "Calorie in linea";
-  openModal(`
-    <h3 class="modal-title">💡 ${GIORNI[i]}: come chiudere la giornata</h3>
-    <div class="r-macro"><span><b>${Math.round(t.kcal)}</b> / ${T.kcal} kcal</span>
-      <span>P ${Math.round(t.proteine)}/${T.proteine}g</span><span>C ${Math.round(t.carboidrati)}/${T.carboidrati}g</span><span>G ${Math.round(t.grassi)}/${T.grassi}g</span>
-      ${barraMacroHTML(t, T)}</div>
-    <p class="consiglio">${stato}.</p>
-    ${adatt.length ? `<h4>1 · Adatta gli altri pasti</h4>
-      <button class="btn block" data-giorno-adatta="${i}">⚖️ Adatta gli altri pasti</button>` : ""}
-    ${sugg.length ? `<h4>${adatt.length ? "2 · " : ""}Oppure aggiungi uno spuntino</h4>
-      ${sugg.map(sg => `<div class="lib-sugg"><span>Mancano ~${sg.manca} g di ${NOMI_MACRO[sg.macro]}, ad esempio:</span>
-        <ul class="sugg-lista">${sg.opz.map(o => `<li>${esc(o.nome)} <b>${o.g} g</b> <em>(${o.kcal} kcal)</em></li>`).join("")}</ul></div>`).join("")}` : ""}
-  `);
-}
-// Riadatta i pasti del piano (non liberi) per far tornare la giornata
-function adattaAltriPasti(i) {
-  const g = settimana[i];
-  const T = targetGiorno(i);
-  const fissi = sommaMacro(g.pasti.filter(p => p.libero));
-  const adatt = pastiAdattabili(i);
-  // si riparte dalla ricetta originale (non dalle quantità già adattate)
-  const originali = adatt.map(x => ricette.find(r => r.nome === x.p.nome && r.pasto === x.p.pasto) || ricette.find(r => r.nome === x.p.nome) || x.p);
-  const sc = fattoriScala(fissi, originali, T);
-  adatt.forEach((x, n) => {
-    const nuovo = scalaPasto(originali[n], sc.fc, sc.fg);
-    nuovo.pasto = x.p.pasto;
-    g.pasti[x.k] = nuovo;
-  });
-  ricalcolaGiorno(i); salvaPiano(); renderSettimana(); renderSpesa();
-  apriSuggerimentiGiorno(i);
-}
 
 // -------- Eventi --------
 document.addEventListener("DOMContentLoaded", () => {
   const mc = document.getElementById("modal-content");
   mc.addEventListener("click", (e) => {
-    const ad = e.target.closest("[data-giorno-adatta]");
-    if (ad) { adattaAltriPasti(+ad.dataset.giornoAdatta); return; }
     if (!liberoCtx) return;
     const c = liberoCtx;
     const b = e.target.closest("[data-lib]");

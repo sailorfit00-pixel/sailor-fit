@@ -148,11 +148,9 @@ const VERSIONE_TARGET = 3;
 // lun sala pesi · mar crossfit (o equitazione) · mer crossfit · gio equitazione · ven crossfit · sab crossfit + sala pesi (o + equitazione) · dom riposo
 const DEFAULT_TIPI = ["pesi", "crossfit", "crossfit", "equitazione", "crossfit", "crossfit+pesi", "riposo"];
 
-// Stato: ricette in uso (esempio o importate da CSV) + settimana generata
+// Stato: ricette in uso (ricettario di base + le tue)
 let ricette = [];
-let settimana = null;                     // array di 7 giorni
-let confermati = [false,false,false,false,false,false,false]; // giorni "bloccati"
-let editCtx = null;                       // { giorno, slot } del pasto aperto in modifica
+let editCtx = null;                       // (vecchio piano settimanale: resta solo per compatibilità, sempre null)
 
 // slug per collegare i pasti del piano alle schede ricetta
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
@@ -260,15 +258,26 @@ const QUOTA_TIPICA = { colazione: 0.22, mattina: 0.08, pranzo: 0.30, cena: 0.28,
 function ingredientiPerPezzi(orig, k) {
   const n = orig.porzioni || 1;
   return orig.ingredienti.filter(i => i.unita !== "q.b.").map(i => {
-    if (i.unita === "pz") return { nome: i.nome, qta: Math.round(i.qta / n * k * 10) / 10, unita: "pz" };
-    return { nome: i.nome, qta: Math.round(grammiIng(i) / n * k), unita: i.unita === "ml" ? "ml" : "g" };
+    // niente arrotondamenti grossi (al grammo o al decimo di pezzo): 1,5 g di olio diventava 2 g e ¼ di uovo 0,3, e una fetta "pesava" il 5% in più
+    if (i.unita === "pz") return { nome: i.nome, qta: Math.round(i.qta / n * k * 100) / 100, unita: "pz" };
+    return { nome: i.nome, qta: Math.round(grammiIng(i) / n * k * 10) / 10, unita: i.unita === "ml" ? "ml" : "g" };
   });
+}
+// Valori di 1 pezzo (fetta, pancake…) = ricetta intera ÷ numero di pezzi
+function macroPerPezzo(orig) {
+  const m = calcolaMacro({ ingredienti: orig.ingredienti }), n = orig.porzioni || 1;
+  return { kcal: Math.round(m.kcal / n), proteine: Math.round(m.proteine / n), carboidrati: Math.round(m.carboidrati / n), grassi: Math.round(m.grassi / n) };
+}
+// k pezzi = esattamente k volte i valori di 1 pezzo (2 fette = 2 × 1 fetta, senza scarti di arrotondamento)
+function macroPezzi(orig, k) {
+  const u = macroPerPezzo(orig);
+  return { kcal: Math.round(u.kcal * k), proteine: Math.round(u.proteine * k), carboidrati: Math.round(u.carboidrati * k), grassi: Math.round(u.grassi * k) };
 }
 // Di quanto cambia il contatore: pezzi con nome (fetta, pancake…) di 1; teglia senza nome del pezzo di ½; ricetta singola ("1 porzione") di ½
 function passoPezzi(orig) { return orig.pezzo && orig.pezzo !== "porzione" ? 1 : 0.5; }   // mezze porzioni: i quarti erano troppo fini
 // il prossimo multiplo del passo, in su o in giù (un vecchio ¼ passa al ½ più vicino)
 const prossimoPasso = (cur, delta, passo) => Math.max(passo, (delta > 0 ? Math.floor(cur / passo + 1e-9) + 1 : Math.ceil(cur / passo - 1e-9) - 1) * passo);
-function kcalPerPezzo(orig) { return calcolaMacro({ ingredienti: ingredientiPerPezzi(orig, 1) }).kcal || 1; }
+function kcalPerPezzo(orig) { return macroPerPezzo(orig).kcal || 1; }
 // Quanti pezzi per avvicinarsi a `kcal` (interi, o mezze porzioni se è una "porzione")
 function pezziPer(orig, kcal) {
   const passo = passoPezzi(orig);
@@ -277,12 +286,17 @@ function pezziPer(orig, kcal) {
 }
 // plurale semplice: fetta -> fette, girella -> girelle, muffin/pancake restano uguali
 function plurale(p) { return p === "taco" ? "tacos" : p === "nugget" ? "nuggets" : /ie$/.test(p) ? p : /a$/.test(p) ? p.slice(0, -1) + "e" : /[oe]$/.test(p) && !/cake$/.test(p) ? p.slice(0, -1) + "i" : p; }
-// Le quantità si dicono sempre in porzioni ("1 porzione", "1¼ porzioni"), qualunque sia il pezzo della ricetta (fetta, pancake…)
-const etichettaPezzi = (orig, k) => `${fmtQta(k)} ${k <= 1 ? "porzione" : "porzioni"}`;
+// Le quantità si dicono col pezzo della ricetta ("1 fetta", "2 fette", "3 pancake"); senza un pezzo con nome, in porzioni ("1 porzione", "1½ porzioni")
+function nomePezzo(orig, k) {
+  const p = orig && orig.porzioni > 1 && String(orig.pezzo || "").trim();
+  if (!p || p === "porzione") return k <= 1 ? "porzione" : "porzioni";
+  return k <= 1 ? p : plurale(p);
+}
+const etichettaPezzi = (orig, k) => `${fmtQta(k)} ${nomePezzo(orig, k)}`;
 function versioneAPezzi(orig, k) {
   const v = Object.assign({}, orig, { ingredienti: ingredientiPerPezzi(orig, k), _orig: orig, porzionabile: true, nPezzi: k });
   delete v.porzioni;
-  aggiornaMacro(v);
+  Object.assign(v, macroPezzi(orig, k));   // k pezzi = k × 1 pezzo, come nell'elenco ricette
   return v;
 }
 function derivaPorzioni(r) {
@@ -338,9 +352,9 @@ function nomeConNumero(nome, quanti, maiuscola) {
   if (c === 1) return cap(s);
   return `${fmtQta(c)} ${c < 1 ? s : p}`;
 }
-// Nome di una ricetta con il contatore: prima la quantità in porzioni. "1 porzione di Banana bread", "3 porzioni di Pancake proteici"
+// Nome di una ricetta con il contatore: prima la quantità, col pezzo della ricetta. "2 fette di Banana bread", "3 pancake di Pancake proteici", "1 porzione di Chili"
 function nomeRicettaConPezzi(r, k) {
-  return `${fmtQta(k)} ${k <= 1 ? "porzione" : "porzioni"} di ${r.nome}`;
+  return `${etichettaPezzi(r && (r._orig || r), k)} di ${r.nome}`;
 }
 const nomeConPezzi = (r) => r.porzionabile && r._orig ? nomeRicettaConPezzi(r, r.nPezzi) : r.nome;
 // Zuccheri (totali e aggiunti), fibre e sale di un elenco di ingredienti, in grammi
@@ -595,7 +609,21 @@ function calcolaMacro(r) {
   // le kcal si contano dai macro (4/4/9), come gli obiettivi: i numeri di kcal e di proteine/carboidrati/grassi tornano sempre; l'alcol si aggiunge a parte (prima un bicchiere di vino contava ~0 kcal)
   return { kcal: Math.round(4 * p + 4 * c + 9 * g + alcol), proteine: Math.round(p), carboidrati: Math.round(c), grassi: Math.round(g) };
 }
-function aggiornaMacro(r) { const m = calcolaMacro(r); r.kcal = m.kcal; r.proteine = m.proteine; r.carboidrati = m.carboidrati; r.grassi = m.grassi; }
+// Un pasto del diario fatto di k pezzi di una ricetta a porzioni, con le quantità della ricetta (al grammo): vale esattamente k × 1 pezzo.
+// Se hai cambiato quantità o ingredienti, si torna al calcolo dagli ingredienti.
+function macroPastoRicetta(p) {
+  if (!p || !p.ricetta || !(p.nPezzi > 0) || typeof ricette === "undefined") return null;
+  const r = ricette.find(x => x.nome === p.ricetta && x._orig), o = r && r._orig;
+  if (!o || !(o.porzioni > 1)) return null;
+  const A = window.ALIMENTI || {}, volte = {};
+  const somma = (lista, conta) => { const t = {}; lista.forEach(i => { const g = grammiIng(i); if (A[i.nome] && g > 0) { t[i.nome] = (t[i.nome] || 0) + g; if (conta) volte[i.nome] = (volte[i.nome] || 0) + 1; } }); return t; };
+  const att = somma(ingredientiPerPezzi(o, p.nPezzi), true), ora = somma(p.ingredienti || []);
+  if (!Object.keys(ora).every(n => att[n] !== undefined)) return null;
+  // ogni quantità uguale a quella della ricetta, al grammo (un pizzico sotto il mezzo grammo, salvato come 0 g, può mancare)
+  if (!Object.keys(att).every(n => ora[n] === undefined ? att[n] < 0.6 : Math.abs(ora[n] - att[n]) <= 0.6 * volte[n] + att[n] * 0.01)) return null;
+  return macroPezzi(o, p.nPezzi);
+}
+function aggiornaMacro(r) { const m = macroPastoRicetta(r) || calcolaMacro(r); r.kcal = m.kcal; r.proteine = m.proteine; r.carboidrati = m.carboidrati; r.grassi = m.grassi; }
 
 // Rileva la "base di carboidrati" prevalente (per non ripeterla nello stesso giorno)
 const CARBO_FAMIGLIE = [
@@ -753,12 +781,45 @@ function ingredienteCon(i, nome) {
   if (unita === "pz" && !(window.PESO_PZ || {})[nome]) { qta = Math.round(b.qta * ((window.PESO_PZ || {})[b.nome] || 100)); unita = "g"; }
   return Object.assign({}, i, { nome, qta, unita, base: b });
 }
+// Le varianti si ricordano per nome dell'ingrediente (es. { "Chili…": { "Manzo magro macinato": "Fesa di tacchino macinata" } }):
+// togliendo o spostando un ingrediente nella ricetta, le altre scelte restano sugli ingredienti giusti
+const haChiave = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 function conVarianti(r) {
   const sc = leggiVarianti()[r.nome];
   if (!sc || !r.ingredienti) return r;
   const c = clone(r);
-  c.ingredienti = c.ingredienti.map((i, k) => sc[k] && (window.ALIMENTI || {})[sc[k]] && sc[k] !== i.nome ? ingredienteCon(i, sc[k]) : i);
+  c.ingredienti = c.ingredienti.map(i => { const n = haChiave(sc, i.nome) ? sc[i.nome] : null; return n && (window.ALIMENTI || {})[n] && n !== i.nome ? ingredienteCon(i, n) : i; });
   return c;
+}
+// Le varianti salvate con la vecchia chiave (posizione dell'ingrediente: "0", "1"…) passano al nome dell'ingrediente che c'è oggi in quella posizione
+function migraVarianti(lista) {
+  const v = leggiVarianti();
+  let cambiato = false;
+  Object.keys(v).forEach(nomeRic => {
+    const sc = v[nomeRic];
+    if (!sc || typeof sc !== "object") { delete v[nomeRic]; cambiato = true; return; }
+    const vecchie = Object.keys(sc).filter(k => /^\d+$/.test(k));
+    if (!vecchie.length) return;
+    const r = lista.find(x => x.nome === nomeRic), ings = (r && (r._orig || r).ingredienti) || [];
+    vecchie.forEach(k => {
+      const i = ings[+k];
+      if (i && i.nome && !haChiave(sc, i.nome)) sc[i.nome] = sc[k];
+      delete sc[k];
+    });
+    if (!Object.keys(sc).length) delete v[nomeRic];
+    cambiato = true;
+  });
+  if (cambiato) salvaVarianti(v);
+}
+// Dopo aver modificato una ricetta: le varianti degli ingredienti che non ci sono più si tolgono (e se la ricetta cambia nome, le varianti la seguono)
+function aggiornaVariantiRicetta(vecchioNome, nuovoNome, ingredienti) {
+  const v = leggiVarianti(), sc = v[vecchioNome];
+  if (!sc) return;
+  const nomi = new Set(ingredienti.map(i => i.nome)), resta = {};
+  Object.keys(sc).forEach(k => { if (nomi.has(k)) resta[k] = sc[k]; });
+  delete v[vecchioNome];
+  if (Object.keys(resta).length) v[nuovoNome] = resta;
+  salvaVarianti(v);
 }
 // Il suggerimento più utile: cosa sostituire per avere lo stesso piatto con meno calorie (senza perdere troppe proteine)
 function suggerimentiLeggeri(o) {
@@ -783,7 +844,7 @@ function suggerimentiLeggeriHTML(r) {
   const tot = s.reduce((x, y) => x + y.risparmio, 0), per = x => n > 1 ? `${Math.round(x / n)} kcal a ${esc(o.pezzo || "porzione")}` : `${x} kcal`;
   return `<details class="sugg-leggera"><summary>💡 Stesso piatto, meno kcal <em>−${per(tot)}</em></summary>
     ${s.map(x => `<button class="sugg-riga" data-var-scegli="${esc(r.nome)}" data-var-idx="${x.idx}" data-var-nome="${esc(x.a)}"><span>${esc(x.da)} → <b>${esc(x.a)}</b></span><em>−${per(x.risparmio)}</em></button>`).join("")}
-    ${s.length > 1 ? `<button class="btn-link" data-var-tutte="${esc(r.nome)}" data-var-lista="${esc(JSON.stringify(s.map(x => [x.idx, x.a])))}">Applica tutte</button>` : ""}</details>`;
+    ${s.length > 1 ? `<button class="btn-link" data-var-tutte="${esc(r.nome)}" data-var-lista="${esc(JSON.stringify(s.map(x => [x.da, x.a])))}">Applica tutte</button>` : ""}</details>`;
 }
 // Tocchi ⇄ accanto a un ingrediente: compare l'elenco delle alternative con la differenza di calorie
 function apriListaVarianti(nomeRic, idx) {
@@ -806,9 +867,12 @@ function apriListaVarianti(nomeRic, idx) {
   box.hidden = false;
 }
 function scegliVariante(nomeRic, idx, nome) {
+  const r = ricette.find(x => x.nome === nomeRic), i = r && (r._orig || r).ingredienti[idx];
+  if (!i) return;
+  const chiave = (i.base || i).nome;   // si ricorda per nome dell'ingrediente originale, non per posizione
   const v = leggiVarianti();
   v[nomeRic] = v[nomeRic] || {};
-  if (nome) v[nomeRic][idx] = nome; else delete v[nomeRic][idx];
+  if (nome) v[nomeRic][chiave] = nome; else delete v[nomeRic][chiave];
   if (!Object.keys(v[nomeRic]).length) delete v[nomeRic];
   salvaVarianti(v);
   caricaRicette();
@@ -825,6 +889,7 @@ function caricaRicette() {
   const custom = leggiCustom();
   const nomiCustom = new Set(custom.map(r => r.nome)); // una tua versione sostituisce quella di base
   const base = (leggiRicette() || window.RICETTE_ESEMPIO).filter(r => !nascoste.has(r.nome) && !nomiCustom.has(r.nome));
+  migraVarianti(base.concat(custom));
   ricette = base.concat(custom).map(conVarianti).map(derivaPorzioni);
   preparaRicette();
 }
@@ -842,17 +907,9 @@ function leggiTipi() {
 function salvaTipi(t) { localStorage.setItem("mp_tipi", JSON.stringify(t)); }
 function targetGiorno(i) { return TIPI_GIORNATA[leggiTipi()[i]].target; }
 
-function salvaRicette() { localStorage.setItem("mp_ricette", JSON.stringify(ricette)); }
 function leggiRicette() {
   const raw = localStorage.getItem("mp_ricette");
   return raw ? JSON.parse(raw) : null;
-}
-// Piano generato + giorni confermati: si conserva alla riapertura dell'app
-function salvaPiano() {
-  try { localStorage.setItem("mp_piano", JSON.stringify({ settimana, confermati })); } catch (e) {}
-}
-function leggiPiano() {
-  try { return JSON.parse(localStorage.getItem("mp_piano")); } catch (e) { return null; }
 }
 
 // -------- Utility --------
@@ -860,7 +917,6 @@ function leggiPiano() {
 function avviso(msg, etichetta, azione, tutto) {
   if (typeof mostraToast === "function") mostraToast(msg, etichetta, azione, tutto); else window.alert(msg);
 }
-function perPasto(pasto) { return ricette.filter(r => r.pasto === pasto); }
 function sommaMacro(lista) {
   return lista.reduce((acc, r) => ({
     kcal: acc.kcal + r.kcal,
@@ -869,99 +925,6 @@ function sommaMacro(lista) {
     grassi: acc.grassi + r.grassi,
   }), { kcal:0, proteine:0, carboidrati:0, grassi:0 });
 }
-
-// Punteggio: quanto una giornata si discosta dagli obiettivi (più basso = meglio)
-function punteggioGiorno(totali, obiettivi) {
-  const rel = (a, b) => b > 0 ? Math.abs(a - b) / b : 0;
-  // le calorie e le proteine pesano di più
-  return rel(totali.kcal, obiettivi.kcal) * 2
-       + rel(totali.proteine, obiettivi.proteine) * 1.5
-       + rel(totali.carboidrati, obiettivi.carboidrati)
-       + rel(totali.grassi, obiettivi.grassi);
-}
-
-// Genera UNA giornata bilanciata provando N combinazioni casuali.
-// `usate` è una mappa nome-ricetta -> giorno in cui è stata usata l'ultima volta:
-// serve a penalizzare le ripetizioni nei giorni vicini (varietà).
-// `fissi`: pasti già decisi (es. pasti liberi) per slot, che restano invariati.
-function generaGiorno(obiettivi, usate = null, giornoCorrente = 0, tentativi = 500, fissi = null) {
-  const gruppi = PASTI.map((p, k) => fissi && fissi[k] ? [fissi[k]] : perPasto(p)).filter(g => g.length > 0);
-  if (gruppi.length === 0) return null;
-  const isFisso = (r) => !!(fissi && fissi.includes(r));
-
-  const penalitaRiuso = (scelte) => {
-    if (!usate) return 0;
-    let p = 0;
-    scelte.forEach(r => {
-      const ultimo = usate.get(r.nome);
-      if (ultimo !== undefined) {
-        const distanza = giornoCorrente - ultimo;
-        if (distanza <= 1) p += 0.6;       // usata ieri: forte penalità
-        else if (distanza <= 2) p += 0.3;  // due giorni fa
-        else if (distanza <= 3) p += 0.12;
-      }
-    });
-    return p;
-  };
-
-  // Penalità se la stessa base proteica O di carboidrati compare più volte
-  // nello stesso giorno (es. no pollo a pranzo e cena; no riso a pranzo e cena).
-  const penalitaBaseGiorno = (scelte) => {
-    const prot = {}, carb = {};
-    scelte.forEach(r => {
-      if (r.base) prot[r.base] = (prot[r.base] || 0) + 1;
-      if (r.baseCarbo) carb[r.baseCarbo] = (carb[r.baseCarbo] || 0) + 1;
-    });
-    let p = 0;
-    Object.values(prot).forEach(n => { if (n > 1) p += (n - 1) * 0.9; });
-    Object.values(carb).forEach(n => { if (n > 1) p += (n - 1) * 0.6; });
-    return p;
-  };
-
-  // Raccoglie i candidati e ne tiene i migliori, poi ne sceglie uno a caso:
-  // così le giornate restano bilanciate ma non sono tutte identiche.
-  const candidati = [];
-  for (let t = 0; t < tentativi; t++) {
-    const scelte = gruppi.map(g => g[Math.floor(Math.random() * g.length)]);
-    const base = sommaMacro(scelte.filter(isFisso)); // i pasti fissi non si scalano
-    const { fc, fg, totali } = fattoriScala(base, scelte.filter(r => !isFisso(r)), obiettivi); // porzioni adattate al target
-    const p = punteggioGiorno(totali, obiettivi) + penalitaRiuso(scelte) + penalitaBaseGiorno(scelte);
-    candidati.push({ scelte, fc, fg, p });
-  }
-  candidati.sort((a, b) => a.p - b.p);
-  const cima = candidati.slice(0, Math.min(8, candidati.length));
-  const scelto = cima[Math.floor(Math.random() * cima.length)];
-  // Copie indipendenti (con porzioni adattate): le modifiche di un giorno non toccano il ricettario
-  const pasti = scelto.scelte.map(r => isFisso(r) ? r : scalaPasto(r, scelto.fc, scelto.fg));
-  return { pasti, totali: sommaMacro(pasti) };
-}
-
-// Pasti liberi (inseriti dall'utente) di un giorno, per slot: si conservano rigenerando
-function liberiDi(i) {
-  const g = settimana && settimana[i];
-  if (!g || !g.pasti.some(p => p.libero)) return null;
-  return PASTI.map((_, k) => g.pasti[k] && g.pasti[k].libero ? g.pasti[k] : null);
-}
-function generaSettimana() {
-  const tipi = leggiTipi();
-  salvaPresi(new Set()); // nuovo piano = nuova spesa: azzera le voci "prese"
-  const usate = new Map(); // nome ricetta -> indice giorno
-  if (!settimana || settimana.length !== 7) settimana = new Array(7).fill(null);
-  // I giorni confermati restano invariati e contribuiscono alla varietà
-  GIORNI.forEach((_, i) => { if (confermati[i] && settimana[i]) settimana[i].pasti.forEach(r => usate.set(r.nome, i)); });
-  GIORNI.forEach((_, i) => {
-    if (confermati[i] && settimana[i]) return; // non rigenerare i giorni bloccati
-    const g = generaGiorno(TIPI_GIORNATA[tipi[i]].target, usate, i, 500, liberiDi(i));
-    if (g) g.pasti.forEach(r => usate.set(r.nome, i));
-    settimana[i] = g;
-  });
-  renderSettimana();
-  renderSpesa();
-  salvaPiano();
-}
-
-// Ricalcola i totali di un giorno dai suoi pasti (dopo modifiche/sostituzioni)
-function ricalcolaGiorno(i) { if (settimana[i]) settimana[i].totali = sommaMacro(settimana[i].pasti); }
 
 // -------- Percentuali dei macro (quota delle calorie) --------
 // 1 g di proteine o carboidrati = 4 kcal, 1 g di grassi = 9 kcal
@@ -983,188 +946,6 @@ function barraMacroHTML(m, obi) {
       <span><i class="dot-c"></i>Carboidrati <b>${x.c}%</b>${o ? ` <em>/ ${o.c}%</em>` : ""}</span>
       <span><i class="dot-g"></i>Grassi <b>${x.g}%</b>${o ? ` <em>/ ${o.g}%</em>` : ""}</span>
     </div>`;
-}
-
-// -------- Rendering --------
-function badge(tot, obi) {
-  const diff = tot - obi;
-  const pct = obi > 0 ? Math.round((diff / obi) * 100) : 0;
-  const cls = Math.abs(pct) <= 8 ? "ok" : (Math.abs(pct) <= 18 ? "warn" : "bad");
-  const segno = diff >= 0 ? "+" : "";
-  return `<span class="badge ${cls}">${segno}${pct}%</span>`;
-}
-
-function renderSettimana() {
-  const tipi = leggiTipi();
-  const cont = document.getElementById("settimana");
-  cont.innerHTML = "";
-  settimana.forEach((giorno, i) => {
-    if (!giorno) return;
-    const t = giorno.totali;
-    const obi = TIPI_GIORNATA[tipi[i]].target;
-    const bloc = !!confermati[i];
-    const card = document.createElement("div");
-    card.className = "giorno" + (bloc ? " confermato" : "");
-    card.innerHTML = `
-      <div class="giorno-head">
-        <h3>${GIORNI[i]}${bloc ? ' <span class="tag-conf">confermato</span>' : ""}</h3>
-        <div class="giorno-actions">
-          <select class="tipo-select" data-giorno="${i}" aria-label="Tipo di giornata" ${bloc ? "disabled" : ""}>
-            ${Object.entries(TIPI_GIORNATA).map(([id, tg]) =>
-              `<option value="${id}" ${tipi[i] === id ? "selected" : ""}>${tg.label} · ${tg.range}</option>`).join("")}
-          </select>
-          <button class="mini" data-regen="${i}" aria-label="Rigenera giorno" ${bloc ? "disabled" : ""}>↻</button>
-          <button class="mini lock ${bloc ? "on" : ""}" data-lock="${i}" title="${bloc ? "Sblocca" : "Conferma e blocca"}">${bloc ? "🔒" : "🔓"}</button>
-        </div>
-      </div>
-      <ul class="pasti" data-giorno="${i}">
-        ${giorno.pasti.map((r, j) => `
-          <li class="${r.libero ? "libero" : ""}">
-            <span class="pasto-tag">${r.pasto}</span>
-            <button class="pasto-nome" data-g="${i}" data-s="${j}">${esc(nomeConPezzi(r))}</button>
-            <span class="pasto-kcal">${r.kcal} kcal</span>
-            <button class="swap" data-swap-g="${i}" data-swap-s="${j}" title="Sostituisci pasto" ${bloc ? "disabled" : ""}>⇄</button>
-          </li>`).join("")}
-      </ul>
-      <div class="totali">
-        <span>${Math.round(t.kcal)} kcal ${badge(t.kcal, obi.kcal)}</span>
-      </div>
-      ${barraMacroHTML(t, obi)}
-      ${!bloc && typeof giornoFuoriTarget === "function" && giornoFuoriTarget(i) ? (() => {
-        const d = Math.round(obi.kcal - t.kcal);
-        return `<button class="sugg-link" data-sugg="${i}">💡 ${d > 0 ? `Mancano ${d} kcal` : `Sopra di ${-d} kcal`}${obi.proteine - t.proteine > obi.proteine * 0.1 ? " · poche proteine" : ""} — vedi suggerimenti</button>`;
-      })() : ""}`;
-    cont.appendChild(card);
-  });
-
-  // Rigenera un singolo giorno
-  cont.querySelectorAll("button[data-regen]").forEach(b => {
-    b.addEventListener("click", () => {
-      const idx = +b.dataset.regen;
-      settimana[idx] = generaGiorno(targetGiorno(idx), null, idx, 500, liberiDi(idx));
-      ricalcolaGiorno(idx);
-      renderSettimana(); renderSpesa(); salvaPiano();
-    });
-  });
-
-  // Conferma/blocca un giorno
-  cont.querySelectorAll("button[data-lock]").forEach(b => {
-    b.addEventListener("click", () => {
-      const idx = +b.dataset.lock;
-      confermati[idx] = !confermati[idx];
-      renderSettimana(); salvaPiano();
-    });
-  });
-
-  // Cambio tipo di giornata -> rigenera quel giorno col nuovo target
-  cont.querySelectorAll(".tipo-select").forEach(s => {
-    s.addEventListener("change", () => {
-      const idx = +s.dataset.giorno;
-      const tp = leggiTipi(); tp[idx] = s.value; salvaTipi(tp);
-      settimana[idx] = generaGiorno(TIPI_GIORNATA[s.value].target, null, idx, 500, liberiDi(idx));
-      ricalcolaGiorno(idx);
-      renderSettimana(); renderSpesa(); salvaPiano();
-    });
-  });
-
-  cont.querySelectorAll("[data-sugg]").forEach(b => b.addEventListener("click", () => apriSuggerimentiGiorno(+b.dataset.sugg)));
-
-  // Sostituisci un singolo pasto
-  cont.querySelectorAll(".swap").forEach(b => {
-    b.addEventListener("click", () => sostituisciPasto(+b.dataset.swapG, +b.dataset.swapS));
-  });
-
-  // Tap sul nome del pasto -> apre la ricetta (modificabile) di QUEL giorno
-  cont.querySelectorAll(".pasto-nome").forEach(b => {
-    b.addEventListener("click", () => apriRicettaIstanza(+b.dataset.g, +b.dataset.s));
-  });
-
-  initDragDrop();
-}
-
-// -------- Trascinamento (SortableJS): riordina giorni e pasti --------
-let _sortables = [];
-function initDragDrop() {
-  _sortables.forEach(s => { try { s.destroy(); } catch (e) {} });
-  _sortables = [];
-  if (typeof Sortable === "undefined") return;
-  // Su touch il drag parte dopo una breve pressione: uno swipe veloce scorre la pagina
-  const base = { animation: 150, delay: 180, delayOnTouchOnly: true, preventOnFilter: false };
-
-  // Riordino delle GIORNATE: si trascina tutto il blocco del giorno.
-  // Esclusi i controlli e l'area dei pasti (che ha il proprio trascinamento).
-  _sortables.push(Sortable.create(document.getElementById("settimana"), Object.assign({}, base, {
-    draggable: ".giorno",
-    filter: ".giorno-actions, .pasti, button, select, input",
-    onEnd: (e) => { if (e.oldIndex !== e.newIndex) riordinaGiorni(e.oldIndex, e.newIndex); },
-  })));
-
-  // Riordino dei PASTI: si trascina tutta la riga (nome incluso).
-  // Solo il pulsante ⇄ resta escluso; il nome: tocco rapido apre, pressione trascina.
-  document.querySelectorAll("ul.pasti").forEach(ul => {
-    _sortables.push(Sortable.create(ul, Object.assign({}, base, {
-      draggable: "li",
-      filter: ".swap",
-      onEnd: (e) => { if (e.oldIndex !== e.newIndex) riordinaPasti(+ul.dataset.giorno, e.oldIndex, e.newIndex); },
-    })));
-  });
-}
-
-// Scambia due elementi di un array
-function scambiaArray(arr, a, b) { const t = arr[a]; arr[a] = arr[b]; arr[b] = t; }
-
-// SCAMBIA due giornate: i due giorni si scambiano di posto (con pasti, tipo e
-// conferma). Gli altri giorni restano fermi.
-function riordinaGiorni(a, b) {
-  const tp = leggiTipi();
-  scambiaArray(settimana, a, b);
-  scambiaArray(confermati, a, b);
-  scambiaArray(tp, a, b);
-  salvaTipi(tp);
-  salvaPiano();
-  // re-render dopo che SortableJS ha finito, per non toccare il DOM che sta gestendo
-  setTimeout(() => { renderSettimana(); renderSpesa(); }, 0);
-}
-
-// SCAMBIA due pasti di un giorno: es. porti la colazione al posto dello spuntino
-// e lo spuntino diventa la colazione; gli altri pasti restano fermi.
-// L'etichetta (colazione/pranzo/…) resta legata alla posizione.
-function riordinaPasti(gi, a, b) {
-  const arr = settimana[gi].pasti;
-  scambiaArray(arr, a, b);
-  arr.forEach((m, k) => { m.pasto = PASTI[k]; });
-  salvaPiano();
-  setTimeout(() => { renderSettimana(); renderSpesa(); }, 0);
-}
-
-// Sostituisce il pasto (giorno i, slot j) con un'altra ricetta dello stesso
-// tipo, scegliendo quella che tiene la giornata più bilanciata e senza
-// ripetere basi proteiche/carboidrati con gli altri pasti.
-function sostituisciPasto(i, j) {
-  const giorno = settimana[i];
-  if (!giorno) return;
-  const attuale = giorno.pasti[j];
-  const altri = giorno.pasti.filter((_, k) => k !== j);
-  const target = targetGiorno(i);
-  const basiP = altri.map(x => x.base).filter(Boolean);
-  const basiC = altri.map(x => x.baseCarbo).filter(Boolean);
-  const candidati = perPasto(attuale.pasto)
-    .filter(r => r.nome !== attuale.nome)
-    .map(r => {
-      const sc = fattoriScala(sommaMacro(altri), [r], target);
-      let p = punteggioGiorno(sc.totali, target);
-      if (r.base && basiP.includes(r.base)) p += 0.9;
-      if (r.baseCarbo && basiC.includes(r.baseCarbo)) p += 0.6;
-      return { r, p, sc };
-    })
-    .sort((a, b) => a.p - b.p);
-  if (!candidati.length) return;
-  const cima = candidati.slice(0, Math.min(5, candidati.length));
-  const scelto = cima[Math.floor(Math.random() * cima.length)];
-  giorno.pasti[j] = scalaPasto(scelto.r, scelto.sc.fc, scelto.sc.fg);
-  giorno.pasti[j].pasto = attuale.pasto;
-  ricalcolaGiorno(i);
-  renderSettimana(); renderSpesa(); salvaPiano();
 }
 
 // Etichetta "peso da crudo" per i carboidrati (riso, pasta, ecc.)
@@ -1374,8 +1155,19 @@ function spesaHTML() {
   const { st } = statSpesa();
   const presi = scadiPresi();
   // quanto ne consumi di solito in una settimana (non quello che serve per il futuro e non meno quello che hai in casa)
-  const voci = Object.entries(st).filter(([nome]) => !SPESA_SALTA.test(nome) && !SPESA_COMPOSTI.test(nome))
-    .map(([nome, e]) => ({ nome: nomeSpesa(nome), giorni: e.giorni, info: qtaSettimanaLabel(nome, e.g), q: qtaSettimanaG(nome, e.g) }));
+  // "Pasta di semola cotta" e "Pasta di semola" sono la stessa cosa da comprare: una riga sola, coi grammi da crudo sommati
+  const unite = {};
+  Object.entries(st).filter(([nome]) => !SPESA_SALTA.test(nome) && !SPESA_COMPOSTI.test(nome)).forEach(([nome, e]) => {
+    const n = nomeSpesa(nome), fatt = /cott/i.test(nome) && n !== nome && (window.CRUDO_FATTORE || []).find(([re]) => re.test(nome));
+    const u = unite[n] ||= { nome: n, giorni: 0, g: 0, fonti: [] };
+    u.g += fatt ? e.g / fatt[1] : e.g;   // cotto → crudo (come nell'etichetta della quantità)
+    u.giorni = Math.max(u.giorni, e.giorni);
+    u.fonti.push([nome, e.g]);
+  });
+  const voci = Object.values(unite).map(u => {
+    const [nome0, g0] = u.fonti.length === 1 ? u.fonti[0] : [u.nome, u.g];   // una fonte sola: etichetta di sempre ("~200 g da crudo")
+    return { nome: u.nome, giorni: u.giorni, info: qtaSettimanaLabel(nome0, g0), q: qtaSettimanaG(nome0, g0) };
+  });
   leggiExtraSpesa().forEach(nome => { if (!voci.some(v => v.nome.toLowerCase() === nome.toLowerCase())) voci.push({ nome, giorni: -1, info: "aggiunto da te", extra: true }); });
   const introVuota = voci.length ? "" : `<li class="hint">🛒 Si riempie con i tuoi pasti</li>`;
   // dispensa: gli ingredienti del ricettario che non sono già nella lista, i più usati nelle ricette per primi
@@ -1465,7 +1257,7 @@ function bottoneAggiungiRicettaHTML(r) {
 }
 function ricettaDetailHTML(r, editable) {
   if (!editable && r._orig) {
-    const o = r._orig, n = o.porzioni, uno = calcolaMacro({ ingredienti: ingredientiPerPezzi(o, 1) });
+    const o = r._orig, n = o.porzioni, uno = macroPerPezzo(o);
     return `
     <h3 class="modal-title">${esc(r.nome)}</h3>
     <div class="r-macro"><span class="pill">${r.pasto}</span>${r.preworkout ? `<span class="pill">pre-workout</span>` : ""}${r.tempo ? `<span>${r.tempo}′</span>` : ""}
@@ -1486,33 +1278,11 @@ function ricettaDetailHTML(r, editable) {
     <h4>Ingredienti${editable ? '' : ""}</h4>
     <ul class="r-ing">${r.ingredienti.map((i, idx) => ingredienteHTML(i, idx, editable, !editable && !r.adattato ? r.nome : "")).join("")}</ul>
     ${!editable && !r.adattato ? suggerimentiLeggeriHTML(r) : ""}
-    ${editable ? `<button class="btn-sec reset-qta" aria-label="Quantità originali della ricetta">↺</button>` : ""}
     ${r.passaggi && r.passaggi.length ? `<h4>Procedimento</h4><ol class="r-steps">${r.passaggi.map(p => `<li>${p}</li>`).join("")}</ol>` : ""}
     ${!editable ? `${bottoneAggiungiRicettaHTML(r)}<div class="r-azioni">
       <button class="btn-sec" data-modifica="${esc(r.nome)}">✏️ Modifica</button>
       <button class="btn-sec danger" data-elimina="${esc(r.nome)}">🗑 Elimina</button></div>` : ""}
   `;
-}
-
-// Ribilancia un pasto: cambiata la quantità di un ingrediente, scala le altre
-// per mantenere ~invariate le calorie del pasto (e quindi la giornata bilanciata).
-function ribilanciaPasto(pasto, idxEdit, nuovaQta) {
-  const kcalTarget = pasto.kcal; // calorie attuali del pasto = valore da mantenere
-  pasto.ingredienti[idxEdit].qta = Math.max(0, nuovaQta);
-  const kcalEdit = kcalIng(pasto.ingredienti[idxEdit]);
-  const scalabili = pasto.ingredienti.filter((x, k) =>
-    k !== idxEdit && x.unita !== "q.b." && (window.ALIMENTI || {})[x.nome]);
-  const kcalAltri = scalabili.reduce((s, x) => s + kcalIng(x), 0);
-  if (kcalAltri > 0) {
-    let f = (kcalTarget - kcalEdit) / kcalAltri;
-    f = Math.max(0.2, Math.min(3, f));
-    scalabili.forEach(x => {
-      let q = x.qta * f;
-      q = x.unita === "pz" ? Math.max(1, Math.round(q)) : Math.max(5, Math.round(q / 5) * 5);
-      x.qta = q;
-    });
-  }
-  aggiornaMacro(pasto);
 }
 
 // Dispensa base: condimenti/spezie che di solito si hanno sempre in casa
@@ -1540,7 +1310,7 @@ function macroStileHTML(m, o = {}) {
 }
 // nell'elenco ricette: per una porzione (o per 1 pezzo, nelle ricette a pezzi) così le confronti a colpo d'occhio
 function macroRigaRicettaHTML(r) {
-  const m = r._orig ? calcolaMacro({ ingredienti: ingredientiPerPezzi(r._orig, 1) }) : r;
+  const m = r._orig ? macroPerPezzo(r._orig) : r;
   return macroStileHTML(m, { extra: `/ ${esc(r._orig ? `1 ${r._orig.pezzo || "porz."}` : "porz.")}` });
 }
 function rigaRicettaHTML(r, mancanti) {
@@ -1567,7 +1337,7 @@ function listaRicetteHTML(filtro, pantry, testo) {
     return true;
   });
 
-  const quotaP = (r) => { const m = r._orig ? calcolaMacro({ ingredienti: ingredientiPerPezzi(r._orig, 1) }) : r; return { q: (m.proteine * 4) / Math.max(1, m.kcal), k: m.kcal }; };
+  const quotaP = (r) => { const m = r._orig ? macroPerPezzo(r._orig) : r; return { q: (m.proteine * 4) / Math.max(1, m.kcal), k: m.kcal }; };
   // per aggiungere a un pasto: prima le più proteiche (a parità, meno calorie); nel ricettario: ordine alfabetico
   const perPasto = !!(contestoAgg && !contestoAgg.auto);
   const ordina = (arr) => perPasto
@@ -1632,6 +1402,8 @@ function closeModal() {
   document.getElementById("modal").hidden = true;
   document.body.classList.remove("no-scroll");
   editCtx = null;
+  if (nuovaRic && nuovaRic === bozzaRic) bozzaStep = wizStep;   // la ricetta nuova a metà resta nella bozza
+  nuovaRic = null;
   contestoAgg = null;   // il "dove aggiungere le ricette" non sopravvive alla chiusura del pannello
   if (typeof salvaBozzaAperta === "function") salvaBozzaAperta();   // chiudere con ✕ o toccando fuori salva la bozza del pasto, non la butta
   if (typeof liberoCtx !== "undefined") liberoCtx = null;
@@ -1656,42 +1428,8 @@ function apriRicetta(nomeOrSlug, daLista) {
   if (r) _ricettaDaLista = !!daLista;   // dalla lista: freccia per tornarci
 }
 
-// Apre il pasto di un giorno specifico in modalità modificabile
-function apriRicettaIstanza(i, j) {
-  const pasto = settimana[i] && settimana[i].pasti[j];
-  if (!pasto) return;
-  editCtx = confermati[i] ? null : { giorno: i, slot: j }; // giorno confermato = sola lettura
-  openModal(ricettaDetailHTML(pasto, !!editCtx));
-}
-
-// Riporta il pasto alle quantità originali della ricetta
-function ripristinaQuantita() {
-  if (!editCtx) return;
-  const pasto = settimana[editCtx.giorno].pasti[editCtx.slot];
-  const def = ricette.find(r => r.nome === pasto.nome && r.pasto === pasto.pasto)
-           || ricette.find(r => r.nome === pasto.nome);
-  if (!def) return;
-  pasto.ingredienti = clone(def.ingredienti);
-  delete pasto.adattato;
-  aggiornaMacro(pasto);
-  ricalcolaGiorno(editCtx.giorno);
-  salvaPiano();
-  rirenderIstanza();
-  renderSettimana();
-  renderSpesa();
-}
-
-// Ridisegna il contenuto del pasto in modifica conservando lo scroll
-function rirenderIstanza() {
-  if (!editCtx) return;
-  const pasto = settimana[editCtx.giorno].pasti[editCtx.slot];
-  const sheet = document.querySelector(".modal-sheet");
-  const sc = sheet ? sheet.scrollTop : 0;
-  document.getElementById("modal-content").innerHTML = ricettaDetailHTML(pasto, true);
-  const sheet2 = document.querySelector(".modal-sheet");
-  if (sheet2) sheet2.scrollTop = sc;
-}
-
+// Il filtro dell'elenco che corrisponde a un pasto del diario: colazione, pranzo e cena il loro; gli altri momenti (mattina, merenda…) sono spuntini
+const filtroPerPasto = (pasto) => ["colazione", "pranzo", "cena", "spuntino"].includes(pasto) ? pasto : "spuntino";
 // Apre l'elenco completo con i filtri per pasto
 function apriListaRicette(mantieni = false, daPasto = false) {
   editCtx = null;
@@ -1701,7 +1439,7 @@ function apriListaRicette(mantieni = false, daPasto = false) {
     ? { data: liberoCtx.data, pasto: liberoCtx.pasto, fatte: new Set() }
     : (mantieni && precedente ? precedente : { data: dataDiario, pasto: null, fatte: new Set(), auto: true }); // da Altro: ＋ aggiunge al pasto giusto di oggi
   if (typeof liberoCtx !== "undefined") liberoCtx = null;
-  if (!mantieni) filtroRicetteCorr = "tutte";          // tornando dalla scheda di una ricetta resta il filtro che avevi scelto
+  if (!mantieni) filtroRicetteCorr = contestoAgg && !contestoAgg.auto && contestoAgg.pasto ? filtroPerPasto(contestoAgg.pasto) : "tutte";   // dal pranzo: già filtrate per pranzo (si può toccare "Tutte"); tornando dalla scheda di una ricetta resta il filtro che avevi scelto
   openModal(`
     ${contestoAgg && !contestoAgg.auto ? `<button class="btn-link torna-pasto" data-agg-torna>‹ Torna al pasto</button>` : ""}
     <h3 class="modal-title">📖 Ricette</h3>
@@ -1714,7 +1452,6 @@ function apriListaRicette(mantieni = false, daPasto = false) {
     <details class="altre-opz"><summary aria-label="Altre opzioni">⋯</summary>
       <button class="btn-sec block" data-azione="scarica">⬇️ Esporta PDF</button>
       <button class="btn-sec block" data-azione="importa">⬆️ Importa CSV</button>
-      <button class="btn-sec block" data-azione="reset">↺ Ripristina originale${leggiNascoste().size ? ` · ${leggiNascoste().size}` : ""}</button>
     </details>
   `);
 }
@@ -1729,21 +1466,31 @@ const PASTI_OPZIONI = [
 ];
 // per scegliere il pasto: bottoni grandi, si vede subito quale è acceso
 const PASTI_CHIP = [["colazione", "☕", "Colazione"], ["spuntino", "🍎", "Spuntino"], ["pranzo", "🍽️", "Pranzo"], ["cena", "🌙", "Cena"]];
-// i pasti si accendono a piacere (anche più di uno: es. pranzo e spuntino); l'ultimo rimasto non si spegne
+// i pasti si accendono e si spengono a piacere (anche più di uno: es. pranzo e spuntino); una ricetta nuova parte senza pasto e si sceglie prima di salvare
 const pastiRic = (r) => r.pasti && r.pasti.length ? r.pasti : (r.pasto === "principale" ? ["pranzo", "cena"] : [r.pasto || "pranzo"]);
-const pastoAcceso = (r, v) => pastiRic(r).includes(v);
+const pastoAcceso = (r, v) => (r.pasti || []).includes(v);
 function scegliPasto(r, v) {
-  const sel = new Set(pastiRic(r));
-  if (sel.has(v)) { if (sel.size > 1) sel.delete(v); } else sel.add(v);
+  const sel = new Set(r.pasti || []);
+  if (sel.has(v)) sel.delete(v); else sel.add(v);
   r.pasti = PASTI_CHIP.map(x => x[0]).filter(x => sel.has(x));
-  r.pasto = r.pasti[0];
+  r.pasto = r.pasti[0] || "";
 }
+const pastoValido = (r) => (r.pasti || []).some(p => PASTI_CHIP.some(x => x[0] === p));
 
+// La ricetta nuova lasciata a metà (pannello chiuso toccando fuori, ✕ o Esc) resta qui: riaprendo "Nuova ricetta" si riprende da dove eri.
+// Si butta solo dopo il salvataggio o con «Annulla».
+let bozzaRic = null, bozzaStep = 0;
 function apriWizard() {
   editCtx = null;
-  nuovaRic = { nome: "", pasto: "pranzo", pasti: ["pranzo"], tempo: 15, porzioni: 1, pezzo: "", ingredienti: [], passaggi: [""] };
-  wizStep = 0;
+  if (!bozzaRic) { bozzaRic = { nome: "", pasto: "", pasti: [], tempo: 15, porzioni: 1, pezzo: "", ingredienti: [], passaggi: [""] }; bozzaStep = 0; }
+  nuovaRic = bozzaRic;   // stesso oggetto: quello che scrivi resta nella bozza
+  wizStep = bozzaStep;
   openModal(wizardHTML());
+}
+function annullaWizard() {
+  if (nuovaRic && !nuovaRic.originale) { bozzaRic = null; bozzaStep = 0; }
+  nuovaRic = null;
+  closeModal();
 }
 
 // Apre il wizard precompilato per modificare una ricetta esistente (base o tua)
@@ -1785,13 +1532,14 @@ function macroRigaHTML(r) {
 function wizardHTML() {
   const r = nuovaRic;
   const righe = r.ingredienti.map((ing, i) => {
-    const nomeHTML = `<input class="qta-input ing-n ${ing.nome || !ing.cercato ? "" : "sconosciuto"}" autocomplete="off" autocorrect="off" spellcheck="false" data-ing="${i}" data-k="nome" value="${esc(ing.nome || ing.cercato || "")}" placeholder="ingrediente" aria-label="Ingrediente">`;
+    const nomeHTML = `<input class="qta-input ing-n ${ing.nome || !ing.cercato ? "" : "sconosciuto"}${ing._errore ? " et-errore" : ""}" autocomplete="off" autocorrect="off" spellcheck="false" data-ing="${i}" data-k="nome" value="${esc(ing.nome || ing.cercato || "")}" placeholder="ingrediente" aria-label="Ingrediente">`;
     const ignoto = !ing.nome && ing.cercato ? `<div class="wiz-ignoto">
         <span>⚠ Non conosco “${esc(ing.cercato)}”: scrivi i valori dall'etichetta</span>
         <div class="etic-box">${campiEtichettaHTML(`etic-ing-${i}`)}</div>
         <button class="btn-link" data-wiz="nuovo-al" data-idx="${i}">Salva alimento</button></div>` : "";
     const altHTML = ing.nome ? `<div class="wiz-alt"><span>${(ing.alt || []).length ? "oppure" : ""}</span>${(ing.alt || []).map((x, k) => `<button class="chip-alt" data-wiz="del-alt" data-idx="${i}" data-k="${k}" aria-label="Togli ${esc(x)}">${esc(x)} ✕</button>`).join("")}${ing._nuovaAlt ? `<input class="qta-input wiz-alt-in" list="dl-ali" data-alt-new="${i}" placeholder="es. farina di riso" autocomplete="off" autocorrect="off" spellcheck="false">` : `<button class="btn-link" data-wiz="add-alt" data-idx="${i}">＋ variante</button>`}</div>` : "";
-    return `<div class="wiz-ing ${ing.nome || !ing.cercato ? "" : "da-fare"}">
+    // il contenitore dello swipe (.sw) è già nell'HTML: così swipe.js non sposta la riga e il campo appena aperto resta col cursore (e la tastiera)
+    return `<div class="sw"><div class="wiz-ing ${ing.nome || !ing.cercato ? "" : "da-fare"}${ing._errore ? " wiz-errore" : ""}">
         ${nomeHTML}
         <input class="qta-input ing-q" type="number" inputmode="decimal" min="0" step="any" data-ing="${i}" data-k="qta" value="${ing.unita === "q.b." || !ing.qta ? "" : ing.qta}" ${ing.unita === "q.b." ? "disabled" : ""} aria-label="Quantità">
         <select class="qta-input ing-u" data-ing="${i}" data-k="unita" aria-label="Unità">
@@ -1799,7 +1547,7 @@ function wizardHTML() {
         </select>
         <button class="lib-del" data-wiz="del-ing" data-idx="${i}" aria-label="Rimuovi">${ICONA_CESTINO}</button>
         <div class="wiz-sub"><span class="ing-kcal">${ing.nome && ing.unita !== "q.b." ? `${Math.round(kcalIng(ing))} kcal${!["g", "ml"].includes(ing.unita) ? ` · ${Math.round(grammiIng(ing))} g` : ""}` : ""}</span>${altHTML}</div>
-      </div>${ignoto}`;
+      </div></div>${ignoto}`;
   }).join("");
   return `
     ${r.originale ? `<button class="modal-trash" data-elimina="${esc(r.originale)}" aria-label="Elimina ricetta" title="Elimina ricetta">🗑</button>` : ""}
@@ -1848,7 +1596,7 @@ function wizardHTML() {
     </div>
 
     <datalist id="dl-ali">${Object.keys(window.ALIMENTI || {}).map(n => `<option value="${esc(n)}">`).join("")}</datalist>
-    <div class="wiz-fondo">${macroRigaHTML(r)}<button class="btn block wiz-salva" data-wiz="save">✓ Salva ricetta</button></div>`;
+    <div class="wiz-fondo">${macroRigaHTML(r)}<button class="btn block wiz-salva" data-wiz="save">✓ Salva ricetta</button>${r.originale ? "" : `<button class="btn-link wiz-annulla" data-wiz="annulla">Annulla</button>`}</div>`;
 }
 
 // Ridisegna il wizard conservando lo scroll (per add/del riga e navigazione)
@@ -1874,7 +1622,19 @@ function salvaNuovaRicetta() {
     const q = document.querySelector(`[data-ing="${senzaQ}"][data-k="qta"]`); if (q) { q.scrollIntoView({ block: "center" }); q.focus(); }
     return;
   }
-  r.ingredienti = r.ingredienti.filter(i => i.nome && i.nome.trim() && (window.ALIMENTI || {})[i.nome]);
+  // un ingrediente che non conosco non si butta in silenzio: si chiede di scrivere i valori o di toglierlo
+  r.ingredienti.forEach(i => { delete i._errore; });
+  const ignoto = r.ingredienti.findIndex(i => !(i.nome && (window.ALIMENTI || {})[i.nome]) && ((i.cercato || i.nome || "").trim()));
+  if (ignoto >= 0) {
+    const x = r.ingredienti[ignoto], nomeX = (x.cercato || x.nome).trim();
+    x._errore = true;
+    renderWizard();
+    avviso(`${nomeX.charAt(0).toUpperCase() + nomeX.slice(1)}: inserisci i valori o toglilo`);
+    const riga = document.querySelector(`[data-ing="${ignoto}"][data-k="nome"]`); if (riga) riga.scrollIntoView({ block: "center" });
+    return;
+  }
+  if (!pastoValido(r)) { avviso("Scegli per quale pasto è"); const p = document.querySelector(".wiz-pasti"); if (p) p.scrollIntoView({ block: "center" }); return; }
+  r.ingredienti = r.ingredienti.filter(i => i.nome && i.nome.trim() && (window.ALIMENTI || {})[i.nome]);   // restano fuori solo le righe vuote
   const noti = r.ingredienti.filter(i => (window.ALIMENTI || {})[i.nome]);
   if (noti.length === 0) { avviso("Aggiungi almeno un ingrediente riconosciuto per calcolare le kcal."); return; }
   r.passaggi = r.passaggi.map(p => p.trim()).filter(Boolean);
@@ -1897,7 +1657,9 @@ function salvaNuovaRicetta() {
   }
   pasti.forEach(p => custom.push(Object.assign({}, base, { pasto: p, ingredienti: clone(base.ingredienti), passaggi: base.passaggi.slice() })));
   salvaCustom(custom);
+  if (r.originale) aggiornaVariantiRicetta(r.originale, r.nome, base.ingredienti);   // varianti di ingredienti tolti: via
   caricaRicette();
+  if (!r.originale) { bozzaRic = null; bozzaStep = 0; }   // salvata: la bozza non serve più
   nuovaRic = null;
   closeModal();
   const nomeSalvata = r.nome;
@@ -1905,7 +1667,7 @@ function salvaNuovaRicetta() {
 }
 
 // Elimina una ricetta (per nome): le tue vengono cancellate, quelle del
-// ricettario di base vengono nascoste (si possono ripristinare da ⚙︎).
+// ricettario di base vengono nascoste.
 function eliminaRicetta(nome) {
   const custom = leggiCustom();
   const primaC = JSON.stringify(custom), primaN = JSON.stringify([...leggiNascoste()]);
@@ -1935,6 +1697,7 @@ function azioneWizard(a, idx, k) {
   if (a === "next") { wizStep = Math.min(2, wizStep + 1); renderWizard(); }
   else if (a === "prev") { wizStep = Math.max(0, wizStep - 1); renderWizard(); }
   else if (a === "save") { leggiIngredientiIncollati(); salvaNuovaRicetta(); } // niente "Riconosci" obbligatorio: si riconoscono da soli
+  else if (a === "annulla") annullaWizard();   // butta la bozza della ricetta nuova
   else if (a === "leggi") { leggiIngredientiIncollati(); renderWizard(); }
   else if (a === "add-ing") {      // una riga vuota: scrivi il nome e compaiono le opzioni
     leggiIngredientiIncollati();
@@ -1952,7 +1715,7 @@ function azioneWizard(a, idx, k) {
     if (!verificaEtichetta(`etic-ing-${idx}`, document.querySelector(`[data-wiz="nuovo-al"][data-idx="${idx}"]`), et)) return;
     const nome = ing.cercato.charAt(0).toUpperCase() + ing.cercato.slice(1);
     salvaAlimentoPersonale(nome, et.base4, et.extra4, et.pesoPz);
-    ing.nome = nome;
+    ing.nome = nome; delete ing._errore;
     renderWizard();
   }
   else if (a === "pasto") { leggiIngredientiIncollati(); scegliPasto(nuovaRic, idx); renderWizard(); }
@@ -1962,6 +1725,13 @@ function azioneWizard(a, idx, k) {
   else if (a === "del-step") { nuovaRic.passaggi.splice(+idx, 1); if (!nuovaRic.passaggi.length) nuovaRic.passaggi.push(""); renderWizard(); }
 }
 
+// Il nome scritto è quasi uguale a quello trovato (maiuscole, o un errore di battitura: "banna" → Banana)? Solo allora si sostituisce da solo
+function quasiUguale(a, b) {
+  if (!a || !b) return false;
+  if (a.toLowerCase() === b.toLowerCase()) return true;
+  if (typeof PREFERITI !== "undefined" && typeof norm === "function" && PREFERITI[norm(a)] === b) return true;   // un sinonimo noto: "olio extravergine di oliva" = Olio EVO
+  return typeof distanzaTesto === "function" && typeof norm === "function" && a.length >= 4 && distanzaTesto(norm(a), norm(b)) <= 2;
+}
 // Mentre scrivi un ingrediente ("for…") compaiono subito gli alimenti che corrispondono
 function wizSuggerisci(inp, soloAlternative) {
   const old = document.getElementById("wiz-sug"); if (old) old.remove();
@@ -1978,7 +1748,7 @@ function wizSuggerisci(inp, soloAlternative) {
 
 // Aggiorna lo stato della ricetta in costruzione mentre l'utente digita
 function wizFieldUpdate(e) {
-  if (!nuovaRic) return;
+  if (!nuovaRic || !document.querySelector("#modal-content .wiz-salva")) return;   // solo dentro il pannello della ricetta
   const campo = e.target.closest("[data-campo]");
   if (campo) {
     const k = campo.dataset.campo;
@@ -1998,8 +1768,9 @@ function wizFieldUpdate(e) {
       if (e.type === "input") { wizSuggerisci(ing); return; }   // intanto compaiono le opzioni
       if (e.type !== "change") return; // si riconosce quando hai finito di scrivere
       const v = ing.value.trim();
+      delete x._errore;
       if ((window.ALIMENTI || {})[v]) { x.nome = v; x.cercato = ""; }
-      else { const t = cercaAlimenti(v); x.cercato = v; x.nome = t[0] || ""; }
+      else { const t = cercaAlimenti(v); x.cercato = v; x.nome = quasiUguale(v, t[0]) ? t[0] : ""; }   // "farina di castagne" non diventa "Farina 00": restano i suggerimenti e i valori da scrivere
       renderWizard(); return;
     }
     aggiornaMacroLive();
@@ -2338,45 +2109,89 @@ function ripristinaBackup(testo) {
   });
 }
 
-// Ripristina il ricettario di partenza
-function ricaricaRicettario() {
-  localStorage.removeItem("mp_ricette");
-  localStorage.removeItem("mp_ricette_nascoste"); // tornano anche le ricette di base eliminate
-  caricaRicette(); // ricettario di base + ricette create dall'utente
-  avviso("Ricaricato il ricettario di partenza (" + contaRicetteUniche() + " ricette).");
-}
-
 // -------- Import CSV --------
-// Colonne attese (con intestazione):
-//  nome, pasto, kcal, proteine, carboidrati, grassi, ingredienti
-//  ingredienti nel formato: "Riso 80 g; Pollo 150 g"
+// Colonne attese (con intestazione, separate da , oppure ;):
+//  nome, pasto, kcal, proteine, carboidrati, grassi, ingredienti   (kcal e macro si ricalcolano dagli ingredienti)
+//  ingredienti nel formato: "Riso 80 g; Pollo 150 g" (tra virgolette se contiene il separatore)
+// Righe e campi di un CSV: virgolette (anche "" dentro un campo e a capo dentro le virgolette), campi vuoti, separatore , o ; (quello dell'intestazione)
+function righeCSV(testo) {
+  testo = String(testo || "").replace(/^﻿/, "");
+  let sep = ",";
+  { let dentro = false, virgole = 0, puntiVirgola = 0;   // il separatore si capisce dalla prima riga (fuori dalle virgolette)
+    for (const ch of testo) { if (ch === '"') dentro = !dentro; else if (!dentro && (ch === "\n" || ch === "\r")) break; else if (!dentro && ch === ",") virgole++; else if (!dentro && ch === ";") puntiVirgola++; }
+    if (puntiVirgola > virgole) sep = ";"; }
+  const righe = [];
+  let riga = [], campo = "", dentro = false;
+  for (let i = 0; i < testo.length; i++) {
+    const ch = testo[i];
+    if (dentro) {
+      if (ch === '"') { if (testo[i + 1] === '"') { campo += '"'; i++; } else dentro = false; }
+      else campo += ch;
+    } else if (ch === '"') dentro = true;
+    else if (ch === sep) { riga.push(campo); campo = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && testo[i + 1] === "\n") i++;
+      riga.push(campo); campo = "";
+      if (riga.some(c => c.trim())) righe.push(riga);
+      riga = [];
+    } else campo += ch;
+  }
+  riga.push(campo);
+  if (riga.some(c => c.trim())) righe.push(riga);
+  return righe;
+}
+// "Petto di pollo 150 g", "Uova 2 pz", "150 g riso", "Sale q.b." → ingrediente conosciuto, oppure null (alimento che non conosco)
+function ingredienteDaCSV(s) {
+  const unitaDa = (u) => { const x = u && SINONIMI_UNITA.find(([re]) => re.test(u.toLowerCase())); return x || null; };
+  let nome = s.trim(), qta = null, unita = null, m;
+  if ((m = nome.match(/^(.+?)\s+q\.?\s?b\.?$/i))) { nome = m[1]; qta = 1; unita = "q.b."; }
+  else if ((m = nome.match(/^(.+?)\s+(\d+(?:[.,]\d+)?|\d+\/\d+)\s*([a-zà-ù.]+)?$/i)) && (!m[3] || unitaDa(m[3]))) { nome = m[1]; qta = numeroDa(m[2]); const u = unitaDa(m[3]); if (u) { unita = u[1]; qta *= u[2]; } }
+  else if ((m = nome.match(/^(\d+(?:[.,]\d+)?|\d+\/\d+)\s*([a-zà-ù.]+)?\s+(?:di\s+)?(.+)$/i)) && (!m[2] || unitaDa(m[2]))) { nome = m[3]; qta = numeroDa(m[1]); const u = unitaDa(m[2]); if (u) { unita = u[1]; qta *= u[2]; } }
+  nome = nome.trim();
+  const A = window.ALIMENTI || {};
+  let trovato = A[nome] ? nome : Object.keys(A).find(k => k.toLowerCase() === nome.toLowerCase());
+  if (!trovato && typeof cercaAlimenti === "function") { const t = cercaAlimenti(nome)[0]; if (quasiUguale(nome, t)) trovato = t; }   // solo nomi quasi uguali: niente sostituzioni a sorpresa
+  if (!trovato || !(qta > 0)) return null;
+  if (!unita) unita = window.pzPredefinito && window.pzPredefinito(trovato) && qta <= 12 ? "pz" : (UNITA_LIQUIDI.test(trovato) ? "ml" : "g");
+  return { nome: trovato, qta: Math.round(qta * 100) / 100, unita };
+}
 function parseCSV(testo) {
-  const righe = testo.trim().split(/\r?\n/);
-  const header = righe[0].split(/[,;]/).map(h => h.trim().toLowerCase());
+  const righe = righeCSV(testo);
+  if (!righe.length) return { ricette: [], saltate: 0, ignoti: 0 };
+  const header = righe[0].map(h => h.trim().toLowerCase());
   const idx = n => header.indexOf(n);
   const out = [];
+  let saltate = 0, ignoti = 0;
   for (let i = 1; i < righe.length; i++) {
-    // split rispettando le virgolette
-    const campi = righe[i].match(/("([^"]*)"|[^,;]+)(?=[,;]|$)/g) || [];
-    const get = n => { const j = idx(n); return j >= 0 && campi[j] ? campi[j].replace(/^"|"$/g,"").trim() : ""; };
-    if (!get("nome")) continue;
-    const ingRaw = get("ingredienti");
-    const ingredienti = ingRaw.split(";").map(s => s.trim()).filter(Boolean).map(s => {
-      const m = s.match(/^(.+?)\s+([\d.]+)\s*(\w+)?$/);
-      return m ? { nome: m[1].trim(), qta: parseFloat(m[2]), unita: m[3] || "" }
-               : { nome: s, qta: 1, unita: "pz" };
-    });
-    out.push({
-      nome: get("nome"),
-      pasto: (get("pasto") || "pranzo").toLowerCase(),
-      kcal: +get("kcal") || 0,
-      proteine: +get("proteine") || 0,
-      carboidrati: +get("carboidrati") || 0,
-      grassi: +get("grassi") || 0,
-      ingredienti,
-    });
+    const campi = righe[i];
+    const get = n => { const j = idx(n); return j >= 0 && campi[j] !== undefined ? campi[j].trim() : ""; };
+    if (!get("nome")) { saltate++; continue; }
+    const letti = get("ingredienti").split(/;|\n/).map(s => s.trim()).filter(Boolean).map(ingredienteDaCSV);
+    const ingredienti = letti.filter(Boolean);
+    if (!ingredienti.some(x => x.unita !== "q.b.")) { saltate++; continue; }   // nessun ingrediente valido: la riga non si importa
+    ignoti += letti.length - ingredienti.length;
+    const p = get("pasto").toLowerCase();
+    const pasti = /principale|pranzo e cena|pranzo\/cena/.test(p) ? ["pranzo", "cena"] : PASTI_CHIP.some(x => x[0] === p) ? [p] : ["pranzo"];
+    out.push({ nome: get("nome"), pasti, ingredienti });
   }
-  return out;
+  return { ricette: out, saltate, ignoti };
+}
+// Le ricette del CSV si AGGIUNGONO al ricettario: sostituiscono solo le tue ricette con lo stesso nome;
+// se il nome è di una ricetta di base, l'importata si chiama "… (importata)" e quella di base resta
+function importaRicetteCSV(lista) {
+  let custom = leggiCustom();
+  const nomiCustom = new Set(custom.map(r => r.nome));
+  const nomiBase = new Set((leggiRicette() || window.RICETTE_ESEMPIO || []).map(r => r.nome));
+  lista.forEach(r => {
+    let nome = r.nome;
+    if (!nomiCustom.has(nome) && nomiBase.has(nome)) nome += " (importata)";
+    custom = custom.filter(x => x.nome !== nome);
+    const m = calcolaMacro(r);
+    r.pasti.forEach(p => custom.push({ nome, pasto: p, custom: true, tempo: null, kcal: m.kcal, proteine: m.proteine, carboidrati: m.carboidrati, grassi: m.grassi, ingredienti: clone(r.ingredienti), passaggi: [] }));
+    nomiCustom.add(nome);
+  });
+  salvaCustom(custom);
+  caricaRicette();
 }
 
 // -------- Scarica ricettario in PDF (via jsPDF) --------
@@ -2452,7 +2267,7 @@ async function scaricaRicettario() {
     gruppo.forEach(rr => {
       // ricette a porzioni: ricetta intera + valori per pezzo
       const r = rr._orig || rr;
-      const m = rr._orig ? calcolaMacro({ ingredienti: ingredientiPerPezzi(r, 1) }) : r;
+      const m = rr._orig ? macroPerPezzo(r) : r;
       const per = rr._orig ? ` (1 ${r.pezzo || "porzione"} su ${r.porzioni})` : "";
       assicura(64); // evita di lasciare il titolo ricetta orfano a fine pagina
       testo(r.nome, { size: 13, style: "bold", color: [25, 25, 25], gap: 1 });
@@ -2509,12 +2324,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const nuove = parseCSV(reader.result);
-        if (nuove.length === 0) { avviso("Nessuna ricetta trovata nel CSV."); return; }
-        ricette = nuove;
-        salvaRicette();
-        caricaRicette(); // riaggiunge le ricette create dall'utente
-        avviso(`Importate ${nuove.length} ricette dal tuo CSV.`);
+        const { ricette: nuove, saltate, ignoti } = parseCSV(reader.result);
+        if (nuove.length === 0) { avviso(saltate ? `Nessuna ricetta importata: ${saltate} righe senza ingredienti che conosco.` : "Nessuna ricetta trovata nel CSV."); return; }
+        importaRicetteCSV(nuove);   // si aggiungono a quelle che hai già
+        avviso(`${nuove.length} ${nuove.length === 1 ? "ricetta importata" : "ricette importate"}${saltate ? ` · ${saltate} saltate` : ""}${ignoti ? ` · ${ignoti} ingredienti sconosciuti tolti` : ""}`);
       } catch (err) {
         avviso("Errore nella lettura del CSV: " + err.message);
       }
@@ -2533,7 +2346,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Interazioni dentro il modale: wizard, menù, lista ricette, filtri, quantità
   document.getElementById("modal-content").addEventListener("click", (e) => {
-    if (e.target.closest(".reset-qta")) { ripristinaQuantita(); return; }
     const vb = e.target.closest("[data-var-ric]");
     if (vb) { apriListaVarianti(vb.dataset.varRic, +vb.dataset.varIdx); return; }
     const vt = e.target.closest("[data-var-tutte]");
@@ -2582,7 +2394,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (az) {
       if (az.dataset.azione === "scarica") scaricaRicettario();
       else if (az.dataset.azione === "importa") { const f = document.getElementById("file-csv"); f.value = ""; f.click(); closeModal(); }
-      else if (az.dataset.azione === "reset") chiediConferma("Ripristinare il ricettario?", "Tornano le ricette di partenza", "Ripristina", () => ricaricaRicettario());
       else if (az.dataset.azione === "nuova") apriWizard();
       else if (az.dataset.azione === "profilo") apriProfilo();
       else if (az.dataset.azione === "miei-alimenti") apriMieiAlimenti();
@@ -2650,7 +2461,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!x) return;
     e.preventDefault();
     const vuota = !x.nome && !x.cercato && !x.qta;      // riga appena aggiunta: unità giusta e si passa alla quantità
-    x.nome = b.dataset.wizSug; x.cercato = "";
+    x.nome = b.dataset.wizSug; x.cercato = ""; delete x._errore;
     if (vuota) { const u = typeof unitaPreferita === "function" ? unitaPreferita(x.nome) : "g"; if (UNITA.includes(u)) x.unita = u; }
     renderWizard();
     if (vuota) setTimeout(() => { const q = document.querySelector(`[data-ing="${b.dataset.ing}"][data-k="qta"]`); if (q) q.focus(); }, 60);
@@ -2726,22 +2537,6 @@ document.addEventListener("DOMContentLoaded", () => {
     salvaPresi(presi);
     const ul = document.getElementById("spesa");
     if (ul) ul.innerHTML = spesaHTML();
-  });
-
-  // Modifica quantità di un ingrediente -> ribilancia e aggiorna il giorno
-  document.getElementById("modal-content").addEventListener("change", (e) => {
-    const inp = e.target.closest(".qta-input");
-    if (!inp || !editCtx) return;
-    const pasto = settimana[editCtx.giorno].pasti[editCtx.slot];
-    const idx = +inp.dataset.idx;
-    const nuova = parseFloat(inp.value);
-    if (isNaN(nuova) || nuova < 0) { rirenderIstanza(); return; }
-    ribilanciaPasto(pasto, idx, nuova);
-    ricalcolaGiorno(editCtx.giorno);
-    salvaPiano();
-    rirenderIstanza();
-    renderSettimana();
-    renderSpesa();
   });
 
   // Chiede al telefono di non cancellare da solo i dati dell'app (es. se manca spazio)

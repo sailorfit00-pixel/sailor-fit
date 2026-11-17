@@ -33,12 +33,14 @@ function eliminaPastoMomento(momento) {
 function preparaSwipe() {
   SWIPE_RIGHE.forEach(([sel, azione]) => {
     document.querySelectorAll(sel).forEach((r) => {
-      if (r.parentNode && r.parentNode.classList.contains("sw")) return;
+      // contenitore .sw già scritto nell'HTML (es. righe del wizard): si prepara sul posto, senza spostare la riga (un campo col cursore non perde il fuoco)
+      const giaNelHTML = r.parentNode && r.parentNode.classList.contains("sw") && !r.parentNode._elimina;
+      if (r.parentNode && r.parentNode.classList.contains("sw") && !giaNelHTML) return;
       const az = azione(r);
       if (!az) return;
       const fn = typeof az === "function" ? az : az.elimina;
       const cs = getComputedStyle(r);
-      const w = document.createElement("div");
+      const w = giaNelHTML ? r.parentNode : document.createElement("div");
       w.className = "sw";
       w.style.margin = cs.margin;
       r.style.margin = "0";
@@ -47,8 +49,8 @@ function preparaSwipe() {
       f.innerHTML = typeof ICONA_CESTINO === "string" ? ICONA_CESTINO : "🗑";
       const az2 = document.createElement("div");   // i tasti stanno in un contenitore largo quanto lo spazio che il gesto libera: sotto la riga non c'è mai niente
       az2.className = "sw-azioni";
-      r.parentNode.insertBefore(w, r);
-      w.appendChild(az2); w.appendChild(r);
+      if (giaNelHTML) w.insertBefore(az2, r);
+      else { r.parentNode.insertBefore(w, r); w.appendChild(az2); w.appendChild(r); }
       r.classList.add("sw-corpo");
       w._elimina = fn; w._larg = SWIPE_LARG; w._azioni = az2;
       if (az.cambia) {   // secondo tasto, accanto al cestino
