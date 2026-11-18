@@ -163,12 +163,14 @@ function calcolaGrammi(items, target) {
 const PEZZI_INTERI = /tortilla|piadina|wrap|pita\b|naan|panino|pizza|focaccia|cornetto|crepe|cialda/i;
 const eIntero = (nome, u) => u === "pz" && PEZZI_INTERI.test(String(nome));
 // quantità in grammi portata a pezzi interi (almeno 1) se l'alimento si conta a pezzi interi
-function qtaPezziInteri(nome, u, qta) { const gu = grammiPerUnita(nome, u); return eIntero(nome, u) && gu ? Math.max(1, Math.round(qta / gu)) * gu : qta; }
+// pizza e focaccia: al minimo mezza
+const PEZZI_MEZZI = /pizza|focaccia/i;
+function qtaPezziInteri(nome, u, qta) { const gu = grammiPerUnita(nome, u); if (!(eIntero(nome, u) && gu)) return qta; const m = PEZZI_MEZZI.test(String(nome)) ? 2 : 1; return Math.max(1, Math.round(qta / gu * m)) / m * gu; }
 // prossimo valore dopo un tocco su − / ＋: il multiplo del passo successivo (0,6 pz con passo 1 → 1, non 2)
 const prossimoMultiplo = (att, d, passo) => Math.max(passo, (d > 0 ? Math.floor(att / passo + 1e-9) + 1 : Math.ceil(att / passo - 1e-9) - 1) * passo);
 function passoQuantita(it) {
   const u = unitaDi(it), gu = grammiPerUnita(it.nome, u);
-  if (gu) return { gu, passo: eIntero(it.nome, u) || (u === "pz" && gu < 100) ? 1 : 0.5 };
+  if (gu) return { gu, passo: eIntero(it.nome, u) && !PEZZI_MEZZI.test(String(it.nome)) || (u === "pz" && gu < 100 && !PEZZI_MEZZI.test(String(it.nome))) ? 1 : 0.5 };
   const tip = profiloAlimento(it.nome).tip;
   return { gu: 0, passo: tip <= 25 ? 5 : tip <= 80 ? 10 : 25 };
 }
@@ -632,7 +634,7 @@ function elencoConsigli(c, m) {
     if (a0[0] < 40) return;                                                         // verdure e simili: non serve ritoccarle
     let migliore = null;
     [0.5, 0.7, 1.3, 1.5, 2].forEach(f => {
-      let nuova = Math.round(r.qta * f / 5) * 5;
+      let nuova = qtaPezziInteri(r.nome, "pz", Math.round(r.qta * f / 5) * 5);   // pizza, piadina…: pezzi interi
       if (f > 1) nuova = Math.min(nuova, r.qta + 100, GRAMMI_MAX_FONTI[r.nome] || 300);
       if (nuova < 5 || Math.abs(nuova - r.qta) < Math.max(10, r.qta * 0.2)) return;
       const d = mac(r.nome, nuova - r.qta);
@@ -663,7 +665,7 @@ function elencoConsigli(c, m) {
     let menoPz = null, piuPz = null;
     [-2, -1, 1, 2].forEach(st => {
       const k2 = c.nPezzi + st * passo; if (k2 < passo) return;
-      const singola = !(rp._orig.porzioni > 1);
+      const singola = !aPezzi(rp._orig);
       const d = meno(singola ? macroDa(scalaSingola(c, rp, k2)) : versioneAPezzi(rp._orig, k2), cur);
       if (d.proteine < -4 && gap.proteine - d.proteine > 6) return;                  // non farne mancare le proteine
       if (st > 0 && sforaCarbo(d)) return;
@@ -789,7 +791,7 @@ function mosseFit(c) {
     });
     // 2) meno grassi e zuccheri aggiunti: la quantità scende di un terzo o della metà
     if (!migliore && r.qta >= 10 && (A[r.nome][3] >= 30 || DOLCIFICANTI.test(r.nome)) && !/^Proteine/.test(r.nome)) {
-      const nuova = Math.max(5, Math.round(r.qta * 0.6 / 5) * 5), d = meno(mac(r.nome, nuova), cur);
+      const nuova = qtaPezziInteri(r.nome, "pz", Math.max(5, Math.round(r.qta * 0.6 / 5) * 5)), d = meno(mac(r.nome, nuova), cur);
       if (nuova < r.qta && d.kcal <= -20) migliore = { tipo: "porta", r, nuova, d, v: -d.kcal };
     }
     if (migliore) out.push(migliore);
@@ -853,7 +855,7 @@ function ricettaPorzioniIntatta(c) {
 // Ricetta a teglia (porzioni > 1: pancake, banana bread…): già cucinata, non si cambiano gli ingredienti
 function ricettaATeglia(c) {
   const r = ricettaPorzioniIntatta(c);
-  return r && r._orig.porzioni > 1 ? r : null;
+  return r && aPezzi(r._orig) ? r : null;
 }
 // Il campo per scrivere un ingrediente (con 📷 e ＋)
 function campoAggiungiHTML(c) {
@@ -971,7 +973,7 @@ function anteprimaRicetta(c, nomeRicetta) {
   }
   const items = ps.items.map(x => ({ nome: x.nome, qta: x.qta }));
   const tmp = { items, ricetta: r.nome, data: c.data, pasto: c.pasto };
-  const mosse = (r._orig || r).porzioni > 1 ? [] : mosseFit(tmp).slice(0, 1);   // un «Più fit» alla volta (il migliore); niente per le ricette a teglia (banana bread…)
+  const mosse = aPezzi(r._orig || r) ? [] : mosseFit(tmp).slice(0, 1);   // un «Più fit» alla volta (il migliore); niente per le ricette a teglia (banana bread…)
   const fit = items.map((it, k) => { const m = mosse.find(a => a.r.k === k); return !m ? it : m.tipo === "cambia" ? { nome: m.a, qta: it.qta } : { nome: it.nome, qta: m.nuova }; });
   return { r, ps, items, mosse, fit, tot: macroDa(items), totFit: macroDa(fit) };
 }
@@ -1388,7 +1390,7 @@ function aggiornaRicettaDaFit(nome, mods) {
   if (!cambiato) return null;
   const m = calcolaMacro({ ingredienti: ingr, porzioni: r.porzioni });
   const base = { nome: r.nome, tempo: r.tempo || null, custom: true, kcal: m.kcal, proteine: m.proteine, carboidrati: m.carboidrati, grassi: m.grassi, ingredienti: ingr, passaggi: (r.passaggi || []).slice() };
-  if (r.porzioni > 1) { base.porzioni = r.porzioni; base.pezzo = r.pezzo || ""; }
+  if (aPezzi(r)) { base.porzioni = r.porzioni; base.pezzo = r.pezzo || ""; }
   const primaC = JSON.stringify(leggiCustom()), primaN = JSON.stringify([...leggiNascoste()]);
   const custom = leggiCustom().filter(x => x.nome !== nome);
   [...pasti].forEach(p => custom.push(Object.assign({}, base, { pasto: p, ingredienti: clone(ingr), passaggi: base.passaggi.slice() })));

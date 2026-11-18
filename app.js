@@ -274,6 +274,8 @@ function macroPezzi(orig, k) {
   return { kcal: Math.round(u.kcal * k), proteine: Math.round(u.proteine * k), carboidrati: Math.round(u.carboidrati * k), grassi: Math.round(u.grassi * k) };
 }
 // Di quanto cambia il contatore: pezzi con nome (fetta, pancake…) di 1; teglia senza nome del pezzo di ½; ricetta singola ("1 porzione") di ½
+// Ricetta a pezzi: a teglia (porzioni > 1) o con un pezzo intero che si conta 1, 2, 3 (1 wrap, 2 wrap)
+const aPezzi = (o) => !!o && (o.porzioni > 1 || (o.porzioni === 1 && !!o.pezzo && o.pezzo !== "porzione"));
 function passoPezzi(orig) { return orig.pezzo && orig.pezzo !== "porzione" ? 1 : 0.5; }   // mezze porzioni: i quarti erano troppo fini
 // il prossimo multiplo del passo, in su o in giù (un vecchio ¼ passa al ½ più vicino)
 const prossimoPasso = (cur, delta, passo) => Math.max(passo, (delta > 0 ? Math.floor(cur / passo + 1e-9) + 1 : Math.ceil(cur / passo - 1e-9) - 1) * passo);
@@ -288,7 +290,7 @@ function pezziPer(orig, kcal) {
 function plurale(p) { return p === "taco" ? "tacos" : p === "nugget" ? "nuggets" : /ie$/.test(p) ? p : /a$/.test(p) ? p.slice(0, -1) + "e" : /[oe]$/.test(p) && !/cake$/.test(p) ? p.slice(0, -1) + "i" : p; }
 // Le quantità si dicono col pezzo della ricetta ("1 fetta", "2 fette", "3 pancake"); senza un pezzo con nome, in porzioni ("1 porzione", "1½ porzioni")
 function nomePezzo(orig, k) {
-  const p = orig && orig.porzioni > 1 && String(orig.pezzo || "").trim();
+  const p = aPezzi(orig) && String(orig.pezzo || "").trim();
   if (!p || p === "porzione") return k <= 1 ? "porzione" : "porzioni";
   return k <= 1 ? p : plurale(p);
 }
@@ -300,7 +302,7 @@ function versioneAPezzi(orig, k) {
   return v;
 }
 function derivaPorzioni(r) {
-  if (!r.porzioni || r.porzioni <= 1) return r;
+  if (!aPezzi(r)) return r;
   const k = pezziPer(r, (QUOTA_TIPICA[r.pasto] || 0.25) * TIPI_GIORNATA.crossfit.target.kcal);
   return versioneAPezzi(r, k);
 }
@@ -617,7 +619,7 @@ function calcolaMacro(r) {
 function macroPastoRicetta(p) {
   if (!p || !p.ricetta || !(p.nPezzi > 0) || typeof ricette === "undefined") return null;
   const r = ricette.find(x => x.nome === p.ricetta && x._orig), o = r && r._orig;
-  if (!o || !(o.porzioni > 1)) return null;
+  if (!aPezzi(o)) return null;
   const A = window.ALIMENTI || {}, volte = {};
   const somma = (lista, conta) => { const t = {}; lista.forEach(i => { const g = grammiIng(i); if (A[i.nome] && g > 0) { t[i.nome] = (t[i.nome] || 0) + g; if (conta) volte[i.nome] = (volte[i.nome] || 0) + 1; } }); return t; };
   const att = somma(ingredientiPerPezzi(o, p.nPezzi), true), ora = somma(p.ingredienti || []);
@@ -842,7 +844,7 @@ function suggerimentiLeggeri(o) {
   return out.sort((x, y) => y.risparmio - x.risparmio).slice(0, 5);
 }
 function suggerimentiLeggeriHTML(r) {
-  const o = r._orig || r, s = suggerimentiLeggeri(o), n = o.porzioni > 1 ? o.porzioni : 1;
+  const o = r._orig || r, s = suggerimentiLeggeri(o), n = aPezzi(o) ? o.porzioni : 1;
   if (!s.length) return "";
   const tot = s.reduce((x, y) => x + y.risparmio, 0), per = x => n > 1 ? `${Math.round(x / n)} kcal a ${esc(o.pezzo || "porzione")}` : `${x} kcal`;
   return `<details class="sugg-leggera"><summary>💡 Stesso piatto, meno kcal <em>−${per(tot)}</em></summary>

@@ -221,6 +221,8 @@ function migraNomiRicette() {
     const vecchioNome = p.ricetta;
     if (p.ricetta && A[p.ricetta]) { p.ricetta = A[p.ricetta]; cambiato = true; }
     const r = p.ricetta && ricette.find(x => x.nome === p.ricetta);
+    // wrap: le vecchie «2 metà di Wrap…» ora sono «1 wrap» (le quantità degli ingredienti restano quelle: erano già per quelle metà)
+    if (r && r._orig && r._orig.pezzo === "wrap" && r._orig.porzioni === 1 && p.nPezzi && /metà/i.test(p.nome || "")) { p.nPezzi = Math.max(0.5, p.nPezzi / 2); cambiato = true; }
     if (r && r._orig && p.nPezzi) { const nn = nomeRicettaConPezzi(r, p.nPezzi); if (p.nome !== nn) { p.nome = nn; cambiato = true; } }
     else if (r && !r._orig && vecchioNome !== p.ricetta && p.nome === vecchioNome) { p.nome = p.ricetta; cambiato = true; }
   }));
@@ -266,7 +268,7 @@ function caricaItemiVivi(data, momento) {
   const lib = g.pasti.find(p => p.pasto === momento && !p.ricetta);
   if (lib) items.push(...mappa(lib, null));
   let n = 0;
-  g.pasti.forEach(p => { if (p.pasto !== momento || !p.ricetta) return; gruppi.push({ n, ricetta: p.ricetta, nome: nomeVisibile(p), nPezzi: p.nPezzi, intatta: !!pastoRicettaIntatta(p) }); items.push(...mappa(p, n)); n++; });
+  g.pasti.forEach(p => { if (p.pasto !== momento || !p.ricetta) return; gruppi.push({ n, ricetta: p.ricetta, nome: nomeConQuantita(p), nPezzi: p.nPezzi, intatta: !!pastoRicettaIntatta(p) }); items.push(...mappa(p, n)); n++; });
   return { items, gruppi };
 }
 // ricarica le righe dal diario e ridisegna il pannello sul posto (resta lo scorrimento)
@@ -349,7 +351,7 @@ function cambiaPezziViva(n, delta) {
   const c = liberoCtx; if (!c || !c.vivo) return;
   const g = giornoDiario(c.data), p = g.pasti.filter(x => x.pasto === c.pasto && x.ricetta)[n], r = p && pastoRicettaIntatta(p);
   if (!r) return;
-  const passo = passoPezzi(r._orig), singola = !(r._orig.porzioni > 1);
+  const passo = passoPezzi(r._orig), singola = !aPezzi(r._orig);
   const nuovo = prossimoPasso(p.nPezzi, delta, passo);   // anche i pasti vecchi con ¼ tornano su multipli di mezza porzione
   if (nuovo === p.nPezzi) return;
   if (singola) {
@@ -388,7 +390,8 @@ function porzioneSuMisura(r, target) {
     const k0 = pezziPer(r._orig, target.kcal);
     const passo = passoPezzi(r._orig);
     const cand = [k0 - passo, k0, k0 + passo].filter(x => x >= passo);
-    const k = (cand.length ? cand : [passo])                      // (se l'obiettivo del pasto non è valido si parte da 1 pezzo)
+    const unico = r._orig.porzioni === 1;   // pezzo intero (1 wrap): non si raddoppia solo per arrivare alle kcal del pasto
+    const k = (unico ? [passo, passo * 2] : cand.length ? cand : [passo]).filter(x => !unico || x === passo || calcolaMacro(versioneAPezzi(r._orig, x)).kcal <= target.kcal * 1.15)   // (se l'obiettivo del pasto non è valido si parte da 1 pezzo)
       .map(x => ({ x, p: punteggioPasto(calcolaMacro(versioneAPezzi(r._orig, x)), target) }))
       .sort((a, b) => a.p - b.p)[0].x;
     m = versioneAPezzi(r._orig, k);
@@ -434,7 +437,7 @@ function cambiaPezzi(delta) {
   const c = liberoCtx, r = c && ricettaAPezzi(c.ricetta);
   if (!r || !c.nPezzi) return;
   const passo = passoPezzi(r._orig);
-  if (!(r._orig.porzioni > 1)) {   // ricetta singola: da 1 porzione adattata si scende o sale di ½ (senza limite), scalando le quantità di ora
+  if (!aPezzi(r._orig)) {   // ricetta singola: da 1 porzione adattata si scende o sale di ½ (senza limite), scalando le quantità di ora
     const k2 = prossimoPasso(c.nPezzi, delta, passo);   // sempre su multipli di mezza porzione
     if (k2 === c.nPezzi) return;
     c.items = scalaSingola(c, r, k2); c.nPezzi = k2; c.nome = nomeRicettaConPezzi(r, k2);
@@ -483,6 +486,8 @@ function mostraToast(testo, etichetta, azione, tutto, extra) {   // extra: un se
 // Ultimi pasti diversi mangiati in quel momento della giornata (ultimi 30 giorni)
 const nomePulito = (n) => String(n || "").replace(/^✍️\s*/, "");
 // Il nome di un pasto come si legge in Oggi: una ricetta a porzioni è solo "Banana bread" (le porzioni si vedono aprendo il pasto)
+// Nella riga di Oggi: la quantità davanti ("1 wrap di…", "2 fette di…") per le ricette a pezzi ancora intatte
+const nomeConQuantita = (p) => { const r = p && p.ricetta && p.nPezzi && pastoRicettaIntatta(p); return r && r._orig && aPezzi(r._orig) ? nomeRicettaConPezzi(r, p.nPezzi) : nomeVisibile(p); };
 const nomeVisibile = (p) => p && p.ricetta && p.nPezzi ? nomePulito(p.ricetta) : nomePulito(p && p.nome);
 
 function pastiRecenti(data, pasto, n = 3) {
@@ -808,7 +813,7 @@ function mosseCosaAggiungere(data, p, m) {
       const eccTot = (oC ? -m.carboidrati * 1.5 : 0) + (oG ? -m.grassi * 3 : 0) + (oK ? -m.kcal * 0.15 : 0);
       const condimento = A[r.nome][3] >= 30 || r.qta < 25;   // olio, frutta secca, burro… si possono anche togliere; riso, pasta, carne si riducono soltanto
       for (const f of [0.8, 0.65, 0.5, 0.35, 0]) {
-        const nuova = f ? r5(r.qta * f) : 0; if (f && (nuova < 5 || nuova >= r.qta)) continue;
+        const nuova = f ? qtaPezziInteri(r.nome, "pz", r5(r.qta * f)) : 0; if (f && (nuova < 5 || nuova >= r.qta)) continue;
         if ((f < 0.5 && f > 0 || f === 0) && !condimento) continue;
         const n = mac(nuova), d = { kcal: n.kcal - cur.kcal, proteine: n.proteine - cur.proteine, carboidrati: n.carboidrati - cur.carboidrati, grassi: n.grassi - cur.grassi };
         const kPf = A[r.nome][1] * 4 / Math.max(1, A[r.nome][0]);   // quanta parte delle calorie sono proteine: riso e pasta ne hanno poche, pollo e pesce molte
@@ -1531,7 +1536,7 @@ function renderOggi() {
     // pasto già inserito: un solo riquadro con i nomi dei piatti; toccandolo si vede l'elenco dei piatti
     if (inseriti.length) {
       const kcal = inseriti.reduce((a, x) => a + (x.p.kcal || 0), 0);
-      const nomi = inseriti.map(x => nomeVisibile(x.p)).join(", ");
+      const nomi = inseriti.map(x => nomeConQuantita(x.p)).join(", ");
       return `<div class="pasto-gruppo ${data >= oggiISO() && !pastoPassato(data, momento) ? "auto" : ""}${pastoPassato(data, momento) ? " passato" : ""}" data-momento="${momento}">
         <button class="pasto-riga fatto" data-oggi-momento="${momento}">
         <span class="pr-icona">${ICONA_PASTO[momento]}</span>
@@ -1632,7 +1637,7 @@ function aggiungiRicettaAlPasto(nome, mod) {   // mod: le quantità scelte nel r
   const c = { data: c0.data, pasto: c0.pasto || pastoPerRicetta(r, c0.data), fatte: c0.fatte };
   const ps = porzioneSuMisura(r, targetResiduoPasto(c.data, c.pasto));
   const g = giornoDiario(c.data);
-  const voci = mod && mod.nome === nome ? mod.items.filter(x => +x.qta > 0) : ps.items.map(x => Object.assign({}, x, { qta: qtaPezziInteri(x.nome, unitaDi({ nome: x.nome }), x.qta) }));   // le quantità che hai scelto tu, altrimenti quelle su misura
+  const voci = mod && mod.nome === nome ? mod.items.filter(x => +x.qta > 0) : ps.items.map(x => Object.assign({}, x, { qta: qtaPezziInteri(x.nome, unitaDi({ nome: x.nome }), x.qta) })).filter(x => +x.qta > 0);   // le quantità che hai scelto tu, altrimenti quelle su misura
   const p = { nome: ps.nome, pasto: c.pasto, passaggi: [], ricetta: r.nome, nPezzi: ps.k,
     ingredienti: voci.map(x => Object.assign({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.cercato || x.nome }, x.u && x.u !== "g" ? { vis: x.u } : {})) };
   aggiornaMacro(p);
