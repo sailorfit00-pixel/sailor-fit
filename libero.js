@@ -1335,7 +1335,7 @@ document.addEventListener("DOMContentLoaded", () => {
         closeModal(); if (typeof renderOggi === "function") renderOggi(); avviso("Modifiche annullate");
       }
       else if (a === "salva-modifiche") { closeModal(); avviso("✓ Modifiche salvate"); }   // erano già nel diario: si conferma e si torna a Oggi
-      else if (a === "conferma-bozza") { c._conferma = true; c.bozza = false; try { rirenderLibero(); } finally { c._conferma = false; } if (liberoCtx === c) rirenderLibero(); }   // ora il pasto è nel diario: si vede il riepilogo
+      else if (a === "conferma-bozza") { c._conferma = true; c.bozza = false; try { rirenderLibero(); } finally { c._conferma = false; } if (liberoCtx === c) rirenderLibero(); avviso("✓ Pasto salvato"); document.getElementById("toast")?.classList.add("ok"); }   // ora il pasto è nel diario: si vede il riepilogo
       else if (a === "al-modifica") { c.modificaAl = b.dataset.nome; c.ignotoNuovo = true; c.ignoto = null; c.ignotoCodice = null; rirenderLibero(); }
       else if (a === "ignoto-annulla") { c.modificaAl = null; c.ignotoNuovo = false; c.ignoto = null; c.ignotoCodice = null; c.ricercaOFF = null; rirenderLibero(); }
       else if (a === "ignoto-salva") {

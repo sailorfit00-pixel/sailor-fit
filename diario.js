@@ -455,7 +455,7 @@ function mostraToast(testo, etichetta, azione, tutto, extra) {   // extra: un se
   let t = document.getElementById("toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; document.body.appendChild(t); }
   t.innerHTML = `<span>${esc(testo)}</span>${etichetta ? `<button${etichetta === "Annulla" ? ' class="t-rosso"' : ""}>${esc(etichetta)}</button>` : ""}${extra ? `<button class="t-rosso" data-t-extra>${esc(extra)}</button>` : ""}`;
-  t.classList.add("on");
+  t.classList.remove("ok"); t.classList.add("on");
   const chiudi = () => { t.classList.remove("on"); clearTimeout(_toastTimer); };
   t.onclick = null; t.classList.toggle("tocca", !!(tutto && azione));
   if (tutto && azione) t.onclick = () => { chiudi(); azione(); };           // tutto il banner è un tasto
@@ -652,6 +652,13 @@ function mancaGiornata(data) {   // cosa manca e cosa è sopra rispetto agli obi
   if (sopraKcal(m)) sopra.push(`kcal +${Math.round(-m.kcal)}`);
   if (!manca.length && !sopra.length && m.kcal > 150) manca.push(`${Math.round(m.kcal)} kcal`);
   const testo = [manca.length ? `Mancano ${manca.join(" · ")}` : "", sopra.length ? `${manca.length ? "sopra: " : "Sopra: "}${sopra.join(" · ")}` : ""].filter(Boolean).join(" — ");
+  // calorie a posto ma un macro molto sotto (es. grassi −13 g con le proteine oltre): non è «in linea», si propone di riequilibrare
+  if (!sopra.length && !sopraKcal(m) && !(m.proteine > 10)) {
+    const squil = [];   // il macro è molto sotto e le kcal rimaste ne coprirebbero meno di 6 decimi: la giornata non è davvero «in linea»
+    if (m.grassi >= Math.max(8, T.grassi * 0.25) && c.grassi < m.grassi * 0.6) squil.push({ macro: "grassi", g: Math.round(m.grassi) });
+    if (m.carboidrati >= Math.max(20, T.carboidrati * 0.15) && c.carboidrati < m.carboidrati * 0.6) squil.push({ macro: "carboidrati", g: Math.round(m.carboidrati) });
+    if (squil.length) return { manca, sopra, squil, squilibrio: true, testo: `Calorie ok · ${squil.map(s => `${s.macro} −${s.g} g`).join(" · ")}`, m, T, ok: false };
+  }
   return { manca, sopra, testo, m, T, ok: !manca.length && !sopra.length };
 }
 // Durante la giornata conta il totale delle kcal, non il singolo pasto: si avvisa solo quando quello che resta
@@ -1225,12 +1232,15 @@ function alimentiIdeaHTML(c) {
     if (pastoPassato(c.data, c.pasto)) return "";
     const m0 = mancaData(c.data), T = targetPastoDiario(c.data, c.pasto);
     const m = { kcal: Math.min(m0.kcal, T.kcal + 20), proteine: m0.proteine, carboidrati: Math.min(m0.carboidrati, T.carboidrati + 3), grassi: Math.min(m0.grassi, T.grassi + 1) };
-    if (m.kcal < 40) return "";
+    if (m.kcal < 40) return `<p class="hint">Niente che ci stia nelle kcal che restano</p>`;
     const pre = c.pasto === "spuntino" && preSera(c.data), sp = c.pasto === "mattina" || c.pasto === "spuntino";
     let mosse = mosseSingole(c.data, c.pasto, m, false);
-    if (!mosse.length && m.carboidrati > 10) mosse = mosseCarbo(c.data, c.pasto, m);
+    // la quota di questo pasto può essere piccola (restano altri pasti da fare): soglie più basse, poi i piccoli completamenti
+    if (!mosse.length && m.carboidrati >= 5) mosse = mosseCarbo(c.data, c.pasto, m);
+    if (!mosse.length && m0.proteine > 4) mosse = mosseProteine(c.data, c.pasto, m, false);
+    if (!mosse.length && typeof piccoliCompletamenti === "function") mosse = piccoliCompletamenti(c.data, c.pasto, m);
     mosse = mosse.filter(x => !String(x.key).includes("|lig|") && !(sp && x.d.kcal > 320) && !(pre && x.d.grassi > 3) && !furbiScartati.has(x.key)).slice(0, 3);
-    if (!mosse.length) return "";
+    if (!mosse.length) return `<p class="hint">Niente che ci stia nelle kcal che restano</p>`;
     return `<h4 class="cosa-testa"><span>💡 Idee</span></h4><div class="sugg-ricette">${mosse.map(x => { const [, , nome, g] = x.key.split("|"); return `<button class="var-furbo lib-furbo" data-lib-add="${esc(nome)}" data-lib-g="${g}" data-lib-fisso="1">${x.testa}<em>${numeriMossa(x.d)}</em></button>`; }).join("")}</div>`;
   } catch (e) { return ""; }
 }
@@ -1257,11 +1267,51 @@ function scartaSuggerimento(chiave) {
   furbiScartati.add(chiave);
   if (!document.getElementById("modal").hidden && document.querySelector("[data-cosa-mossa]")) aggiornaCosaAggiungere(); else if (liberoCtx) rirenderLibero();
 }
+// Calorie a posto ma un macro (grassi o carboidrati) molto sotto, con proteine in più: si porta un po' di una fonte proteica in eccesso
+// a quanto serve e con le calorie liberate si aggiunge il macro che manca, nello stesso pasto. Un tocco applica entrambe le cose.
+function mosseRiequilibra(data, mg) {
+  const A = window.ALIMENTI || {}, m = mg.m, out = [], g = giornoDiario(data);
+  let slots = momentiGiorno(data).filter(p => !pastoPassato(data, p));
+  if (!slots.length && momentiGiorno(data).includes("cena")) slots = ["cena"];   // a cena passata si riequilibra la cena
+  const eccP = Math.max(0, -m.proteine);
+  if (eccP < 8) return out;
+  g.pasti.forEach((p, pi) => {
+    if (!slots.includes(p.pasto)) return;
+    const tipo = tipoFontiPasto(data, p.pasto);
+    (p.ingredienti || []).forEach((ing, ii) => {
+      const a = A[ing.nome], q = grammiIng(ing);
+      if (!a || ing.unita === "q.b." || !(a[1] >= 15) || !(q >= 60)) return;   // solo fonti di proteine vere
+      const ridG = Math.min(Math.round(q * 0.4 / 5) * 5, Math.floor(eccP * 100 / a[1] / 5) * 5);
+      if (ridG < 20) return;
+      const lib = macroDi(ing.nome, ridG), nuova = Math.round(q - ridG);
+      mg.squil.forEach(s => {
+        const fonti = s.macro === "grassi" ? (tipo === "pre" ? [] : FONTI_GRASSI) : (FONTI_CARBO_PASTO[tipo] || []);
+        const col = s.macro === "grassi" ? 3 : 2;
+        for (const [nome, massimo] of fonti) {
+          if (!A[nome] || MAI_CONSIGLIATI.test(nome)) continue;
+          for (let gg = Math.min(massimo, Math.max(5, Math.ceil(Math.min(s.g, 20) * 100 / A[nome][col] / 5) * 5)); gg >= 5; gg -= 5) {
+            const add = macroDi(nome, gg), d = { kcal: add.kcal - lib.kcal, proteine: add.proteine - lib.proteine, carboidrati: add.carboidrati - lib.carboidrati, grassi: add.grassi - lib.grassi };
+            if (d.kcal > m.kcal + 5 || (s.macro === "grassi" && d.carboidrati > Math.max(0, m.carboidrati) + 3) || (s.macro === "carboidrati" && d.grassi > Math.max(0, m.grassi) + 1)) continue;
+            if ((s.macro === "grassi" ? add.grassi : add.carboidrati) < Math.min(s.g * 0.4, 8)) break;
+            out.push({ key: `${p.pasto}|sco|${pi}|${ii}|${nuova}|${nome}|${gg}`, testa: `Porta <b>${esc(ing.nome.toLowerCase())}</b> da ${Math.round(q)} a <b>${nuova} g</b> e aggiungi <b>${gg} g di ${esc(nome.toLowerCase())}</b>`, d, _p: Math.abs((s.macro === "grassi" ? add.grassi : add.carboidrati) - s.g) });
+            break;
+          }
+        }
+      });
+    });
+  });
+  return out.sort((x, y) => x._p - y._p).filter((x, i, arr) => arr.findIndex(z => z.key === x.key) === i).slice(0, 4);
+}
 function cosaAggiungereHTML() {
   const data = dataDiario, sp = !giornataPronta(data) ? scartoPasti(data) : null;
   const m = sp && sp.voce ? sp.m : mancaData(data);   // a metà giornata si ragiona sui pasti già fatti, non sul totale del giorno
   const mg = sp && sp.voce ? { ok: false, testo: sp.voce.testo } : mancaGiornata(data);
   if (mg.ok) return `<h3 class="modal-title">Giornata completa ✓</h3>`;
+  if (mg.squilibrio) {   // calorie ok ma un macro molto sotto: soluzioni per riequilibrare la giornata
+    const mosse = mosseRiequilibra(data, mg).filter(x => !furbiScartati.has(x.key));
+    return `<h3 class="modal-title">${esc(mg.testo)}</h3>
+      ${mosse.length ? `<h4 class="cosa-testa"><span>⚖️ Riequilibra</span></h4><div class="sugg-ricette">${mosse.map(x => `<button class="var-furbo lib-furbo" data-furbo-k="${esc(x.key)}" data-cosa-mossa="${esc(x.key)}">${x.testa}<em>${numeriMossa(x.d)}</em></button>`).join("")}</div>` : `<p class="hint">Niente da spostare oggi: lo recuperi domani</p>`}`;
+  }
   const gOggi = giornoDiario(data).pasti, usate = new Set();
   const basiC = new Set(gOggi.map(x => rilevaBaseCarbo(x)).filter(Boolean)), basiP = new Set(gOggi.map(x => rilevaBaseProt(x)).filter(Boolean));
   let momenti = momentiGiorno(data).filter(p => !pastoPassato(data, p));
@@ -1306,12 +1356,18 @@ function aggiornaCosaAggiungere() {   // riscrive il foglio senza riaprirlo (la 
 function apriCosaAggiungere() { editCtx = null; liberoCtx = null; cosaGiro = {}; furbiScartati.clear(); openModal(cosaAggiungereHTML()); }
 // applica una mossa scelta nel foglio, direttamente sulla giornata
 function applicaMossaCosa(data, key) {
-  const [p, tipo, a, b, c, d] = key.split("|");
+  const [p, tipo, a, b, c, d, e] = key.split("|");
   const g = giornoDiario(data), prima = JSON.stringify(g);
   if (tipo === "ric") { if (aggiungiRicettaIn(data, p, a) < 0) return false; return prima; }
   if (tipo === "agg") {
     const x = { nome: a, pasto: p, passaggi: [], ingredienti: [{ nome: a, qta: +b, unita: "g", lock: true, cercato: a }] };
     aggiornaMacro(x); g.pasti.push(x);
+  } else if (tipo === "sco") {   // riequilibra: meno di una fonte proteica e, nello stesso pasto, il macro che mancava
+    const x = g.pasti[+a], ing = x && (x.ingredienti || [])[+b]; if (!ing) return false;
+    x.ingredienti[+b] = { nome: ing.nome, qta: +c, unita: UNITA_LIQUIDI.test(ing.nome) ? "ml" : "g", lock: true, cercato: ing.cercato || ing.nome };
+    delete x.auto; rinominaLibero(x);
+    const y = { nome: d, pasto: p, passaggi: [], ingredienti: [{ nome: d, qta: +e, unita: "g", lock: true, cercato: d }] };
+    aggiornaMacro(y); g.pasti.push(y);
   } else if (tipo === "lig") {
     const x = { nome: `${a} con ${String(c).toLowerCase()}`, pasto: p, passaggi: [], ingredienti: [{ nome: a, qta: +b, unita: "g", lock: true, cercato: a }, { nome: c, qta: +d, unita: "g", lock: true, cercato: c }] };
     aggiornaMacro(x); g.pasti.push(x);

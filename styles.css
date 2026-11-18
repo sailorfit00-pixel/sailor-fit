@@ -1258,6 +1258,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .wiz-sug { display: flex; flex-direction: column; gap: 4px; margin: -2px 0 8px; }
 
 .toast.tocca { cursor: pointer; }
+.toast.ok { border-color: var(--ok); color: var(--ok); font-weight: 600; }   /* verde sottile: sfondo scuro come gli altri messaggi, bordo e testo verdi (non un pulsante) */
 .wiz-fondo { box-shadow: 0 -14px 14px -4px var(--card), 0 60px 0 0 var(--card); }
 .lib-footer .lib-bilancia { flex: 0 0 auto; margin: 0; white-space: nowrap; }
 

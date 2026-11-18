@@ -1415,8 +1415,8 @@ function closeModal() {
 // Pannello di conferma dal basso (titolo, nota grigia, «Annulla» rosso e il tasto verde che esegue): per le azioni che cancellano o sostituiscono dati
 // Le azioni che cancellano o sovrascrivono dati (Elimina, Togli, Azzera, Ripristina…) hanno il tasto rosso e «Annulla» grigio; le altre il tasto verde e «Annulla» rosso.
 const AZIONI_DISTRUTTIVE = /^(elimina|togli|rimuovi|cancella|svuota|azzera|ripristina|sostituisci)/i;
-function chiediConferma(titolo, nota, etichettaSi, azione, indietro) {
-  const rossa = AZIONI_DISTRUTTIVE.test(String(etichettaSi).trim());
+function chiediConferma(titolo, nota, etichettaSi, azione, indietro, verde) {   // verde: forza il tasto verde (e «Annulla» rosso) anche per un'azione che sostituisce dati, es. il ripristino del backup
+  const rossa = !verde && AZIONI_DISTRUTTIVE.test(String(etichettaSi).trim());
   openModal(`<h3 class="modal-title">${esc(titolo)}</h3>${nota ? `<p class="hint">${esc(nota)}</p>` : ""}
     <div class="wiz-nav"><button class="btn-sec${rossa ? "" : " danger"}" data-cf-no>Annulla</button><button class="btn${rossa ? " btn-danger" : ""}" data-cf-si>${esc(etichettaSi)}</button></div>`);
   document.querySelector("[data-cf-no]").onclick = () => { if (indietro) indietro(); else closeModal(); };
@@ -2131,7 +2131,7 @@ function ripristinaBackup(testo) {
     Object.entries(b.dati).forEach(([k, v]) => { if (k.startsWith("mp_") && k !== "mp_adatta" && k !== "mp_storico") localStorage.setItem(k, v); });
     localStorage.setItem("mp_adatta", "1");   // al riavvio i dati vecchi si adattano alla versione nuova
     location.reload();
-  });
+  }, null, true);   // tasto di conferma verde
 }
 
 // -------- Import CSV --------
