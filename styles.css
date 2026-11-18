@@ -1281,6 +1281,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .lib-avv { background: none; border: none; color: var(--warn); font-size: 17px; width: 32px; height: 36px; cursor: pointer; padding: 0; }
 .lib-avv-lista { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
 .lib-avv-lista .var-furbo { margin-top: 0; width: auto; }
+.avv-tonno { font-size: 13px; color: var(--warn); line-height: 1.3; padding: 0 4px; }
 
 .lib-add-ing { display: block; margin: 4px 0 8px; padding: 8px 2px; font-size: 15px; }
 .lib-risultato .r-macro em { font-style: normal; color: var(--muted); font-size: .9em; }

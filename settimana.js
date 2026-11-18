@@ -67,6 +67,13 @@ function pianoSettimanaCalc(data) {
 
 // Obiettivo del giorno (kcal e macro) tenendo conto del budget settimanale
 function targetEffettivo(data) {
+  const oggi = oggiISO();
+  if (data < oggi) { const salvato = ((leggiDiario()[data] || {}).tgt); if (salvato && salvato.kcal > 0) return salvato; }   // un giorno passato mantiene l'obiettivo che aveva: Andamento non cambia a posteriori
+  const r = targetEffettivoCalcolato(data);
+  if (data === oggi) { try { const d = leggiDiario(), g = d[data]; if (g && (g.pasti || []).length && JSON.stringify(g.tgt) !== JSON.stringify(r)) { g.tgt = { kcal: r.kcal, proteine: r.proteine, carboidrati: r.carboidrati, grassi: r.grassi }; salvaDiario(d); } } catch (e) {} }   // oggi: si ricorda l'ultimo valore visto
+  return r;
+}
+function targetEffettivoCalcolato(data) {
   const T = targetBase(data);
   const p = pianoSettimana(data);
   const kcal = p.target[p.date.indexOf(data)];
@@ -194,7 +201,8 @@ let _riadTimer = null;
 function riadattaDopo(dataRif) {
   clearTimeout(_riadTimer);
   _riadTimer = setTimeout(() => {
-    riadattaSettimana(dataRif);
+    const prima = riadattaSettimana(dataRif);
+    if (Object.keys(prima).length && typeof avviso === "function") avviso("✓ Pasti adattati", "Annulla", () => { annullaPianificazione(prima); renderOggi(); });
     if (document.querySelector("#modal-content .budget-sett") && !document.getElementById("modal").hidden) rirenderAndamento();
     renderOggi();
   }, 350);

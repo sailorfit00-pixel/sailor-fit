@@ -466,7 +466,7 @@ const FONTI_PROTEINE = {
   leggero: ["Yogurt greco 0%", "Fiocchi di latte", "Quark magro"],      // colazione e spuntini: latticini magri
   pasto: ["Petto di pollo", "Fesa di tacchino", "Merluzzo", "Nasello", "Albume", "Tofu", "Fiocchi di latte", "Ceci cotti", "Lenticchie cotte"],   // niente tonno in scatola: per il mercurio si mangia con moderazione
 };
-const MAI_CONSIGLIATI = /^Tonno|^Skyr/;   // tonno: mercurio; skyr: non lo mangi mai
+const MAI_CONSIGLIATI = /(?!)/;   // nessun alimento è escluso dai consigli (tonno e skyr li mangi: il tonno in scatola si limita a 160 g a settimana, vedi tonnoOk)
 const furbiScartati = new Set();   // suggerimenti tolti con lo swipe (cestino): spariscono finché non riapri il foglio                                    // il tonno si mangia con moderazione (mercurio): mai proposto
 // Distanza dall'obiettivo del pasto (più bassa = meglio): le proteine mancanti pesano molto, grassi e calorie in eccesso anche
 function distanzaPasto(g) {
@@ -634,7 +634,7 @@ function elencoConsigli(c, m) {
       if (sforaCarbo(d)) return;
       if (d.kcal > 0 && ((gap.grassi >= -3 && nuovo.grassi < -3) || (gap.carboidrati >= -8 && nuovo.carboidrati < -10) || (gap.kcal >= -40 && nuovo.kcal < -40))) return;
       const v = valore(d) - 1;                                                       // un piccolo "costo" perché cambiare quantità è meno furbo che cambiare alimento
-      if (v >= 6 && (!migliore || v > migliore.v)) migliore = { tipo: "porta", r, nuova, d, v };
+      if (v >= 6 && (!migliore || v > migliore.v) && !(nuova > r.qta && TONNO_SCATOLA.test(r.nome) && !tonnoOk(c.data))) migliore = { tipo: "porta", r, nuova, d, v };
     });
     // completa: la fonte di carboidrati sale alla quantità che colma il buco (o che usa le calorie rimaste), anche di pochi grammi (patate 150 → 170 g)
     if (a0[2] * 4 / a0[0] >= 0.55 && gap.carboidrati >= 8 && gap.kcal >= 15) {
@@ -644,7 +644,7 @@ function elencoConsigli(c, m) {
         const d = mac(r.nome, nuova - r.qta), nuovo = meno(gap, d);
         if (!sforaCarbo(d) && nuovo.kcal >= -5 && (d.grassi <= 1 || nuovo.grassi >= -3)) {
           const v = valore(d) - 0.5;
-          if (v >= 1.5 && (!migliore || v >= migliore.v - 1)) migliore = { tipo: "porta", r, nuova, d, v };
+          if (v >= 1.5 && (!migliore || v >= migliore.v - 1) && !(nuova > r.qta && TONNO_SCATOLA.test(r.nome) && !tonnoOk(c.data))) migliore = { tipo: "porta", r, nuova, d, v };
         }
       }
     }
@@ -713,6 +713,8 @@ function elencoConsigli(c, m) {
   const passato = typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto);
   if (passato && righe.some(r => r.reg)) azioni.length = 0;   // un pasto già mangiato non si ritocca né ci si aggiunge altro; un momento ancora vuoto sì (se scrivi qualcosa che avevi dimenticato)
   // più mosse sullo stesso alimento non servono: si tiene la migliore. Poi le migliori tre, diverse tra loro
+  // «Cambia X con Y» nei consigli furbi si applica come AGGIUNTA (X lo togli tu): va valutata come somma, non come scambio. Se aggiungendo si sfora, non si propone
+  for (let i = azioni.length - 1; i >= 0; i--) { const a = azioni[i]; if (a.tipo !== "cambia") continue; const gn = a.g || Math.max(5, Math.round(a.r.qta / 5) * 5); a.d = mac(a.a, gn); if (sforaCarbo(a.d)) azioni.splice(i, 1); }
   azioni.sort((a, b) => b.v - a.v);
   const usati = new Set(), scelte = [];
   const iv = azioni.findIndex(a => a.tipo === "verdura");
@@ -805,9 +807,10 @@ function consiglioFurboHTML(c, m, fitMosse = []) {
       testa = `Mangiane <b>${esc(etichettaPezzi(rp._orig, a.k))}</b> invece di ${esc(fmtQta(c.nPezzi))}`;
       attr = `data-pezzi-set="${a.k}"`;
     } else if (a.tipo === "cambia") {
-      testa = a.g ? `Cambia <b>${esc(a.r.nome.toLowerCase())}</b> (${Math.round(a.r.qta)} g) con <b>${a.g} g di ${esc(a.a.toLowerCase())}</b>` : `Cambia <b>${esc(a.r.nome.toLowerCase())}</b> (${Math.round(a.r.qta)} g) con <b>${esc(a.a.toLowerCase())}</b>`;
-      const gAttr = a.g ? ` data-g="${a.g}"` : "";
-      attr = a.r.reg ? `data-sost-diario="${a.r.rif[0]}|${a.r.rif[1]}" data-nome="${esc(a.a)}"${gAttr}` : `data-sost-scegli="${a.r.rif}" data-nome="${esc(a.a)}"${gAttr}`;
+      // l'idea si AGGIUNGE a quello che c'è: niente sostituzione automatica, tolgo io ciò che non voglio (cestino)
+      const gn = a.g || Math.max(5, Math.round(a.r.qta / 5) * 5);
+      testa = `Aggiungi <b>${gn} g di ${esc(a.a.toLowerCase())}</b>`;
+      attr = `data-lib-add="${esc(a.a)}" data-lib-g="${gn}" data-lib-fisso="1"`;
     } else if (a.tipo === "porta") {
       testa = `Porta <b>${esc(a.r.nome.toLowerCase())}</b> da ${Math.round(a.r.qta)} a <b>${a.nuova} g</b>`;
       attr = a.r.reg ? `data-qta-diario="${a.r.rif[0]}|${a.r.rif[1]}|${a.nuova}"` : `data-lib-setq="${a.r.rif}|${a.nuova}"`;
@@ -1037,12 +1040,14 @@ function liberoHTML() {
     const crudo0 = /cott/i.test(it.nome) && typeof crudoLabel === "function" ? crudoLabel(it.nome, it.qta) : null;
     const crudo = [crudo0, eAlimentoTuo(it.nome) ? `<button class="btn-link lib-modifica-al" data-lib="al-modifica" data-nome="${esc(it.nome)}" aria-label="Modifica i valori nutrizionali">✏️ valori</button>` : ""].filter(Boolean).join(" · ") || null;   // riso, pasta… cotti: quanto pesarli da crudo
     const avv = pre && troppiGrassiPre(it.nome, it.qta);   // pre-workout: niente grassi
+    const avvT = typeof avvisoTonnoRiga === "function" ? avvisoTonnoRiga(c, it) : "";   // tonno in scatola oltre il consigliato della settimana
     const alt2 = avv && c.avvAperto === k ? alternativePre(c, it.nome, it.qta, k) : [];
     return `<div class="lib-riga">
       ${sel}${qtaHTML}
       ${avv ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}
+      ${avvT ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}
       <button class="lib-del" data-lib-del="${k}" aria-label="Rimuovi">${ICONA_CESTINO}</button>
-    </div>${avv && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${crudo ? `<div class="lib-crudo">${crudo}</div>` : ""}`;
+    </div>${avvT && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${crudo ? `<div class="lib-crudo">${crudo}</div>` : ""}`;
   });
   // ordine di lettura: prima le righe libere, poi ogni ricetta con la sua intestazione (nome · − porzioni + · cestino); gli indici k restano quelli di c.items
   const rango = (it) => it.grp == null ? -1 : it.grp;
@@ -1093,14 +1098,15 @@ function liberoHTML() {
     const equiv = gu ? `≈ ${Math.round(it.qta)} ${ug}` : (pzG ? `≈ ${fmtQta(it.qta / pzG)} pz` : "");   // quanto pesa quel pezzo / quanti pezzi sono quei grammi
     const scegli = opz.length > 1 ? `<span class="pm-unita">${opz.map(x => `<button class="pm-u${(gu ? u : ug) === x ? " on" : ""}" data-lib-unita-set="${k}|${x}" aria-pressed="${(gu ? u : ug) === x}">${ABBR[x] === "cucchiai" ? "cucc." : ABBR[x] === "cucchiaini" ? "c.ino" : x}</button>`).join("")}</span>` : "";
     const avv = pre && troppiGrassiPre(it.nome, it.qta);
+    const avvT = typeof avvisoTonnoRiga === "function" ? avvisoTonnoRiga(c, it) : "";
     const alt2 = avv && c.avvAperto === k ? alternativePre(c, it.nome, it.qta, k) : [];
     const aperta = !!(c.vociAperte && c.vociAperte.has(it.nome));
     return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
       <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura" : ""}" data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}">
         <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
-        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${frecciaHTML()}
+        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${avvT && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}${frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
-      </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
+      </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
     </div>`;
   };
   const parti = [];
@@ -1396,6 +1402,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const sa = e.target.closest("[data-sost-altri]");
     if (sa && liberoCtx) { liberoCtx.sostGiro = (liberoCtx.sostGiro || 0) + 1; const campo = document.querySelector(".lib-nome-in"); if (campo) { mostraSostituzioni(campo); campo.focus(); } return; }   // ↻ altri tre sostituti
+    const avt = e.target.closest("[data-lib-avvt]");
+    if (avt) { const k = +avt.dataset.libAvvt; c.tonnoAperto = c.tonnoAperto === k ? null : k; rirenderLibero(); return; }
     const av = e.target.closest("[data-lib-avv]");
     if (av) { const k = +av.dataset.libAvv; c.avvAperto = c.avvAperto === k ? null : k; rirenderLibero(); return; }
     if (e.target.closest("[data-furbo-altro]")) { c.furbiGiro = (c.furbiGiro || 0) + 1; rirenderLibero(); return; }   // ↻ un'altra idea
@@ -1412,6 +1420,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const it = c.items[+q.dataset.libQta];
       const v = leggiNumero(q.value);
       const pz = +q.dataset.pz || 0;
+      if (!isNaN(v) && v === 0) { const cestino = document.querySelector(`[data-lib-del="${+q.dataset.libQta}"]`); if (cestino) { cestino.click(); return; } }   // 0 = lo tolgo: come il cestino, con Annulla
       if (!isNaN(v) && v >= 0) { it.qta = Math.round(pz ? v * pz : v); it.lock = true; }
       ricalcolaLibero(); rirenderLibero(); return;
     }
@@ -1441,7 +1450,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const ne = e.target.closest("[data-lib-nome-edit]");
     if (ne && liberoCtx && liberoCtx.items[+ne.dataset.libNomeEdit]) { nomeComeCampo(ne, liberoCtx.items[+ne.dataset.libNomeEdit]); return; }
     const sc = e.target.closest("[data-sost-scegli]");
-    if (sc && liberoCtx) { sostituisciIngrediente(+sc.dataset.sostScegli, sc.dataset.nome, +sc.dataset.g || 0); return; }
+    if (sc && liberoCtx) {
+      const cc = liberoCtx, prima = (sc.querySelector(".tag-fit") || sc.closest(".lib-avv-lista")) && cc.vivo ? JSON.parse(JSON.stringify(cc.items)) : null;   // «più fit» e sostituti sono scambi dichiarati: si annullano con un tocco
+      sostituisciIngrediente(+sc.dataset.sostScegli, sc.dataset.nome, +sc.dataset.g || 0);
+      if (prima && typeof mostraToast === "function") mostraToast("Cambiato", "Annulla", () => { if (liberoCtx !== cc) return; cc.items = prima; ricalcolaLibero(); rirenderLibero(); });
+      return;
+    }
     const ar = e.target.closest("[data-autoc-ricetta], [data-ignoto-ricetta]");
     if (ar && liberoCtx && typeof usaRicettaNellEditor === "function") { usaRicettaNellEditor(ar.dataset.autocRicetta || ar.dataset.ignotoRicetta); return; }
     const av = e.target.closest("[data-autoc]");
