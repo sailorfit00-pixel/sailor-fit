@@ -1618,7 +1618,7 @@ function aggiungiRicettaAlPasto(nome, mod) {   // mod: le quantità scelte nel r
   const g = giornoDiario(c.data);
   const voci = mod && mod.nome === nome ? mod.items.filter(x => +x.qta > 0) : ps.items;   // le quantità che hai scelto tu, altrimenti quelle su misura
   const p = { nome: ps.nome, pasto: c.pasto, passaggi: [], ricetta: r.nome, nPezzi: ps.k,
-    ingredienti: voci.map(x => ({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.cercato || x.nome })) };
+    ingredienti: voci.map(x => Object.assign({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.cercato || x.nome }, x.u && x.u !== "g" ? { vis: x.u } : {})) };
   aggiornaMacro(p);
   g.pasti.push(p);
   scriviGiorno(c.data, g);
@@ -1773,7 +1773,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const ric = e.target.closest("[data-oggi-ricetta]");
     if (ric) {   // ＋ = aggiungi subito; tocco sulla ricetta = anteprima con la versione più fit
       if (e.target.closest(".rr-piu")) { usaRicettaNellEditor(ric.dataset.oggiRicetta); return; }
-      liberoCtx.anteprima = ric.dataset.oggiRicetta; liberoCtx.fitApplicato = null; liberoCtx.antQta = {}; liberoCtx.antK = null; rirenderLibero(); return;
+      liberoCtx.anteprima = ric.dataset.oggiRicetta; liberoCtx.fitApplicato = null; liberoCtx.antQta = {}; liberoCtx.antK = null; liberoCtx.antUni = null; rirenderLibero(); return;
     }
     const pz = e.target.closest("[data-pezzi]");
     if (pz) { cambiaPezzi(+pz.dataset.pezzi); return; }

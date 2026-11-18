@@ -849,7 +849,8 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 /* Pasti da fare: tutti lilla tratteggiati (il prossimo ha in più il fondo lilla e "Cosa mangi?") */
 .pasto-riga.vuoto { border: 1px dashed rgba(183,156,245,.6); }
 .pasto-riga.vuoto b { color: var(--lilla); }
-.pasto-riga.vuoto.prossimo { border: 1px dashed var(--lilla); background: var(--lilla-bg); }
+.pasto-riga.vuoto, .pasto-riga.vuoto.prossimo { background: none; }
+.pasto-riga.vuoto.prossimo { border: 1px dashed var(--lilla); }   /* pasto non ancora registrato: solo il tratteggio viola, niente riempimento */
 /* Corsa: scelta dei km */
 .km-scelta { margin-top: 14px; }
 .km-scelta .chips { align-items: center; }

@@ -1271,11 +1271,14 @@ function quantitaPastoHTML(r) {
   try {
     const c = contestoAgg && !contestoAgg.auto ? contestoAgg : { data: dataDiario, pasto: null };
     const pasto = c.pasto || pastoPerRicetta(r, c.data), ps = porzioneSuMisura(r, targetPastoDiario(c.data, pasto));
-    _aggQta = { nome: r.nome, items: ps.items.map(x => ({ nome: x.nome, qta: Math.round(x.qta), cercato: x.cercato })) };
+    _aggQta = { nome: r.nome, items: ps.items.map(x => ({ nome: x.nome, qta: Math.round(x.qta), cercato: x.cercato, u: typeof unitaDi === "function" ? unitaDi({ nome: x.nome }) : "g" })) };
   } catch (e) { _aggQta = null; return ""; }
   if (!_aggQta.items.length) return "";
-  return `<h4>Le tue quantità</h4><ul class="r-ing r-ing-agg">${_aggQta.items.map((i, k) => `<li class="ing-edit"><span class="ing-nome">${esc(i.nome)}</span><span class="ing-qta"><input type="number" class="qta-input" data-agg-qta="${k}" value="${i.qta}" min="0" step="5" inputmode="decimal" aria-label="Quantità di ${esc(i.nome)}"><em>g</em></span></li>`).join("")}</ul><p class="agg-totale" id="agg-totale">${totaleAggHTML()}</p>`;
+  return `<h4>Le tue quantità</h4><div class="lib-righe agg-righe" id="agg-lista">${aggListaHTML()}</div><p class="agg-totale" id="agg-totale">${totaleAggHTML()}</p>`;
 }
+// righe delle quantità (nome · − quantità + · unità · cestino): stesso aspetto del pannello del pasto
+function aggListaHTML() { return _aggQta ? _aggQta.items.map((i, k) => i.tolto ? "" : rigaQuantitaHTML("agg", k, i, i.u)).join("") : ""; }
+function aggAggiorna() { const l = document.getElementById("agg-lista"), t = document.getElementById("agg-totale"); if (l) l.innerHTML = aggListaHTML(); if (t) t.innerHTML = totaleAggHTML(); }
 function ricettaDetailHTML(r, editable) {
   if (!editable && r._orig) {
     const o = r._orig, n = o.porzioni, uno = macroPerPezzo(o);
@@ -2502,8 +2505,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const q = e.target.closest && e.target.closest("[data-agg-qta]");
     if (!q || !_aggQta) return;
     const it = _aggQta.items[+q.dataset.aggQta]; if (!it) return;
-    it.qta = Math.max(0, +q.value || 0);
+    const v = typeof leggiNumero === "function" ? leggiNumero(q.value) : +q.value, pz = +q.dataset.pz || 0;   // virgola ok; in pezzi/cucchiai si converte in grammi
+    it.qta = Math.max(0, isNaN(v) ? 0 : Math.round((pz ? v * pz : v) * 10) / 10);
     const tot = document.getElementById("agg-totale"); if (tot) tot.innerHTML = totaleAggHTML();
+  });
+  document.getElementById("modal-content").addEventListener("click", (e) => {   // − / ＋ e cestino delle quantità del riepilogo ricetta
+    if (!_aggQta) return;
+    const st = e.target.closest("[data-agg-step]");
+    if (st) { const [k, d] = st.dataset.aggStep.split("|").map(Number), it = _aggQta.items[k]; if (it) { it.qta = qtaDopoStep(it.nome, +it.qta, it.u, d); aggAggiorna(); } return; }
+    const del = e.target.closest("[data-agg-del]");
+    if (del) { const it = _aggQta.items[+del.dataset.aggDel]; if (it) { it.qta = 0; it.tolto = true; aggAggiorna(); } }
+  });
+  document.getElementById("modal-content").addEventListener("change", (e) => {   // unità del riepilogo ricetta: g ⇄ pz…
+    const un = e.target.closest && e.target.closest("[data-agg-unita]");
+    if (!un || !_aggQta) return;
+    const it = _aggQta.items[+un.dataset.aggUnita]; if (!it) return;
+    it.u = un.value; if (typeof salvaUnitaPreferita === "function") salvaUnitaPreferita(it.nome, un.value); aggAggiorna();
   });
   document.getElementById("modal-content").addEventListener("change", wizFieldUpdate);
   // toccando un'opzione si sceglie subito (prima che il campo perda il fuoco)

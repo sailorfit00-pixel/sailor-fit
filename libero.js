@@ -956,10 +956,35 @@ function anteprimaRicetta(c, nomeRicetta) {
   const fit = items.map((it, k) => { const m = mosse.find(a => a.r.k === k); return !m ? it : m.tipo === "cambia" ? { nome: m.a, qta: it.qta } : { nome: it.nome, qta: m.nuova }; });
   return { r, ps, items, mosse, fit, tot: macroDa(items), totFit: macroDa(fit) };
 }
+// Riga «nome · − quantità + · unità · cestino» con l'unità cambiabile (g ⇄ pz, cucchiai…): per l'anteprima della ricetta (p = "ant") e per il riepilogo (p = "agg").
+// La quantità è sempre in grammi dentro; qui si vede nell'unità scelta.
+function opzioniUnita(nome) {
+  const pz = (window.PESO_PZ || {})[nome];
+  return [...(pz ? [["pz", "pz"]] : []), ...(UNITA_LIQUIDI.test(nome) ? [["ml", "ml"], ["g", "g"]] : [["g", "g"]]), ...(puoUsareCucchiai(nome) ? [["cucchiaio", "cucchiaio"], ["cucchiaino", "cucchiaino"]] : [])];
+}
+function rigaQuantitaHTML(p, k, it, u) {
+  const gu = grammiPerUnita(it.nome, u), ABBR = { pz: "pz", g: "g", ml: "ml", cucchiaio: "cucc.", cucchiaino: "c.ino" };
+  const fmt = (n) => String(Math.round(n * 10) / 10).replace(".", ",");
+  const input = gu
+    ? `<input class="qta-input lib-qta" type="text" inputmode="decimal" autocomplete="off" data-${p}-qta="${k}" data-pz="${gu}" value="${fmt(it.qta / gu)}" aria-label="Quantità di ${esc(it.nome)}">`
+    : `<input class="qta-input lib-qta" type="text" inputmode="decimal" autocomplete="off" data-${p}-qta="${k}" value="${Math.round(it.qta)}" aria-label="Quantità di ${esc(it.nome)}">`;
+  return `<div class="lib-riga"><div class="lib-nome-txt${classeNome(it.nome)}"><span class="lib-nome-t">${esc(it.nome)}</span></div>
+      <div class="qstep"><button class="qstep-b" data-${p}-step="${k}|-1" aria-label="Meno">−</button>${input}<button class="qstep-b" data-${p}-step="${k}|1" aria-label="Più">＋</button></div>
+      <div class="unita-box"><span class="unita-et ${(ABBR[u] || u).length > 3 ? "lunga" : ""}">${ABBR[u] || u}</span><select class="lib-unita-sel" data-${p}-unita="${k}" aria-label="Unità di misura">${opzioniUnita(it.nome).map(([v, l]) => `<option value="${v}" ${u === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <button class="lib-del" data-${p}-del="${k}" aria-label="Rimuovi">${ICONA_CESTINO}</button></div>`;
+}
+// nuova quantità (in grammi) dopo un tocco su − / ＋, con lo stesso passo del pannello
+function qtaDopoStep(nome, qta, u, d) {
+  const { gu, passo } = passoQuantita({ nome, qta, unita: u });
+  const att = gu ? qta / gu : qta;
+  const nuovo = gu ? Math.max(passo, Math.round((att + d * passo) / passo) * passo)
+    : Math.max(0, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10) : (att <= 10 ? Math.ceil(att) - 1 : Math.ceil(att / 10) * 10 - 10));
+  return gu ? Math.round(nuovo * gu * 10) / 10 : nuovo;
+}
 // le quantità dell'anteprima (con «Più fit» se applicato) e quelle che hai cambiato tu a mano
 function anteprimaItemsModificati(c, a) {
   const base = c.fitApplicato === "ora" ? a.fit : a.items, mod = c.antQta || {};
-  return base.map((it, k) => ({ nome: it.nome, qta: mod[k] != null ? mod[k] : it.qta }));
+  return base.map((it, k) => ({ nome: it.nome, qta: mod[k] != null ? mod[k] : it.qta, u: (c.antUni && c.antUni[k]) || unitaDi({ nome: it.nome }) }));
 }
 function anteprimaHTML(c) {
   const a = anteprimaRicetta(c, c.anteprima); if (!a) { c.anteprima = null; return ""; }
@@ -972,10 +997,7 @@ function anteprimaHTML(c) {
     <div class="wiz-nav"><button class="btn-sec" data-ant-fit-si="ora">Solo questa volta</button><button class="btn" data-ant-fit-si="sempre">Sempre</button></div>`;
   const ora = c.fitApplicato === "ora";
   const items = anteprimaItemsModificati(c, a), tot = macroDa(items);   // le quantità che hai cambiato tu contano nel totale
-  const riga = (it, k) => `<div class="lib-riga"><div class="lib-nome-txt${classeNome(it.nome)}"><span class="lib-nome-t">${esc(it.nome)}</span></div>
-      <div class="qstep"><button class="qstep-b" data-ant-step="${k}|-1" aria-label="Meno">−</button><input class="qta-input lib-qta" type="text" inputmode="decimal" autocomplete="off" data-ant-qta="${k}" value="${Math.round(it.qta)}" aria-label="Quantità di ${esc(it.nome)}"><button class="qstep-b" data-ant-step="${k}|1" aria-label="Più">＋</button></div>
-      <div class="unita-box"><span class="unita-et">g</span></div>
-      <button class="lib-del" data-ant-del="${k}" aria-label="Rimuovi">${ICONA_CESTINO}</button></div>`;
+  const riga = (it, k) => rigaQuantitaHTML("ant", k, it, it.u);
   const rp = a.r._orig && typeof etichettaPezzi === "function" ? a.r._orig : null;
   const misura = rp && a.ps.kMisura !== a.ps.k ? `<button class="btn-link ant-misura" data-ant-misura>≈ ${esc(String(etichettaPezzi(rp, a.ps.kMisura)))} per il tuo obiettivo</button>` : "";
   const cont = rp ? `<div class="ant-cont"><span class="pm-contatore pm-cont-grande"><button class="nav-btn" data-ant-pz="-1" aria-label="Meno porzioni">−</button><b>${esc(String(etichettaPezzi(rp, a.ps.k)))}</b><button class="nav-btn" data-ant-pz="1" aria-label="Più porzioni">＋</button></span>${misura}</div>` : "";
@@ -1010,8 +1032,8 @@ function applicaPiuFit(c, quando) {
 // aggiunge la ricetta dell'anteprima (normale o più fit) al pasto e torna al pasto
 function aggiungiDaAnteprima(c) {
   const a = anteprimaRicetta(c, c.anteprima), stato = c.fitApplicato, mosse = c.fitMosse;
-  const finali = a ? anteprimaItemsModificati(c, a).filter(x => +x.qta > 0) : [], kFinale = a ? a.ps.k : null, nomeFinale = a ? a.ps.nome : null, mod = c.antQta || {}, cambiato = Object.keys(mod).length || (a && a.ps.kMisura != null && a.ps.k !== a.ps.kMisura);
-  c.anteprima = null; c.fitApplicato = null; c.fitMosse = null; c.confermaFit = false; c.antQta = null; c.antK = null;
+  const finali = a ? anteprimaItemsModificati(c, a).filter(x => +x.qta > 0) : [], kFinale = a ? a.ps.k : null, nomeFinale = a ? a.ps.nome : null, mod = c.antQta || {}, cambiato = Object.keys(mod).length || Object.keys(c.antUni || {}).length || (a && a.ps.kMisura != null && a.ps.k !== a.ps.kMisura);
+  c.anteprima = null; c.fitApplicato = null; c.fitMosse = null; c.confermaFit = false; c.antQta = null; c.antK = null; c.antUni = null;
   if (!a) { rirenderLibero(); return; }
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
   const i = aggiungiRicettaIn(c.data, c.pasto, a.r.nome); if (i < 0) { rirenderLibero(); return; }
@@ -1023,7 +1045,7 @@ function aggiungiDaAnteprima(c) {
   if (cambiato && finali.length) {   // porzioni e quantità scelte nell'anteprima vincono su quelle calcolate
     const g = giornoDiario(c.data), p = g.pasti[i];
     if (p) {
-      p.ingredienti = finali.map(x => ({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.nome }));
+      p.ingredienti = finali.map(x => Object.assign({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.nome }, x.u && x.u !== "g" ? { vis: x.u } : {}));   // vis = l'unità con cui l'hai scelta (pz, cucchiai…)
       if (kFinale) { p.nPezzi = kFinale; if (nomeFinale) p.nome = nomeFinale; }
       aggiornaMacro(p); scriviGiorno(c.data, g);
     }
@@ -1391,7 +1413,7 @@ document.addEventListener("DOMContentLoaded", () => {
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
       return;
     }
-    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; c.fitApplicato = null; c.confermaFit = false; c.antQta = null; c.antK = null; rirenderLibero(); return; }
+    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; c.fitApplicato = null; c.confermaFit = false; c.antQta = null; c.antK = null; c.antUni = null; rirenderLibero(); return; }
     if (e.target.closest("[data-ant-fit]")) { c.confermaFit = true; rirenderLibero(); return; }
     if (e.target.closest("[data-ant-fit-no]")) { c.confermaFit = false; rirenderLibero(); return; }
     const fitSi = e.target.closest("[data-ant-fit-si]"); if (fitSi) { applicaPiuFit(c, fitSi.dataset.antFitSi); return; }
@@ -1409,7 +1431,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (antSt && c.anteprima) {
       const [k, d] = antSt.dataset.antStep.split("|").map(Number), a = anteprimaRicetta(c, c.anteprima); if (!a) return;
       const cur = anteprimaItemsModificati(c, a)[k]; if (!cur) return;
-      (c.antQta = c.antQta || {})[k] = Math.max(0, Math.round((+cur.qta + d * 5) / 5) * 5); rirenderLibero(); return;
+      (c.antQta = c.antQta || {})[k] = qtaDopoStep(cur.nome, +cur.qta, cur.u, d); rirenderLibero(); return;
     }
     const antDel = e.target.closest("[data-ant-del]");   // cestino: l'ingrediente non entra nel pasto
     if (antDel && c.anteprima) { (c.antQta = c.antQta || {})[+antDel.dataset.antDel] = 0; rirenderLibero(); return; }
@@ -1460,6 +1482,8 @@ document.addEventListener("DOMContentLoaded", () => {
   mc.addEventListener("change", (e) => {
     if (!liberoCtx) return;
     const c = liberoCtx;
+    const au = e.target.closest && e.target.closest("[data-ant-unita]");   // unità dell'anteprima: g ⇄ pz…, la quantità resta la stessa
+    if (au && c.anteprima) { const k = +au.dataset.antUnita, a = anteprimaRicetta(c, c.anteprima), cur = a && anteprimaItemsModificati(c, a)[k]; if (cur) { (c.antUni = c.antUni || {})[k] = au.value; salvaUnitaPreferita(cur.nome, au.value); rirenderLibero(); } return; }
     const q = e.target.closest("[data-lib-qta]");
     if (q) {
       const it = c.items[+q.dataset.libQta];
@@ -1491,8 +1515,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const aq = e.target.closest && e.target.closest("[data-ant-qta]");   // quantità nell'anteprima della ricetta: il totale si aggiorna mentre scrivi
     if (aq && liberoCtx.anteprima) {
       const c = liberoCtx, a = anteprimaRicetta(c, c.anteprima); if (!a) return;
-      const vq = leggiNumero(aq.value);   // accetta anche la virgola (7,5)
-      (c.antQta = c.antQta || {})[+aq.dataset.antQta] = Math.max(0, isNaN(vq) ? 0 : vq);
+      const vq = leggiNumero(aq.value), pzq = +aq.dataset.pz || 0;   // accetta anche la virgola (7,5); in pezzi/cucchiai si converte in grammi
+      (c.antQta = c.antQta || {})[+aq.dataset.antQta] = Math.max(0, isNaN(vq) ? 0 : Math.round((pzq ? vq * pzq : vq) * 10) / 10);
       const box = document.querySelector(".ant-tot"); if (box) box.innerHTML = macroHaObiettivoHTML(macroDa(anteprimaItemsModificati(c, a)), c.target());
     }
   });
