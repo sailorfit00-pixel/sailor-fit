@@ -1263,15 +1263,16 @@ let _aggQta = null;
 function totaleAggHTML() {
   if (!_aggQta || typeof macroAlimento !== "function") return "";
   const t = _aggQta.items.reduce((a, i) => { const d = macroAlimento(i.nome, +i.qta || 0); return { kcal: a.kcal + d.kcal, proteine: a.proteine + d.proteine, carboidrati: a.carboidrati + d.carboidrati, grassi: a.grassi + d.grassi }; }, { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 });
-  return `<b>${Math.round(t.kcal)}</b> kcal · P ${Math.round(t.proteine)} · C ${Math.round(t.carboidrati)} · G ${Math.round(t.grassi)}`;
+  const giorno = contestoAgg && !contestoAgg.auto ? contestoAgg.data : dataDiario;
+  return `<b>${Math.round(t.kcal)}</b> kcal · P ${Math.round(t.proteine)} · C ${Math.round(t.carboidrati)} · G ${Math.round(t.grassi)}${typeof sopraGiornoHTML === "function" ? sopraGiornoHTML(giorno, t.kcal) : ""}`;
 }
 function quantitaPastoHTML(r) {
   _aggQta = null;
   if (typeof aggiungiRicettaAlPasto !== "function" || typeof porzioneSuMisura !== "function" || typeof targetPastoDiario !== "function" || typeof pastoPerRicetta !== "function") return "";
   try {
     const c = contestoAgg && !contestoAgg.auto ? contestoAgg : { data: dataDiario, pasto: null };
-    const pasto = c.pasto || pastoPerRicetta(r, c.data), ps = porzioneSuMisura(r, targetPastoDiario(c.data, pasto));
-    _aggQta = { nome: r.nome, items: ps.items.map(x => ({ nome: x.nome, qta: Math.round(x.qta), cercato: x.cercato, u: typeof unitaDi === "function" ? unitaDi({ nome: x.nome }) : "g" })) };
+    const pasto = c.pasto || pastoPerRicetta(r, c.data), ps = porzioneSuMisura(r, targetResiduoPasto(c.data, pasto));
+    _aggQta = { nome: r.nome, items: ps.items.map(x => { const u = typeof unitaDi === "function" ? unitaDi({ nome: x.nome }) : "g"; return { nome: x.nome, qta: typeof qtaPezziInteri === "function" ? qtaPezziInteri(x.nome, u, Math.round(x.qta)) : Math.round(x.qta), cercato: x.cercato, u }; }) };
   } catch (e) { _aggQta = null; return ""; }
   if (!_aggQta.items.length) return "";
   return `<h4>Le tue quantità</h4><div class="lib-righe agg-righe" id="agg-lista">${aggListaHTML()}</div><p class="agg-totale" id="agg-totale">${totaleAggHTML()}</p>`;
@@ -2386,7 +2387,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Chiusura del modale (X, backdrop, tasto Esc)
   document.getElementById("modal").addEventListener("click", (e) => {
-    if (e.target.closest("[data-chiudi]")) { if (_ricettaDaLista) apriListaRicetteCome(); else closeModal(); }
+    const ch = e.target.closest("[data-chiudi]");
+    if (ch) {
+      if (ch.classList.contains("modal-close") && typeof indietroAnteprima === "function" && indietroAnteprima()) { e.__tornaIdee = true; return; }   // ✕ nell'anteprima di un'idea: torna alle idee (sfondo e Esc chiudono tutto)
+      if (_ricettaDaLista) apriListaRicetteCome(); else closeModal();
+    }
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !document.getElementById("modal").hidden) { if (_ricettaDaLista) apriListaRicetteCome(); else closeModal(); }
@@ -2520,7 +2525,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const un = e.target.closest && e.target.closest("[data-agg-unita]");
     if (!un || !_aggQta) return;
     const it = _aggQta.items[+un.dataset.aggUnita]; if (!it) return;
-    it.u = un.value; if (typeof salvaUnitaPreferita === "function") salvaUnitaPreferita(it.nome, un.value); aggAggiorna();
+    it.u = un.value; if (typeof salvaUnitaPreferita === "function") salvaUnitaPreferita(it.nome, un.value); if (typeof qtaPezziInteri === "function") it.qta = qtaPezziInteri(it.nome, it.u, +it.qta); aggAggiorna();
   });
   document.getElementById("modal-content").addEventListener("change", wizFieldUpdate);
   // toccando un'opzione si sceglie subito (prima che il campo perda il fuoco)

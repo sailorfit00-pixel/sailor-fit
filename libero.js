@@ -159,9 +159,16 @@ function calcolaGrammi(items, target) {
 
 // Macro di un insieme di ingredienti in grammi
 // Di quanto cambia la quantità a ogni tocco di − / ＋: pezzi interi (mezzi per i frutti grandi), mezzi cucchiai, grammi in base all'alimento
+// Cose che si contano a pezzi interi (tortilla, piadina, wrap, panino…): 1, 2, 3… (i mezzi solo se li scrivi tu). Il peso del pezzo cambia con la grandezza.
+const PEZZI_INTERI = /tortilla|piadina|wrap|pita\b|naan|panino|pizza|focaccia|cornetto|crepe|cialda/i;
+const eIntero = (nome, u) => u === "pz" && PEZZI_INTERI.test(String(nome));
+// quantità in grammi portata a pezzi interi (almeno 1) se l'alimento si conta a pezzi interi
+function qtaPezziInteri(nome, u, qta) { const gu = grammiPerUnita(nome, u); return eIntero(nome, u) && gu ? Math.max(1, Math.round(qta / gu)) * gu : qta; }
+// prossimo valore dopo un tocco su − / ＋: il multiplo del passo successivo (0,6 pz con passo 1 → 1, non 2)
+const prossimoMultiplo = (att, d, passo) => Math.max(passo, (d > 0 ? Math.floor(att / passo + 1e-9) + 1 : Math.ceil(att / passo - 1e-9) - 1) * passo);
 function passoQuantita(it) {
   const u = unitaDi(it), gu = grammiPerUnita(it.nome, u);
-  if (gu) return { gu, passo: u === "pz" && gu < 100 ? 1 : 0.5 };
+  if (gu) return { gu, passo: eIntero(it.nome, u) || (u === "pz" && gu < 100) ? 1 : 0.5 };
   const tip = profiloAlimento(it.nome).tip;
   return { gu: 0, passo: tip <= 25 ? 5 : tip <= 80 ? 10 : 25 };
 }
@@ -917,17 +924,19 @@ function altreIdeeHTML(c) {
   if (!c || !c.vivo || c.bozza || !c.items.length || typeof ricetteConsigliate !== "function") return "";
   const g = giornoDiario(c.data), idx = new Set(g.pasti.map((p, k) => p.pasto === c.pasto ? k : -1).filter(k => k >= 0));
   const attuali = new Set(g.pasti.filter(p => p.pasto === c.pasto).map(p => p.ricetta || p.nome));
-  if (!c._altre || c._altreChiave !== [...attuali].join("|")) {
-    const resta = mancaData(c.data, idx);   // ciò che resta nella giornata senza questo pasto: le idee non devono sforare
+  const chiaveAltre = [...attuali].join("|") + "|" + Math.round(mancaData(c.data).kcal);   // si ricalcola se cambia il pasto o le kcal che restano
+  if (!c._altre || c._altreChiave !== chiaveAltre) {
+    const resta = mancaData(c.data);   // ciò che resta nella giornata CON quello che hai già nel pasto: le idee si aggiungono, non lo sostituiscono
     const ciSta = (t) => t.kcal <= resta.kcal + 15 && t.carboidrati <= Math.max(0, resta.carboidrati) + 4 && t.grassi <= Math.max(0, resta.grassi) + 2;
-    c._altre = ricetteConsigliate(c.data, c.pasto, 24, idx).filter(x => !attuali.has(x.r.nome) && ciSta(x.tot) && !(typeof ricettaEsclusa === "function" && ricettaEsclusa(x.r)))
-      .sort((a, b) => Math.abs(resta.kcal - a.tot.kcal) - Math.abs(resta.kcal - b.tot.kcal));   // prima quelle che riempiono meglio le kcal che restano
-    c._altreChiave = [...attuali].join("|");
+    const quota = targetResiduoPasto(c.data, c.pasto).kcal;   // quanto resta a QUESTO pasto (quota meno ciò che c'è già)
+    c._altre = ricetteConsigliate(c.data, c.pasto, 24).filter(x => !attuali.has(x.r.nome) && ciSta(x.tot) && !(typeof ricettaEsclusa === "function" && ricettaEsclusa(x.r)))
+      .sort((a, b) => Math.abs(quota - a.tot.kcal) - Math.abs(quota - b.tot.kcal));   // prima quelle più vicine a quello che resta del pasto
+    c._altreChiave = chiaveAltre;
   }
   const tutte = c._altre; if (!tutte.length) return "";
   const pagine = Math.ceil(tutte.length / 3), pg = (c.altreGiro || 0) % pagine;
   return `<div class="altre-idee"><h4 class="cosa-testa"><span>💡 Idee</span>${pagine > 1 ? `<button class="cosa-altre" data-altre-idee aria-label="Altre idee">${ICONA_ALTRE}</button>` : ""}</h4>
-    <div class="sugg-ricette">${tutte.slice(pg * 3, pg * 3 + 3).map(x => `<button class="riga-ricetta rr-sostituisci" data-lib-sostituisci="${esc(x.r.nome)}"><span class="rr-nome">${esc(x.nome || x.r.nome)}</span>${macroStileHTML(x.tot)}</button>`).join("")}</div></div>`;
+    <div class="sugg-ricette">${tutte.slice(pg * 3, pg * 3 + 3).map(x => `<button class="riga-ricetta con-piu" data-oggi-ricetta="${esc(x.r.nome)}"><span class="rr-nome">${esc(x.nome || x.r.nome)}</span>${macroStileHTML(x.tot)}<span class="rr-piu" role="button" aria-label="Aggiungi subito">＋</span></button>`).join("")}</div></div>`;
 }
 // sostituisce tutto quello che c'è nel pasto con la ricetta scelta (porzione su misura per le kcal che restano), con Annulla
 function sostituisciPastoCon(c, nomeRicetta) {
@@ -942,9 +951,19 @@ function sostituisciPastoCon(c, nomeRicetta) {
 function anteprimaRicetta(c, nomeRicetta) {
   const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === (c.pasto === "mattina" ? "spuntino" : c.pasto)) || ricette.find(x => x.nome === nomeRicetta);
   if (!r) return null;
-  const ps = porzioneSuMisura(r, targetPastoDiario(c.data, c.pasto));
+  const ps = porzioneSuMisura(r, targetResiduoPasto(c.data, c.pasto));
   ps.kMisura = ps.k;   // la porzione su misura per le kcal che restano: si parte da 1 e si sale se serve
-  const kScelto = r._orig ? (c.antK || 1) : null;   // sempre 1 porzione / 1 fetta di partenza
+  // si parte da 1 porzione / 1 fetta; ma se c'è un pezzo intero (tortilla, piadina…) la porzione parte da quella che ne usa almeno ¾ (così «1 metà di wrap» diventa 1 wrap intero, non 0,6 tortilla)
+  const kPartenza = (() => {
+    if (!r._orig || typeof versioneAPezzi !== "function") return 1;
+    const passo = typeof passoPezzi === "function" ? passoPezzi(r._orig) : 1, A = window.ALIMENTI || {};
+    for (let k = Math.max(1, passo); k <= (r._orig.porzioni || 1) + 0.001; k += passo) {
+      const ing = versioneAPezzi(r._orig, k).ingredienti.filter(i => A[i.nome] && eIntero(i.nome, "pz") && grammiPerUnita(i.nome, "pz"));
+      if (!ing.length || ing.every(i => grammiIng(i) / grammiPerUnita(i.nome, "pz") >= 0.75)) return k;
+    }
+    return 1;
+  })();
+  const kScelto = r._orig ? (c.antK || kPartenza) : null;
   if (r._orig && kScelto !== ps.k && typeof versioneAPezzi === "function") {
     const m = versioneAPezzi(r._orig, kScelto), A = window.ALIMENTI || {};
     ps.items = m.ingredienti.filter(i => i.unita !== "q.b." && A[i.nome]).map(i => ({ nome: i.nome, qta: Math.round(grammiIng(i)) }));
@@ -977,21 +996,31 @@ function rigaQuantitaHTML(p, k, it, u) {
 function qtaDopoStep(nome, qta, u, d) {
   const { gu, passo } = passoQuantita({ nome, qta, unita: u });
   const att = gu ? qta / gu : qta;
-  const nuovo = gu ? Math.max(passo, Math.round((att + d * passo) / passo) * passo)
+  const nuovo = gu ? prossimoMultiplo(att, d, passo)
     : Math.max(0, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10) : (att <= 10 ? Math.ceil(att) - 1 : Math.ceil(att / 10) * 10 - 10));
   return gu ? Math.round(nuovo * gu * 10) / 10 : nuovo;
+}
+// totale del pasto DOPO l'aggiunta: quello che c'è già nel pasto + l'idea che stai guardando (così si confronta con la quota del pasto)
+function sommaConPasto(c, t) {
+  if (!c.items || !c.items.length) return t;
+  const g = macroDa(c.items); return { kcal: g.kcal + t.kcal, proteine: g.proteine + t.proteine, carboidrati: g.carboidrati + t.carboidrati, grassi: g.grassi + t.grassi };
+}
+// ✕ dentro l'anteprima = un livello indietro (torna alle idee), non chiude il pannello. Vero se ha gestito il tocco.
+function indietroAnteprima() {
+  const c = liberoCtx; if (!c || !c.vivo || !c.anteprima) return false;
+  if (c.confermaFit) { c.confermaFit = false; rirenderLibero(); return true; }
+  c.anteprima = null; c.fitApplicato = null; c.confermaFit = false; c.antQta = null; c.antK = null; c.antUni = null; rirenderLibero(); return true;
 }
 // le quantità dell'anteprima (con «Più fit» se applicato) e quelle che hai cambiato tu a mano
 function anteprimaItemsModificati(c, a) {
   const base = c.fitApplicato === "ora" ? a.fit : a.items, mod = c.antQta || {};
-  return base.map((it, k) => ({ nome: it.nome, qta: mod[k] != null ? mod[k] : it.qta, u: (c.antUni && c.antUni[k]) || unitaDi({ nome: it.nome }) }));
+  return base.map((it, k) => { const u = (c.antUni && c.antUni[k]) || unitaDi({ nome: it.nome }); return { nome: it.nome, qta: mod[k] != null ? mod[k] : qtaPezziInteri(it.nome, u, it.qta), u }; });   // tortilla, piadina…: pezzi interi
 }
 function anteprimaHTML(c) {
   const a = anteprimaRicetta(c, c.anteprima); if (!a) { c.anteprima = null; return ""; }
   const descr = a.mosse.map(descrMossaFit).join(" · ");
   // conferma di «Più fit»: solo per questo piatto o per sempre (la ricetta cambia)
-  if (c.confermaFit && a.mosse.length) return `<button class="btn-link modal-indietro" data-ant-fit-no>‹ Torna</button>
-    <h3 class="modal-title">🥗 Più fit</h3>
+  if (c.confermaFit && a.mosse.length) return `<h3 class="modal-title">🥗 Più fit</h3>
     <p class="ant-conf">${descr} <b class="ant-meno">−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</b></p>
     <p class="hint">«Sempre» cambia anche la ricetta: le prossime volte la trovi già così.</p>
     <div class="wiz-nav"><button class="btn-sec" data-ant-fit-si="ora">Solo questa volta</button><button class="btn" data-ant-fit-si="sempre">Sempre</button></div>`;
@@ -1007,9 +1036,8 @@ function anteprimaHTML(c) {
       <span class="ant-mosse">${descr}</span>
       <span class="ant-fit-nota">Tocca per applicarlo</span>
     </button>` : "";   // niente da alleggerire: non compare niente
-  return `<button class="btn-link modal-indietro" data-ant-chiudi>‹ Torna al pasto</button>
-    <h3 class="modal-title">${esc(a.ps.nome || a.r.nome)}</h3>
-    ${cont}<div class="ant-righe"><div class="r-macro ant-tot">${macroHaObiettivoHTML(tot, c.target())}</div><div class="lib-righe">${items.map((it, k) => it.qta > 0 || !(c.antQta && c.antQta[k] === 0) ? riga(it, k) : "").join("")}</div></div>
+  return `<h3 class="modal-title">${esc(a.ps.nome || a.r.nome)}</h3>
+    ${cont}<div class="ant-righe"><div class="r-macro ant-tot">${macroHaObiettivoHTML(sommaConPasto(c, tot), c.target())}${sopraGiornoHTML(c.data, tot.kcal)}</div><div class="lib-righe">${items.map((it, k) => it.qta > 0 || !(c.antQta && c.antQta[k] === 0) ? riga(it, k) : "").join("")}</div></div>
     ${fit}
     <div class="barra-salva"><button class="btn block" data-ant-aggiungi>✓ Aggiungi</button></div>`;
 }
@@ -1032,7 +1060,7 @@ function applicaPiuFit(c, quando) {
 // aggiunge la ricetta dell'anteprima (normale o più fit) al pasto e torna al pasto
 function aggiungiDaAnteprima(c) {
   const a = anteprimaRicetta(c, c.anteprima), stato = c.fitApplicato, mosse = c.fitMosse;
-  const finali = a ? anteprimaItemsModificati(c, a).filter(x => +x.qta > 0) : [], kFinale = a ? a.ps.k : null, nomeFinale = a ? a.ps.nome : null, mod = c.antQta || {}, cambiato = Object.keys(mod).length || Object.keys(c.antUni || {}).length || (a && a.ps.kMisura != null && a.ps.k !== a.ps.kMisura);
+  const finali = a ? anteprimaItemsModificati(c, a).filter(x => +x.qta > 0) : [], kFinale = a ? a.ps.k : null, nomeFinale = a ? a.ps.nome : null, mod = c.antQta || {}, cambiato = Object.keys(mod).length || Object.keys(c.antUni || {}).length || (a && a.ps.kMisura != null && a.ps.k !== a.ps.kMisura) || finali.some((x, i) => a && a.items[i] && Math.abs(x.qta - a.items[i].qta) > 0.5);   // anche se i pezzi interi hanno cambiato un po' i grammi
   c.anteprima = null; c.fitApplicato = null; c.fitMosse = null; c.confermaFit = false; c.antQta = null; c.antK = null; c.antUni = null;
   if (!a) { rirenderLibero(); return; }
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
@@ -1203,6 +1231,7 @@ function liberoHTML() {
     </div>`}
     ${ignoto}
     ${c.items.length ? `
+      ${sopraGiornoHTML(c.data, c.bozza ? m.kcal : 0)}
       ${ingrLive}
       <div class="lib-risultato">
         <div class="r-macro">${macroHaObiettivoHTML(mPasto, T, true)}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
@@ -1446,7 +1475,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (st) {
       const it = c.items[+st.dataset.libStep], d = +st.dataset.d, { gu, passo } = passoQuantita(it);
       const att = gu ? it.qta / gu : it.qta;
-      const nuovo = gu ? Math.max(passo, Math.round((att + d * passo) / passo) * passo)
+      const nuovo = gu ? prossimoMultiplo(att, d, passo)
         : Math.max(1, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10)    // grammi: di 10 in 10, sotto i 10 di 1 in 1
                             : (att <= 10 ? Math.ceil(att) - 1 : Math.ceil(att / 10) * 10 - 10));
       it.qta = gu ? Math.round(nuovo * gu * 10) / 10 : nuovo; it.lock = true; // un decimale: 11 mandorle restano 11, non 10,8
@@ -1483,7 +1512,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!liberoCtx) return;
     const c = liberoCtx;
     const au = e.target.closest && e.target.closest("[data-ant-unita]");   // unità dell'anteprima: g ⇄ pz…, la quantità resta la stessa
-    if (au && c.anteprima) { const k = +au.dataset.antUnita, a = anteprimaRicetta(c, c.anteprima), cur = a && anteprimaItemsModificati(c, a)[k]; if (cur) { (c.antUni = c.antUni || {})[k] = au.value; salvaUnitaPreferita(cur.nome, au.value); rirenderLibero(); } return; }
+    if (au && c.anteprima) { const k = +au.dataset.antUnita, a = anteprimaRicetta(c, c.anteprima), cur = a && anteprimaItemsModificati(c, a)[k]; if (cur) { (c.antUni = c.antUni || {})[k] = au.value; salvaUnitaPreferita(cur.nome, au.value); (c.antQta = c.antQta || {})[k] = qtaPezziInteri(cur.nome, au.value, +cur.qta); rirenderLibero(); } return; }
     const q = e.target.closest("[data-lib-qta]");
     if (q) {
       const it = c.items[+q.dataset.libQta];
@@ -1517,7 +1546,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const c = liberoCtx, a = anteprimaRicetta(c, c.anteprima); if (!a) return;
       const vq = leggiNumero(aq.value), pzq = +aq.dataset.pz || 0;   // accetta anche la virgola (7,5); in pezzi/cucchiai si converte in grammi
       (c.antQta = c.antQta || {})[+aq.dataset.antQta] = Math.max(0, isNaN(vq) ? 0 : Math.round((pzq ? vq * pzq : vq) * 10) / 10);
-      const box = document.querySelector(".ant-tot"); if (box) box.innerHTML = macroHaObiettivoHTML(macroDa(anteprimaItemsModificati(c, a)), c.target());
+      const box = document.querySelector(".ant-tot"); if (box) { const tq = macroDa(anteprimaItemsModificati(c, a)); box.innerHTML = macroHaObiettivoHTML(sommaConPasto(c, tq), c.target()) + sopraGiornoHTML(c.data, tq.kcal); }
     }
   });
   mc.addEventListener("click", (e) => {
@@ -1553,5 +1582,5 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   // chiudendo il modale si esce dal pasto libero
-  document.getElementById("modal").addEventListener("click", (e) => { if (e.target.closest("[data-chiudi]")) { salvaBozzaAperta(); liberoCtx = null; } });   // (di solito closeModal l'ha già fatto)
+  document.getElementById("modal").addEventListener("click", (e) => { if (e.target.closest("[data-chiudi]") && !e.__tornaIdee) { salvaBozzaAperta(); liberoCtx = null; } });   // (di solito closeModal l'ha già fatto)
 });

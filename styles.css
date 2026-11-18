@@ -1259,6 +1259,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .wiz-sug { display: flex; flex-direction: column; gap: 4px; margin: -2px 0 8px; }
 
 .toast.tocca { cursor: pointer; }
+body.no-scroll .toast { bottom: calc(168px + env(safe-area-inset-bottom)); }   /* con un pannello aperto il messaggio sta sopra la barra fissa dei tasti, non la copre */
 .toast.ok span::first-letter { color: var(--ok); font-weight: 800; }   /* feedback «salvato»: solo la spunta è verde, niente contorno */
 .r-ing-agg .ing-edit { align-items: center; }
 .agg-totale { margin: 6px 0 12px; font-size: 14px; color: var(--muted); }
@@ -1286,6 +1287,9 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .lib-righe { margin-top: 10px; }
 .lib-bil { margin-left: auto; background: var(--card2); border: none; border-radius: 14px; width: 34px; height: 30px; cursor: pointer; font-size: 15px; }
 .avv-post { color: var(--warn); font-weight: 600; }
+.rr-sfora { color: var(--warn); font-weight: 700; font-size: 13px; margin-left: 8px; white-space: nowrap; }   /* idea che sfora le kcal di oggi */
+.avv-giorno { display: block; color: var(--warn); font-size: 14px; font-weight: 600; margin: 6px 0; }   /* «⚠ Sopra di N kcal oggi»: stesso arancione dei ⚠ del pre-workout */
+.ant-tot .avv-giorno { flex: 0 0 100%; }
 .lib-avv { background: none; border: none; color: var(--warn); font-size: 17px; width: 32px; height: 36px; cursor: pointer; padding: 0; }
 .lib-avv-lista { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
 .lib-avv-lista .var-furbo { margin-top: 0; width: auto; }

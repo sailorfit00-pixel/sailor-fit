@@ -86,6 +86,15 @@ function targetPastoDiario(data, pasto, escludiIdx = null) {
   return r;
 }
 
+// Obiettivo di quello che resta da aggiungere a un pasto: la sua quota intera meno ciò che c'è già dentro (es. colazione 352 kcal con un cappuccino da 35 → ne restano ~317).
+// A pasto vuoto è la quota normale. Serve per dare porzioni e idee giuste quando AGGIUNGI qualcosa a un pasto già scritto.
+function targetResiduoPasto(data, pasto) {
+  const g = giornoDiario(data), idx = new Set(g.pasti.map((p, k) => p.pasto === pasto ? k : -1).filter(k => k >= 0));
+  if (!idx.size) return targetPastoDiario(data, pasto);
+  const Tq = targetPastoDiario(data, pasto, idx), gia = sommaMacro(g.pasti.filter((_, k) => idx.has(k))), r = {};
+  ["kcal", "proteine", "carboidrati", "grassi"].forEach(k => { r[k] = Math.max(0, Math.round((Tq[k] || 0) - (gia[k] || 0))); });
+  return r;
+}
 // Prossimo pasto da fare: in base all'ora (oggi) e a quelli già inseriti
 function etichettaMomento(data, momento) {
   return nomePasto(momento, data);
@@ -222,7 +231,8 @@ function migraNomiRicette() {
 // escludiIdx: pasto già segnato che si sta modificando (il suo obiettivo è quello di quel pasto, e la sua ricetta non si ripropone)
 function ideeBloccoHTML(c, titolo, escludiIdx = null) {
   const data = c.data, esistente = escludiIdx !== null && escludiIdx !== undefined;
-  if (!c._idee || c._ideePasto !== c.pasto) {
+  const restaIdee = Math.round(mancaData(data).kcal);   // kcal che restano oggi: le idee che le superano si segnano e vanno in fondo
+  if (!c._idee || c._ideePasto !== c.pasto || c._ideeResta !== restaIdee) {
     const attuale = esistente ? (giornoDiario(data).pasti[escludiIdx] || {}).ricetta : null;
     const casa = esistente ? [] : ricetteInCasa(data, c.pasto, 3);
     const inCasaNomi = new Set(casa.map(x => x.r.nome));
@@ -232,12 +242,14 @@ function ideeBloccoHTML(c, titolo, escludiIdx = null) {
     try { Object.values(leggiDiario()).forEach(g => (g.pasti || []).forEach(q => { if (q.ricetta) scelte.set(q.ricetta, (scelte.get(q.ricetta) || 0) + 1); })); } catch (e) {}
     const pool = cons.concat(dolci).map((x, k) => ({ x, k, n: scelte.get(x.r.nome) || 0 }));
     pool.sort((a, b) => (b.n >= 2 ? b.n : 0) - (a.n >= 2 ? a.n : 0) || a.k - b.k);   // le più scelte (almeno 2 volte) in testa, il resto nell'ordine di prima
-    c._idee = pool.map(({ x }) => `<button class="riga-ricetta con-piu" data-oggi-ricetta="${esc(x.r.nome)}">
+    pool.forEach(o => { o.sf = Math.round(o.x.tot.kcal - restaIdee); });
+    pool.sort((a, b) => (a.sf > 15 ? 1 : 0) - (b.sf > 15 ? 1 : 0));   // quelle che sforano le kcal di oggi in fondo (l'ordinamento resta stabile)
+    c._idee = pool.map(({ x, sf }) => `<button class="riga-ricetta con-piu" data-oggi-ricetta="${esc(x.r.nome)}">
           <span class="rr-nome">${esc(x.r.nome)}</span>
-          ${macroStileHTML(x.tot)}
+          ${macroStileHTML(x.tot)}${sf > 15 ? `<span class="rr-sfora" aria-label="Sopra di ${sf} kcal oggi">+${sf}</span>` : ""}
           <span class="rr-piu" role="button" aria-label="Aggiungi subito">＋</span>
         </button>`);
-    c._ideePasto = c.pasto;
+    c._ideePasto = c.pasto; c._ideeResta = restaIdee;
   }
   const tutte = c._idee, n = tutte.length;
   if (!n) return "";
@@ -531,7 +543,7 @@ const FAMIGLIE_DOLCI = [["pancake", /pancake/i], ["rolls", /cinnamon/i], ["bread
 const famigliaDolce = (r) => { const f = FAMIGLIE_DOLCI.find(([, re]) => re.test(r.nome)); return f ? f[0] : null; };
 function dolciConsigliati(data, pasto) {
   if (!["colazione", "mattina", "spuntino"].includes(pasto)) return [];
-  const T = targetPastoDiario(data, pasto);
+  const T = targetResiduoPasto(data, pasto);
   if (T.kcal < 120) return [];
   const migliori = {};
   ricette.forEach(r => {
@@ -561,7 +573,7 @@ function ricetteInCasa(data, pasto, n = 3) {
 }
 // Ricette del ricettario che, adattate, si avvicinano di più all'obiettivo del pasto
 function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
-  const T = targetPastoDiario(data, pasto, escludiIdx);
+  const T = escludiIdx !== null && escludiIdx !== undefined ? targetPastoDiario(data, pasto, escludiIdx) : targetResiduoPasto(data, pasto);   // aggiungendo a un pasto già scritto contano solo le kcal che restano a quel pasto
   if (T.kcal < 120) return [];
   const giaMangiate = new Set(giornoDiario(data).pasti.map(p => p.ricetta).filter(Boolean));
   const basiOggi = giornoDiario(data).pasti.map(p => rilevaBaseProt(p)).filter(Boolean);
@@ -645,6 +657,10 @@ const avvisoVisto = (data, k, ora) => { const v = leggiAvvisiVisti()[data] || {}
 // la giornata è "programmata" quando ci sono colazione, pranzo e cena (gli spuntini sono facoltativi)
 const giornataPronta = (data) => { const f = new Set(giornoDiario(data).pasti.map(p => p.pasto)); return ["colazione", "pranzo", "cena"].every(p => f.has(p)); };
 const sopraKcal = (m) => m.kcal < 0;   // qualsiasi sforamento delle calorie conta come «sopra»
+// «⚠ Sopra di N kcal oggi» quando le kcal già registrate nel giorno + quelle che stai per aggiungere (kcalExtra) superano l'obiettivo: si vede mentre componi, con l'anello coperto dal pannello
+function sopraGiornoHTML(data, kcalExtra) {
+  try { const oltre = Math.round((+kcalExtra || 0) - mancaData(data).kcal); return oltre >= 1 ? `<span class="avv-giorno">⚠ Sopra di ${oltre} kcal${data === oggiISO() ? " oggi" : ""}</span>` : ""; } catch (e) { return ""; }
+}
 // Quanto di ciò che manca ci sta davvero nelle kcal rimaste (1 g di proteine o carboidrati = 4 kcal, 1 g di grassi = 9): 10 g di grassi con 68 kcal non si possono colmare
 function mancantiColmabili(m) { const k = Math.max(0, m.kcal); return { proteine: Math.min(m.proteine, k / 4), carboidrati: Math.min(m.carboidrati, k / 4), grassi: Math.min(m.grassi, k / 9) }; }
 function mancaGiornata(data) {   // cosa manca e cosa è sopra rispetto agli obiettivi di tutta la giornata
@@ -759,9 +775,9 @@ function aggiungiAlimentoAlPasto(data, pasto, nome, grammi) {
 function aggiungiRicettaIn(data, pasto, nomeRicetta) {
   const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === (pasto === "mattina" ? "spuntino" : pasto)) || ricette.find(x => x.nome === nomeRicetta);
   if (!r) return -1;
-  const ps = porzioneSuMisura(r, targetPastoDiario(data, pasto));
+  const ps = porzioneSuMisura(r, targetResiduoPasto(data, pasto));
   const g = giornoDiario(data);
-  const p = { nome: ps.nome, pasto, passaggi: [], ricetta: r.nome, nPezzi: ps.k, ingredienti: ps.items.map(x => ({ nome: x.nome, qta: x.qta, unita: "g", lock: true, cercato: x.cercato })) };
+  const p = { nome: ps.nome, pasto, passaggi: [], ricetta: r.nome, nPezzi: ps.k, ingredienti: ps.items.map(x => ({ nome: x.nome, qta: qtaPezziInteri(x.nome, unitaDi({ nome: x.nome }), x.qta), unita: "g", lock: true, cercato: x.cercato })) };   // tortilla, piadina…: pezzi interi
   aggiornaMacro(p);
   g.pasti.push(p); scriviGiorno(data, g);
   return g.pasti.length - 1;
@@ -1614,9 +1630,9 @@ function aggiungiRicettaAlPasto(nome, mod) {   // mod: le quantità scelte nel r
   const r = ricette.find(x => x.nome === nome && (!c0.pasto || x.pasto === c0.pasto)) || ricette.find(x => x.nome === nome);
   if (!r) return;
   const c = { data: c0.data, pasto: c0.pasto || pastoPerRicetta(r, c0.data), fatte: c0.fatte };
-  const ps = porzioneSuMisura(r, targetPastoDiario(c.data, c.pasto));
+  const ps = porzioneSuMisura(r, targetResiduoPasto(c.data, c.pasto));
   const g = giornoDiario(c.data);
-  const voci = mod && mod.nome === nome ? mod.items.filter(x => +x.qta > 0) : ps.items;   // le quantità che hai scelto tu, altrimenti quelle su misura
+  const voci = mod && mod.nome === nome ? mod.items.filter(x => +x.qta > 0) : ps.items.map(x => Object.assign({}, x, { qta: qtaPezziInteri(x.nome, unitaDi({ nome: x.nome }), x.qta) }));   // le quantità che hai scelto tu, altrimenti quelle su misura
   const p = { nome: ps.nome, pasto: c.pasto, passaggi: [], ricetta: r.nome, nPezzi: ps.k,
     ingredienti: voci.map(x => Object.assign({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.cercato || x.nome }, x.u && x.u !== "g" ? { vis: x.u } : {})) };
   aggiornaMacro(p);
