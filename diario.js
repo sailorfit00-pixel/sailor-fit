@@ -31,6 +31,9 @@ const momentiGiorno = momentiTutti;
 
 // -------- Dati --------
 function leggiDiario() { try { return JSON.parse(localStorage.getItem("mp_diario")) || {}; } catch (e) { return {}; } }
+// lettura veloce SOLA LETTURA (si rilegge solo se il diario è cambiato): per chi deve solo guardare, mai modificare l'oggetto che torna
+let _rawLS = null, _objLS = {};
+function leggiDiarioSolaLettura() { try { const raw = localStorage.getItem("mp_diario") || ""; if (raw !== _rawLS) { _objLS = raw ? (JSON.parse(raw) || {}) : {}; _rawLS = raw; } return _objLS; } catch (e) { return {}; } }
 function salvaDiario(d) { localStorage.setItem("mp_diario", JSON.stringify(d)); }
 function giornoDiario(data) {
   const d = leggiDiario()[data] || {};
@@ -128,7 +131,7 @@ function rinominaLibero(p) {
       // stessi ingredienti della ricetta (cambiano solo i grammi): resta col suo nome. Ingrediente cambiato/tolto/aggiunto: il nome segue gli ingredienti veri («Riso basmati, gamberi»)
       const r = ricettaDaNome(p.ricetta), A = window.ALIMENTI || {};
       const base = new Set(((r && (r._orig || r).ingredienti) || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));
-      const att = new Set((p.ingredienti || []).map(i => i.nome));
+      const att = new Set((p.ingredienti || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));   // stessi criteri della ricetta: q.b. e alimenti sconosciuti non contano
       const uguali = base.size === att.size && [...att].every(n => base.has(n));
       if (uguali) { if (v !== p.nome) delete p.nPezzi; p.nome = v; aggiornaMacro(p); return; }
       delete p.nPezzi;   // niente contatore porzioni: non è più la ricetta com'era (la ricetta resta per i macro e il «Più fit»)
@@ -392,7 +395,7 @@ function porzioneSuMisura(r, target) {
 }
 // Ricetta a porzioni collegata a un pasto (per il − N pancake +)
 // Ricetta con il contatore delle porzioni: quelle a teglia (pancake, banana bread…) e anche le singole (brownie al microonde, pollo al limone), che contano ¼ di porzione alla volta
-// Ricette che non si propongono mai (tonno: mercurio; skyr: non lo mangi): restano nel ricettario ma non compaiono in idee, alternative e compilazioni
+// Nessuna ricetta è esclusa (tonno e skyr li mangi): il tonno in scatola si limita con la penalità in ricetteConsigliate e con tonnoOk
 const ricettaEsclusa = (r) => false;   // nessuna ricetta è esclusa: il tonno in scatola resta solo meno frequente (penalità in ricetteConsigliate)
 const ricettaAPezzi = (nome) => {
   const t = ricette.find(x => x.nome === nome && x._orig);
@@ -462,7 +465,7 @@ function mostraToast(testo, etichetta, azione, tutto, extra) {   // extra: un se
   else if (etichetta) t.querySelector("button").onclick = () => { chiudi(); azione && azione(); };
   const ex = t.querySelector("[data-t-extra]"); if (ex) ex.onclick = () => chiudi();
   clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(chiudi, 5000);
+  _toastTimer = setTimeout(chiudi, etichetta || extra ? 3500 : 2200);   // un messaggio semplice dura poco; con «Annulla» un po' di più
 }
 
 // Ultimi pasti diversi mangiati in quel momento della giornata (ultimi 30 giorni)
@@ -612,7 +615,7 @@ function alternativeTonno(it, k) {
 }
 // ⚠ sulla riga del tonno scritto a mano: testo di una riga, o "" se sei nei limiti
 function avvisoTonnoRiga(c, it) {
-  if (!c || !it || !TONNO_SCATOLA.test(it.nome)) return "";
+  if (!c || !c.data || !it || !TONNO_SCATOLA.test(it.nome)) return "";
   let tot = grammiTonnoSettimana(c.data);
   if (c.bozza) tot += (c.items || []).filter(x => TONNO_SCATOLA.test(x.nome)).reduce((s, x) => s + (grammiIng(x) || +x.qta || 0), 0);   // la bozza non è ancora nel diario
   return tot > TONNO_MAX_SETT_G ? `Tonno: ${tot} g in 7 giorni · consigliati max ${TONNO_MAX_SETT_G} g` : "";
@@ -1148,7 +1151,7 @@ function ingredientiPastoTutti(data, pasto) {
   return lista;
 }
 // -------- Proteine che mancano / grassi e carboidrati sopra: per ogni pasto non ancora fatto, cosa fare (scegli tu dove) --------
-// Fonti di proteine magre adatte al pasto (grammi massimi ragionevoli): mai tonno (mercurio)
+// Fonti di proteine magre adatte al pasto (grammi massimi ragionevoli); il tonno in scatola solo con moderazione (mercurio)
 const FONTI_PROT_PASTO = {
   colazione: [["Yogurt greco 0%", 250], ["Skyr", 250], ["Kefir bianco", 250], ["Albume", 250], ["Fiocchi di latte", 200], ["Proteine in polvere", 40]],
   spuntino: [["Yogurt greco 0%", 200], ["Skyr", 200], ["Kefir bianco", 250], ["Fiocchi di latte", 200], ["Bresaola", 60], ["Fesa di tacchino", 80], ["Proteine in polvere", 30]],
@@ -1606,15 +1609,16 @@ function pastoPerRicetta(r, data) {
   if (r.pasto === "pranzo" || r.pasto === "cena") return r.pasto;
   return new Date().getHours() < 16 ? "pranzo" : "cena";
 }
-function aggiungiRicettaAlPasto(nome) {
+function aggiungiRicettaAlPasto(nome, mod) {   // mod: le quantità scelte nel riepilogo (se le hai modificate prima di aggiungere)
   const c0 = contestoAgg || { data: dataDiario, pasto: null, fatte: new Set() };
   const r = ricette.find(x => x.nome === nome && (!c0.pasto || x.pasto === c0.pasto)) || ricette.find(x => x.nome === nome);
   if (!r) return;
   const c = { data: c0.data, pasto: c0.pasto || pastoPerRicetta(r, c0.data), fatte: c0.fatte };
   const ps = porzioneSuMisura(r, targetPastoDiario(c.data, c.pasto));
   const g = giornoDiario(c.data);
+  const voci = mod && mod.nome === nome ? mod.items.filter(x => +x.qta > 0) : ps.items;   // le quantità che hai scelto tu, altrimenti quelle su misura
   const p = { nome: ps.nome, pasto: c.pasto, passaggi: [], ricetta: r.nome, nPezzi: ps.k,
-    ingredienti: ps.items.map(x => ({ nome: x.nome, qta: x.qta, unita: "g", lock: true, cercato: x.cercato })) };
+    ingredienti: voci.map(x => ({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.cercato || x.nome })) };
   aggiornaMacro(p);
   g.pasti.push(p);
   scriviGiorno(c.data, g);
@@ -1769,7 +1773,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const ric = e.target.closest("[data-oggi-ricetta]");
     if (ric) {   // ＋ = aggiungi subito; tocco sulla ricetta = anteprima con la versione più fit
       if (e.target.closest(".rr-piu")) { usaRicettaNellEditor(ric.dataset.oggiRicetta); return; }
-      liberoCtx.anteprima = ric.dataset.oggiRicetta; liberoCtx.fitApplicato = null; rirenderLibero(); return;
+      liberoCtx.anteprima = ric.dataset.oggiRicetta; liberoCtx.fitApplicato = null; liberoCtx.antQta = {}; liberoCtx.antK = null; rirenderLibero(); return;
     }
     const pz = e.target.closest("[data-pezzi]");
     if (pz) { cambiaPezzi(+pz.dataset.pezzi); return; }

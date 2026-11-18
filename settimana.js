@@ -68,9 +68,10 @@ function pianoSettimanaCalc(data) {
 // Obiettivo del giorno (kcal e macro) tenendo conto del budget settimanale
 function targetEffettivo(data) {
   const oggi = oggiISO();
-  if (data < oggi) { const salvato = ((leggiDiario()[data] || {}).tgt); if (salvato && salvato.kcal > 0) return salvato; }   // un giorno passato mantiene l'obiettivo che aveva: Andamento non cambia a posteriori
+  if (data < oggi) { const salvato = ((leggiDiarioSolaLettura()[data] || {}).tgt); if (salvato && salvato.kcal > 0) return salvato; }   // un giorno passato mantiene l'obiettivo che aveva: Andamento non cambia a posteriori
   const r = targetEffettivoCalcolato(data);
-  if (data === oggi) { try { const d = leggiDiario(), g = d[data]; if (g && (g.pasti || []).length && JSON.stringify(g.tgt) !== JSON.stringify(r)) { g.tgt = { kcal: r.kcal, proteine: r.proteine, carboidrati: r.carboidrati, grassi: r.grassi }; salvaDiario(d); } } catch (e) {} }   // oggi: si ricorda l'ultimo valore visto
+  if (data === oggi) { try { const g0 = leggiDiarioSolaLettura()[data], nuovo = { kcal: r.kcal, proteine: r.proteine, carboidrati: r.carboidrati, grassi: r.grassi };
+    if (g0 && (g0.pasti || []).length && JSON.stringify(g0.tgt) !== JSON.stringify(nuovo)) { const d = leggiDiario(), g = d[data]; if (g) { g.tgt = nuovo; salvaDiario(d); } } } catch (e) {} }   // oggi: si ricorda l'ultimo valore visto
   return r;
 }
 function targetEffettivoCalcolato(data) {

@@ -943,11 +943,23 @@ function anteprimaRicetta(c, nomeRicetta) {
   const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === (c.pasto === "mattina" ? "spuntino" : c.pasto)) || ricette.find(x => x.nome === nomeRicetta);
   if (!r) return null;
   const ps = porzioneSuMisura(r, targetPastoDiario(c.data, c.pasto));
+  ps.kMisura = ps.k;   // la porzione su misura per le kcal che restano: si parte da 1 e si sale se serve
+  const kScelto = r._orig ? (c.antK || 1) : null;   // sempre 1 porzione / 1 fetta di partenza
+  if (r._orig && kScelto !== ps.k && typeof versioneAPezzi === "function") {
+    const m = versioneAPezzi(r._orig, kScelto), A = window.ALIMENTI || {};
+    ps.items = m.ingredienti.filter(i => i.unita !== "q.b." && A[i.nome]).map(i => ({ nome: i.nome, qta: Math.round(grammiIng(i)) }));
+    ps.nome = nomeRicettaConPezzi(r, kScelto); ps.k = kScelto;
+  }
   const items = ps.items.map(x => ({ nome: x.nome, qta: x.qta }));
   const tmp = { items, ricetta: r.nome, data: c.data, pasto: c.pasto };
   const mosse = (r._orig || r).porzioni > 1 ? [] : mosseFit(tmp).slice(0, 1);   // un «Più fit» alla volta (il migliore); niente per le ricette a teglia (banana bread…)
   const fit = items.map((it, k) => { const m = mosse.find(a => a.r.k === k); return !m ? it : m.tipo === "cambia" ? { nome: m.a, qta: it.qta } : { nome: it.nome, qta: m.nuova }; });
   return { r, ps, items, mosse, fit, tot: macroDa(items), totFit: macroDa(fit) };
+}
+// le quantità dell'anteprima (con «Più fit» se applicato) e quelle che hai cambiato tu a mano
+function anteprimaItemsModificati(c, a) {
+  const base = c.fitApplicato === "ora" ? a.fit : a.items, mod = c.antQta || {};
+  return base.map((it, k) => ({ nome: it.nome, qta: mod[k] != null ? mod[k] : it.qta }));
 }
 function anteprimaHTML(c) {
   const a = anteprimaRicetta(c, c.anteprima); if (!a) { c.anteprima = null; return ""; }
@@ -959,8 +971,14 @@ function anteprimaHTML(c) {
     <p class="hint">«Sempre» cambia anche la ricetta: le prossime volte la trovi già così.</p>
     <div class="wiz-nav"><button class="btn-sec" data-ant-fit-si="ora">Solo questa volta</button><button class="btn" data-ant-fit-si="sempre">Sempre</button></div>`;
   const ora = c.fitApplicato === "ora";
-  const items = ora ? a.fit : a.items, tot = ora ? a.totFit : a.tot;
-  const riga = (it) => `<li><span>${esc(it.nome)}</span><b>${Math.round(it.qta)} g</b></li>`;
+  const items = anteprimaItemsModificati(c, a), tot = macroDa(items);   // le quantità che hai cambiato tu contano nel totale
+  const riga = (it, k) => `<div class="lib-riga"><div class="lib-nome-txt${classeNome(it.nome)}"><span class="lib-nome-t">${esc(it.nome)}</span></div>
+      <div class="qstep"><button class="qstep-b" data-ant-step="${k}|-1" aria-label="Meno">−</button><input class="qta-input lib-qta" type="text" inputmode="decimal" autocomplete="off" data-ant-qta="${k}" value="${Math.round(it.qta)}" aria-label="Quantità di ${esc(it.nome)}"><button class="qstep-b" data-ant-step="${k}|1" aria-label="Più">＋</button></div>
+      <div class="unita-box"><span class="unita-et">g</span></div>
+      <button class="lib-del" data-ant-del="${k}" aria-label="Rimuovi">${ICONA_CESTINO}</button></div>`;
+  const rp = a.r._orig && typeof etichettaPezzi === "function" ? a.r._orig : null;
+  const misura = rp && a.ps.kMisura !== a.ps.k ? `<button class="btn-link ant-misura" data-ant-misura>≈ ${esc(String(etichettaPezzi(rp, a.ps.kMisura)))} per il tuo obiettivo</button>` : "";
+  const cont = rp ? `<div class="ant-cont"><span class="pm-contatore pm-cont-grande"><button class="nav-btn" data-ant-pz="-1" aria-label="Meno porzioni">−</button><b>${esc(String(etichettaPezzi(rp, a.ps.k)))}</b><button class="nav-btn" data-ant-pz="1" aria-label="Più porzioni">＋</button></span>${misura}</div>` : "";
   const fit = c.fitApplicato ? `<p class="ant-fatto">✓ Più fit applicato ${ora ? "solo questa volta" : "sempre"}</p>`
     : a.mosse.length ? `<button class="ant-fit" data-ant-fit>
       <span class="ant-fit-t">🥗 Più fit <span>−${Math.round(a.tot.kcal - a.totFit.kcal)} kcal</span></span>
@@ -969,9 +987,9 @@ function anteprimaHTML(c) {
     </button>` : "";   // niente da alleggerire: non compare niente
   return `<button class="btn-link modal-indietro" data-ant-chiudi>‹ Torna al pasto</button>
     <h3 class="modal-title">${esc(a.ps.nome || a.r.nome)}</h3>
-    <div class="ant-box">${macroStileHTML(tot)}<ul class="pm-sola-lista">${items.map(riga).join("")}</ul></div>
+    ${cont}<div class="ant-righe"><div class="r-macro ant-tot">${macroHaObiettivoHTML(tot, c.target())}</div><div class="lib-righe">${items.map((it, k) => it.qta > 0 || !(c.antQta && c.antQta[k] === 0) ? riga(it, k) : "").join("")}</div></div>
     ${fit}
-    <button class="btn block" data-ant-aggiungi>✓ Aggiungi</button>`;
+    <div class="barra-salva"><button class="btn block" data-ant-aggiungi>✓ Aggiungi</button></div>`;
 }
 const descrMossaFit = (m) => m.tipo === "cambia" ? `${esc(m.r.nome.toLowerCase())} → <b>${esc(m.a.toLowerCase())}</b>` : `${esc(m.r.nome.toLowerCase())}: ${Math.round(m.r.qta)} → <b>${m.nuova} g</b>`;
 // risposta alla conferma: «ora» = solo il piatto che aggiungi; «sempre» = anche la ricetta (con Annulla)
@@ -992,7 +1010,8 @@ function applicaPiuFit(c, quando) {
 // aggiunge la ricetta dell'anteprima (normale o più fit) al pasto e torna al pasto
 function aggiungiDaAnteprima(c) {
   const a = anteprimaRicetta(c, c.anteprima), stato = c.fitApplicato, mosse = c.fitMosse;
-  c.anteprima = null; c.fitApplicato = null; c.fitMosse = null; c.confermaFit = false;
+  const finali = a ? anteprimaItemsModificati(c, a).filter(x => +x.qta > 0) : [], kFinale = a ? a.ps.k : null, nomeFinale = a ? a.ps.nome : null, mod = c.antQta || {}, cambiato = Object.keys(mod).length || (a && a.ps.kMisura != null && a.ps.k !== a.ps.kMisura);
+  c.anteprima = null; c.fitApplicato = null; c.fitMosse = null; c.confermaFit = false; c.antQta = null; c.antK = null;
   if (!a) { rirenderLibero(); return; }
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
   const i = aggiungiRicettaIn(c.data, c.pasto, a.r.nome); if (i < 0) { rirenderLibero(); return; }
@@ -1000,6 +1019,14 @@ function aggiungiDaAnteprima(c) {
     const g = giornoDiario(c.data), p = g.pasti[i];
     mosse.forEach(m => { const ing = p.ingredienti[m.r.k]; if (!ing) return; if (m.tipo === "cambia") { ing.nome = m.a; ing.cercato = m.a; } else ing.qta = m.nuova; });
     aggiornaMacro(p); scriviGiorno(c.data, g);
+  }
+  if (cambiato && finali.length) {   // porzioni e quantità scelte nell'anteprima vincono su quelle calcolate
+    const g = giornoDiario(c.data), p = g.pasti[i];
+    if (p) {
+      p.ingredienti = finali.map(x => ({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.nome }));
+      if (kFinale) { p.nPezzi = kFinale; if (nomeFinale) p.nome = nomeFinale; }
+      aggiornaMacro(p); scriviGiorno(c.data, g);
+    }
   }
   if (typeof renderOggi === "function") renderOggi();
   c._firma0 = undefined;   // appena aggiunto: non è una modifica da salvare
@@ -1364,10 +1391,28 @@ document.addEventListener("DOMContentLoaded", () => {
       chiediConferma("Sbloccare il pasto?", "Potrai togliere ciò che hai mangiato", "Sblocca", () => { pastiSbloccati.add(dataP + "|" + pastoP); apriPastoDiario(dataP, null, pastoP); }, () => apriPastoDiario(dataP, null, pastoP));
       return;
     }
-    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; c.fitApplicato = null; c.confermaFit = false; rirenderLibero(); return; }
+    if (e.target.closest("[data-ant-chiudi]")) { c.anteprima = null; c.fitApplicato = null; c.confermaFit = false; c.antQta = null; c.antK = null; rirenderLibero(); return; }
     if (e.target.closest("[data-ant-fit]")) { c.confermaFit = true; rirenderLibero(); return; }
     if (e.target.closest("[data-ant-fit-no]")) { c.confermaFit = false; rirenderLibero(); return; }
     const fitSi = e.target.closest("[data-ant-fit-si]"); if (fitSi) { applicaPiuFit(c, fitSi.dataset.antFitSi); return; }
+    if (e.target.closest("[data-ant-misura]") && c.anteprima) {   // porta alla porzione su misura per le kcal che restano
+      const a = anteprimaRicetta(c, c.anteprima); if (a) { c.antK = a.ps.kMisura; c.antQta = {}; c.fitApplicato = null; rirenderLibero(); }
+      return;
+    }
+    const antPz = e.target.closest("[data-ant-pz]");   // porzioni − / ＋ nell'anteprima
+    if (antPz && c.anteprima) {
+      const r = ricette.find(x => x.nome === c.anteprima), a = anteprimaRicetta(c, c.anteprima);
+      if (r && r._orig && a) { c.antK = prossimoPasso(a.ps.k, +antPz.dataset.antPz, passoPezzi(r._orig)); c.antQta = {}; c.fitApplicato = null; rirenderLibero(); }
+      return;
+    }
+    const antSt = e.target.closest("[data-ant-step]");   // − / ＋ sulla quantità
+    if (antSt && c.anteprima) {
+      const [k, d] = antSt.dataset.antStep.split("|").map(Number), a = anteprimaRicetta(c, c.anteprima); if (!a) return;
+      const cur = anteprimaItemsModificati(c, a)[k]; if (!cur) return;
+      (c.antQta = c.antQta || {})[k] = Math.max(0, Math.round((+cur.qta + d * 5) / 5) * 5); rirenderLibero(); return;
+    }
+    const antDel = e.target.closest("[data-ant-del]");   // cestino: l'ingrediente non entra nel pasto
+    if (antDel && c.anteprima) { (c.antQta = c.antQta || {})[+antDel.dataset.antDel] = 0; rirenderLibero(); return; }
     const antA = e.target.closest("[data-ant-aggiungi]"); if (antA) { aggiungiDaAnteprima(c); return; }
     const sost = e.target.closest("[data-lib-sostituisci]");
     if (sost) { sostituisciPastoCon(c, sost.dataset.libSostituisci); return; }
@@ -1443,6 +1488,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.dataset && e.target.dataset.libNome !== undefined) { mostraSostituzioni(e.target); return; }
     if (e.target.id === "lib-nome") liberoCtx.nome = e.target.value;
     if (e.target.id === "lib-input") mostraAutocompleta(e.target.value);
+    const aq = e.target.closest && e.target.closest("[data-ant-qta]");   // quantità nell'anteprima della ricetta: il totale si aggiorna mentre scrivi
+    if (aq && liberoCtx.anteprima) {
+      const c = liberoCtx, a = anteprimaRicetta(c, c.anteprima); if (!a) return;
+      const vq = leggiNumero(aq.value);   // accetta anche la virgola (7,5)
+      (c.antQta = c.antQta || {})[+aq.dataset.antQta] = Math.max(0, isNaN(vq) ? 0 : vq);
+      const box = document.querySelector(".ant-tot"); if (box) box.innerHTML = macroHaObiettivoHTML(macroDa(anteprimaItemsModificati(c, a)), c.target());
+    }
   });
   mc.addEventListener("click", (e) => {
     const ft = e.target.closest("[data-fit]");

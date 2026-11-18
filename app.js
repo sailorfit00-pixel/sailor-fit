@@ -1256,7 +1256,25 @@ function bottoneAggiungiRicettaHTML(r) {
   if (typeof aggiungiRicettaAlPasto !== "function" || r.nome === undefined) return "";
   const c = contestoAgg && !contestoAgg.auto ? contestoAgg : null;
   const dove = c ? `${nomePasto(c.pasto, c.data || dataDiario)}` : (typeof pastoPerRicetta === "function" ? nomePasto(pastoPerRicetta(r, dataDiario), dataDiario) : "oggi");
-  return `<button class="btn block" data-agg-ricetta="${esc(r.nome)}" data-agg-chiudi="1">✓ Aggiungi a ${esc(dove)}</button>`;
+  return `<div class="barra-salva"><button class="btn block" data-agg-ricetta="${esc(r.nome)}" data-agg-chiudi="1">✓ Aggiungi a ${esc(dove)}</button></div>`;   // fisso in fondo al pannello
+}
+// Le quantità che finiscono nel pasto (su misura per il tuo obiettivo): si modificano nel riepilogo, prima di aggiungere
+let _aggQta = null;
+function totaleAggHTML() {
+  if (!_aggQta || typeof macroAlimento !== "function") return "";
+  const t = _aggQta.items.reduce((a, i) => { const d = macroAlimento(i.nome, +i.qta || 0); return { kcal: a.kcal + d.kcal, proteine: a.proteine + d.proteine, carboidrati: a.carboidrati + d.carboidrati, grassi: a.grassi + d.grassi }; }, { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 });
+  return `<b>${Math.round(t.kcal)}</b> kcal · P ${Math.round(t.proteine)} · C ${Math.round(t.carboidrati)} · G ${Math.round(t.grassi)}`;
+}
+function quantitaPastoHTML(r) {
+  _aggQta = null;
+  if (typeof aggiungiRicettaAlPasto !== "function" || typeof porzioneSuMisura !== "function" || typeof targetPastoDiario !== "function" || typeof pastoPerRicetta !== "function") return "";
+  try {
+    const c = contestoAgg && !contestoAgg.auto ? contestoAgg : { data: dataDiario, pasto: null };
+    const pasto = c.pasto || pastoPerRicetta(r, c.data), ps = porzioneSuMisura(r, targetPastoDiario(c.data, pasto));
+    _aggQta = { nome: r.nome, items: ps.items.map(x => ({ nome: x.nome, qta: Math.round(x.qta), cercato: x.cercato })) };
+  } catch (e) { _aggQta = null; return ""; }
+  if (!_aggQta.items.length) return "";
+  return `<h4>Le tue quantità</h4><ul class="r-ing r-ing-agg">${_aggQta.items.map((i, k) => `<li class="ing-edit"><span class="ing-nome">${esc(i.nome)}</span><span class="ing-qta"><input type="number" class="qta-input" data-agg-qta="${k}" value="${i.qta}" min="0" step="5" inputmode="decimal" aria-label="Quantità di ${esc(i.nome)}"><em>g</em></span></li>`).join("")}</ul><p class="agg-totale" id="agg-totale">${totaleAggHTML()}</p>`;
 }
 function ricettaDetailHTML(r, editable) {
   if (!editable && r._orig) {
@@ -1266,25 +1284,27 @@ function ricettaDetailHTML(r, editable) {
     <div class="r-macro"><span class="pill">${r.pasto}</span>${r.preworkout ? `<span class="pill">pre-workout</span>` : ""}${r.tempo ? `<span>${r.tempo}′</span>` : ""}
       <span>1 ${esc(o.pezzo || "porzione")}: <b>${uno.kcal}</b> kcal</span><span>P ${uno.proteine}g</span><span>C ${uno.carboidrati}g</span><span>G ${uno.grassi}g</span>
       ${barraMacroHTML(uno)}</div>
+    ${quantitaPastoHTML(r)}
     <h4>Ingredienti <span class="hint-inline">— per ${n} ${esc(plurale(o.pezzo || "porzione"))}</span></h4>
     <ul class="r-ing">${o.ingredienti.map((i, idx) => `<li class="${i.base ? "ing-var" : ""}">${esc(i.nome)} — <strong>${i.unita === "q.b." ? "q.b." : `${String(i.qta).replace(".", ",")} ${i.unita}`}</strong>${["cucchiaio", "cucchiaino"].includes(i.unita) ? ` <span class="crudo">(${Math.round(grammiIng(i))} g)</span>` : ""}${varBtnHTML(r.nome, i, idx)}<div class="var-lista" id="var-${idx}" hidden></div></li>`).join("")}</ul>
     ${suggerimentiLeggeriHTML(r)}
     ${o.passaggi && o.passaggi.length ? `<h4>Procedimento</h4><ol class="r-steps">${o.passaggi.map(p => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
-    ${bottoneAggiungiRicettaHTML(r)}
     <div class="r-azioni">
       <button class="btn-sec" data-modifica="${esc(r.nome)}">✏️ Modifica</button>
-      <button class="btn-sec danger" data-elimina="${esc(r.nome)}">🗑 Elimina</button></div>`;
+      <button class="btn-sec danger" data-elimina="${esc(r.nome)}">🗑 Elimina</button></div>
+    ${bottoneAggiungiRicettaHTML(r)}`;
   }
   return `
     <h3 class="modal-title">${esc(nomeConPezzi(r))}</h3>
     <div class="r-macro" id="r-macro">${macroPillsHTML(r)}</div>
+    ${!editable ? quantitaPastoHTML(r) : ""}
     <h4>Ingredienti${editable ? '' : ""}</h4>
     <ul class="r-ing">${r.ingredienti.map((i, idx) => ingredienteHTML(i, idx, editable, !editable && !r.adattato ? r.nome : "")).join("")}</ul>
     ${!editable && !r.adattato ? suggerimentiLeggeriHTML(r) : ""}
     ${r.passaggi && r.passaggi.length ? `<h4>Procedimento</h4><ol class="r-steps">${r.passaggi.map(p => `<li>${p}</li>`).join("")}</ol>` : ""}
-    ${!editable ? `${bottoneAggiungiRicettaHTML(r)}<div class="r-azioni">
+    ${!editable ? `<div class="r-azioni">
       <button class="btn-sec" data-modifica="${esc(r.nome)}">✏️ Modifica</button>
-      <button class="btn-sec danger" data-elimina="${esc(r.nome)}">🗑 Elimina</button></div>` : ""}
+      <button class="btn-sec danger" data-elimina="${esc(r.nome)}">🗑 Elimina</button></div>${bottoneAggiungiRicettaHTML(r)}` : ""}
   `;
 }
 
@@ -2450,7 +2470,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const aggR = e.target.closest("[data-agg-ricetta]");
     if (aggR) {
-      if (typeof aggiungiRicettaAlPasto === "function") aggiungiRicettaAlPasto(aggR.dataset.aggRicetta);
+      if (typeof aggiungiRicettaAlPasto === "function") aggiungiRicettaAlPasto(aggR.dataset.aggRicetta, aggR.dataset.aggChiudi ? _aggQta : null);   // le quantità modificate valgono solo per il tasto del riepilogo
+      _aggQta = null;
       if (aggR.dataset.aggChiudi) { contestoAgg = null; closeModal(); renderOggi(); } // dal dettaglio: torni a Oggi
       return;
     }
@@ -2477,6 +2498,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Aggiornamento live dei campi del wizard mentre si digita (input + select)
   document.getElementById("modal-content").addEventListener("input", wizFieldUpdate);
+  document.getElementById("modal-content").addEventListener("input", (e) => {   // quantità del riepilogo ricetta: il totale si aggiorna mentre scrivi
+    const q = e.target.closest && e.target.closest("[data-agg-qta]");
+    if (!q || !_aggQta) return;
+    const it = _aggQta.items[+q.dataset.aggQta]; if (!it) return;
+    it.qta = Math.max(0, +q.value || 0);
+    const tot = document.getElementById("agg-totale"); if (tot) tot.innerHTML = totaleAggHTML();
+  });
   document.getElementById("modal-content").addEventListener("change", wizFieldUpdate);
   // toccando un'opzione si sceglie subito (prima che il campo perda il fuoco)
   document.getElementById("modal-content").addEventListener("pointerdown", (e) => {
