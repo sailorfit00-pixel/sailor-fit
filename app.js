@@ -1056,7 +1056,7 @@ function leggiInCasa() {
 
 // -------- Lista della spesa: da quello che mangi più spesso --------
 // Guarda il diario delle ultime 4 settimane: per ogni ingrediente quanti giorni
-// l'hai mangiato e quanto in media a settimana. In cima ciò che mangi più spesso.
+// l'hai mangiato e quanto in media a settimana (mai meno della quantità che ne mangi di solito in un giorno). In cima ciò che mangi più spesso.
 const GIORNI_SPESA = 28;
 // Consumo per alimento nei giorni indicati: contano solo i giorni con almeno 3 pasti scritti (un giorno dimenticato non abbassa la media).
 // `g` è già «a settimana» (grammi totali / giorni validi × 7); `giorni` = in quanti dei giorni validi l'hai mangiato.
@@ -1102,20 +1102,24 @@ function consumiPerAlimento(giorniISO) {
   const validi = giorniISO.filter(x => d[x] && (d[x].pasti || []).length >= 3);
   const st = {};
   validi.forEach(x => {
-    const visti = new Set();
+    const visti = new Set(), delGiorno = {};
     d[x].pasti.forEach(p => (p.ingredienti || []).forEach(i => {
       if (!(window.ALIMENTI || {})[i.nome] || i.unita === "q.b.") return;
       // un piatto (cappuccino, omelette, porridge…) in lista diventa i suoi ingredienti: si compra il latte, non il cappuccino
       const parti = ingredientiSpesa(i.nome) || [[i.nome, 1]];
       parti.forEach(([nome, fr]) => {
-        const e = st[nome] ||= { giorni: 0, g: 0 };
+        const e = st[nome] ||= { giorni: 0, g: 0, porz: [] };
         e.g += grammiIng(i) * fr;
+        delGiorno[nome] = (delGiorno[nome] || 0) + grammiIng(i) * fr;
         if (!visti.has(nome)) { visti.add(nome); e.giorni++; }
       });
     }));
+    Object.entries(delGiorno).forEach(([nome, g]) => st[nome].porz.push(g));   // quanto ne hai mangiato quel giorno
   });
   const k = validi.length ? 7 / validi.length : 0;
-  Object.values(st).forEach(e => { e.g *= k; });
+  // media a settimana, ma mai meno di quanto ne mangi di solito in un giorno: lo yogurt mangiato una volta (150 g) non diventa «~40 g»
+  const mediana = (a) => { const v = a.slice().sort((x, y) => x - y), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+  Object.values(st).forEach(e => { e.g = Math.max(e.g * k, e.porz.length ? mediana(e.porz) : 0); delete e.porz; });
   return { st, nValidi: validi.length, validi };
 }
 // La lista della spesa mostra ciò che consumi di solito: ultime 4 settimane, solo giorni passati (né oggi né quelli pianificati)

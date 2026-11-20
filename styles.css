@@ -1895,3 +1895,16 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 .barra-salva.due { display: flex; gap: 10px; }
 .barra-salva.due > * { flex: 1 1 0; margin: 0; }
 .barra-salva.due .btn-sec { min-height: 50px; text-align: center; }
+
+/* «Già mangiato» come elenco leggero: niente riquadro per ogni piatto (così non sembra la card del pasto in «Oggi»),
+   righe separate da una linea sottile e freccia piccola senza cerchio */
+.pm-sezione .pm-card { background: transparent; border: none; border-radius: 0; box-shadow: none; margin: 0; padding: 12px 2px; }
+.pm-sezione .sw { border-radius: 0; }
+.pm-sezione .sw-fondo, .pm-sezione .sw-azioni { border-radius: 0; }
+.pm-sezione .pm-tot { padding-bottom: 8px; margin-bottom: 0; border-bottom: 1px solid rgba(183,156,245,.35); }
+.pm-sezione > .pm-card, .pm-sezione > .sw { border-bottom: 1px solid var(--line2); }
+.pm-sezione .pm-card.aperto, .pm-sezione .pm-card.aperta { background: rgba(183,156,245,.06); }
+.pm-sezione .pm-card .pm-testa .pm-freccia { border: none; background: none; border-radius: 0; width: 22px; height: 22px; }
+.pm-sezione .pm-card .pm-testa .pm-freccia::before { width: 7px; height: 7px; border-color: var(--muted); }
+.pm-sezione .pm-dett, .pm-sezione .lib-voce .pm-dett, .pm-sezione .pm-ricetta .pm-dett { border-top-color: var(--line2); }
+.lib-risultato .r-macro:empty { display: none; }

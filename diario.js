@@ -133,32 +133,51 @@ function aggiungiIngredienteA(piatto, ing) {
   if (e) e.qta = (+e.qta || 0) + (+ing.qta || 0);
   else (piatto.ingredienti = piatto.ingredienti || []).push(clone(ing));
 }
-function rinominaLibero(p) {
-  if (p.ricetta && typeof nomeVariante === "function") {   // una ricetta con qualche ingrediente cambiato resta la ricetta: «Pancake proteici (con ricotta)»
-    const v = nomeVariante(p.ricetta, p.nome, p.ingredienti);
-    if (v) {
-      // stessi ingredienti della ricetta (cambiano solo i grammi): resta col suo nome. Ingrediente cambiato/tolto/aggiunto: il nome segue gli ingredienti veri («Riso basmati, gamberi»)
-      const r = ricettaDaNome(p.ricetta), A = window.ALIMENTI || {};
-      const base = new Set(((r && (r._orig || r).ingredienti) || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));
-      const att = new Set((p.ingredienti || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));   // stessi criteri della ricetta: q.b. e alimenti sconosciuti non contano
-      const uguali = base.size === att.size && [...att].every(n => base.has(n));
-      if (uguali) { if (v !== p.nome) delete p.nPezzi; p.nome = v; aggiornaMacro(p); return; }
-      delete p.nPezzi;   // niente contatore porzioni: non è più la ricetta com'era (la ricetta resta per i macro e il «Più fit»)
-    } else { delete p.ricetta; delete p.nPezzi; }   // troppi cambi: piatto di ingredienti singoli
+// Una ricetta resta la ricetta anche se ne cambi gli ingredienti (`prima` = gli ingredienti di prima del cambio):
+// - cambi un ingrediente che non è nel nome, ne togli uno che non è nel nome o ne aggiungi uno → il nome resta («Pancake proteici»)
+// - cambi un ingrediente che è nel nome → cambia la parola nel nome («Pollo con basmati» → «Coniglio con basmati»)
+// - togli un ingrediente che è nel nome → il piatto si divide: ciò che resta diventa alimenti singoli («Yogurt greco e datteri» senza datteri → yogurt)
+function rinominaLibero(p, prima) {
+  if (p.ricetta) {
+    const r = typeof ricettaDaNome === "function" ? ricettaDaNome(p.ricetta) : null, A = window.ALIMENTI || {};
+    if (r) {
+      const conta = (lista) => (lista || []).filter(i => i.unita !== "q.b." && A[i.nome] && grammiIng(i) > 0).map(i => i.nome);   // q.b. e alimenti sconosciuti non contano
+      let nome = String(p.nome || "").replace(/\s*\(con [^)]*\)\s*$/, "");
+      if (!nome.trim() || /^✍️/.test(nome)) nome = r.nome;   // piatti rinominati con l'elenco degli ingredienti dalle versioni vecchie: torna il nome della ricetta
+      if (prima && typeof ingredienteNelNome === "function") {
+        const vecchi = conta(prima), nuovi = conta(p.ingredienti), sNuovi = new Set(nuovi), sVecchi = new Set(vecchi);
+        // stesso posto, alimento diverso = sostituzione (il cambio avviene sul posto); conta solo se il numero di ingredienti è lo stesso
+        const coppie = vecchi.length === nuovi.length ? vecchi.map((v, k) => [v, nuovi[k]]).filter(([v, n]) => v !== n && !sNuovi.has(v) && !sVecchi.has(n)) : [];
+        const sostituiti = new Set(coppie.map(x => x[0]));
+        const tolti = vecchi.filter(v => !sNuovi.has(v) && !sostituiti.has(v));
+        if (tolti.some(v => ingredienteNelNome(nome, v))) { delete p.ricetta; delete p.nPezzi; }
+        else coppie.forEach(([v, n]) => { const x = nomeConSostituzione(nome, v, n); if (x) nome = x; });
+      }
+      if (p.ricetta) {
+        const base = new Set(((r._orig || r).ingredienti || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));
+        const att = new Set((p.ingredienti || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));
+        if (!(base.size === att.size && [...att].every(n => base.has(n)))) delete p.nPezzi;   // non è più la ricetta com'era: niente contatore porzioni (la ricetta resta per i passaggi e i macro)
+        p.nome = nome; aggiornaMacro(p); return;
+      }
+    } else { delete p.ricetta; delete p.nPezzi; }   // ricetta che non esiste più: piatto di ingredienti singoli
   }
   p.nome = "✍️ " + nomeAutomatico((p.ingredienti || []).map(i => ({ nome: i.nome, cercato: i.cercato, qta: grammiIng(i) || i.qta })));
   aggiornaMacro(p);
 }
-function unisciPastiLiberi(data, momento) {
-  const g = giornoDiario(data);
+// fonde i piatti liberi di un momento in uno solo, sulla giornata già caricata; vero se ha cambiato qualcosa
+function unisciPastiLiberiIn(g, momento) {
   const liberi = g.pasti.filter(p => p.pasto === momento && !p.ricetta);
-  if (liberi.length < 2) return;
+  if (liberi.length < 2) return false;
   const base = liberi[0], altri = new Set(liberi.slice(1));
   liberi.slice(1).forEach(p => (p.ingredienti || []).forEach(i => aggiungiIngredienteA(base, i)));
   g.pasti = g.pasti.filter(p => !altri.has(p));
   delete base.auto;   // piatto fuso con cose tue: non è più solo dell'app
   rinominaLibero(base);
-  scriviGiorno(data, g);
+  return true;
+}
+function unisciPastiLiberi(data, momento) {
+  const g = giornoDiario(data);
+  if (unisciPastiLiberiIn(g, momento)) scriviGiorno(data, g);
 }
 // Nomi ricette accorciati e quantità davanti ("3 Pancake proteici"): i pasti già registrati si aggiornano una volta sola
 // Dopo aver ripristinato un backup (anche di una versione vecchia) i dati si adattano a quella nuova:
@@ -312,14 +331,11 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
         if (!righe.length) { gg.pasti.splice(gg.pasti.indexOf(p), 1); cambiato = true; struttura = true; return; }
         if (norm(p) === JSON.stringify(righe.map(senzaT))) return;
         const rimasti = (p.ingredienti || []).filter(i => !A[i.nome] || grammiIng(i) <= 0);   // q.b. e simili restano com'erano
+        const ingrPrima = p.ingredienti;
         p.ingredienti = righe.concat(rimasti); delete p.auto;
         const ricettaPrima = p.ricetta, nPrima = p.nPezzi;
-        rinominaLibero(p);   // una ricetta con un ingrediente cambiato resta «ricetta (con X)»; con troppi cambi diventa un piatto libero
+        rinominaLibero(p, ingrPrima);   // cambi un ingrediente del nome → cambia il nome; togli un ingrediente del nome → il piatto si divide; il resto lascia il nome
         if (!p.ricetta || p.ricetta !== ricettaPrima || p.nPezzi !== nPrima) struttura = true;
-        if (!p.ricetta) {   // troppi ingredienti cambiati: si propone di tenerla come ricetta tua
-          const nomeProp = String(ricettaPrima).replace(/\s*\(con [^)]*\)\s*$/, "") + " (mia versione)", itemsProp = righe.map(x => ({ nome: x.nome, qta: x.qta, cercato: x.cercato }));
-          { const tt = document.getElementById("toast"), occupato = tt && tt.classList.contains("on"); setTimeout(() => mostraToast("⭐ Tante modifiche: salvala come tua ricetta?", "Salva", () => salvaPiattoComeRicetta({ items: itemsProp, pasto: c.pasto }, nomeProp)), occupato ? 5200 : 400); }   // se c'è un «Annulla» sullo schermo non lo copro
-        }
         cambiato = true;
       });
       if (!cambiato) return;
@@ -1388,8 +1404,9 @@ function applicaMossaCosa(data, key) {
     aggiornaMacro(x); g.pasti.push(x);
   } else if (tipo === "sco") {   // riequilibra: meno di una fonte proteica e, nello stesso pasto, il macro che mancava
     const x = g.pasti[+a], ing = x && (x.ingredienti || [])[+b]; if (!ing) return false;
+    const ingrPrima = clone(x.ingredienti);
     x.ingredienti[+b] = { nome: ing.nome, qta: +c, unita: UNITA_LIQUIDI.test(ing.nome) ? "ml" : "g", lock: true, cercato: ing.cercato || ing.nome };
-    delete x.auto; rinominaLibero(x);
+    delete x.auto; rinominaLibero(x, ingrPrima);
     const y = { nome: d, pasto: p, passaggi: [], ingredienti: [{ nome: d, qta: +e, unita: "g", lock: true, cercato: d }] };
     aggiornaMacro(y); g.pasti.push(y);
   } else if (tipo === "lig") {
@@ -1397,10 +1414,11 @@ function applicaMossaCosa(data, key) {
     aggiornaMacro(x); g.pasti.push(x);
   } else {
     const pi = +a, ii = +b, x = g.pasti[pi], ing = x && (x.ingredienti || [])[ii]; if (!ing) return false;
+    const ingrPrima = clone(x.ingredienti);
     if (tipo === "tol") x.ingredienti.splice(ii, 1);
     else if (tipo === "por") x.ingredienti[ii] = { nome: ing.nome, qta: +c, unita: UNITA_LIQUIDI.test(ing.nome) ? "ml" : "g", lock: true, cercato: ing.cercato || ing.nome };
     else { const nuovo = c; x.ingredienti[ii] = { nome: nuovo, qta: +d > 0 ? +d : Math.round(grammiIng(ing)), unita: UNITA_LIQUIDI.test(nuovo) ? "ml" : "g", lock: true, cercato: nuovo }; }
-    if (!x.ingredienti.length) g.pasti.splice(pi, 1); else { delete x.auto; rinominaLibero(x); }
+    if (!x.ingredienti.length) g.pasti.splice(pi, 1); else { delete x.auto; rinominaLibero(x, ingrPrima); if (!x.ricetta) unisciPastiLiberiIn(g, x.pasto); }
   }
   scriviGiorno(data, g);
   return prima;

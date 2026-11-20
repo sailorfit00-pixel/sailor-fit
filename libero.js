@@ -294,7 +294,7 @@ function ricetteTestoHTML(q, attr) {
   return `<div class="autoc-titolo">📖 Ricette</div>` + lista.map(({ r, ps }) =>
     `<button class="autoc-voce autoc-ricetta" ${attr}="${esc(r.nome)}"><b>${esc(r.nome)}</b>${macroStileHTML(ps.tot)}</button>`).join("");
 }
-// Piatti composti da più alimenti diversi: non sono ingredienti. (Il modo di cuocere o preparare un alimento — lesso, al forno, arrosto, carpaccio — resta un ingrediente.) Nel pasto si trovano insieme alle ricette; nelle ricette non si propongono.
+// Piatti composti da più alimenti diversi: non sono ingredienti. (Il modo di cuocere o preparare un alimento — lesso, al forno, arrosto, carpaccio — resta un ingrediente.) Nel pasto si trovano tra gli alimenti, sopra le ricette; nelle ricette non si propongono.
 const PIATTI_PRONTI = new Set(["Hamburger di manzo", "Pizza margherita", "Pizza marinara", "Pizza diavola", "Pizza capricciosa", "Pizza quattro formaggi", "Pizza al taglio", "Pizza bianca mozzarella funghi e speck", "Sushi", "Panino hamburger", "Panino con prosciutto", "Aperitivo condiviso (tagliere)", "Crostata alla marmellata", "Torta (ciambellone)", "Tiramisù",
   "Polpette di manzo", "Polpette di pollo o tacchino", "Hamburger di pollo", "Cotoletta di pollo impanata", "Cotoletta alla milanese", "Spezzatino di manzo", "Bastoncini di pesce",
   "Frittata", "Frittata di albumi", "Gyoza", "Involtini primavera", "Tempura di gamberi", "Pollo al curry", "Nigiri", "Maki", "Uramaki", "Poke bowl", "Zuppa di miso", "Ramen (noodles in brodo)", "Purè di patate", "Crocchette di patate",
@@ -316,10 +316,9 @@ function mostraAutocompleta(testo) {
   const voce = (n) => `<button class="autoc-voce" data-autoc="${esc(n)}">${esc(n)}</button>`;
   const ingr = trovati.filter(n => !PIATTI_PRONTI.has(n)).slice(0, 6).map(voce).join("");       // alimenti singoli
   const piatti = trovati.filter(n => PIATTI_PRONTI.has(n)).slice(0, 4).map(voce).join("");      // già composti
-  // sopra i singoli ingredienti, sotto le ricette (i piatti già composti stanno con le ricette)
-  const sotto = ricetteHTML + piatti;
-  box.innerHTML = (ingr && sotto ? `<div class="autoc-titolo">🥕 Ingredienti</div>` : "") + ingr
-    + (sotto && !ricetteHTML ? `<div class="autoc-titolo">📖 Ricette</div>` : "") + sotto;
+  // sopra tutti gli alimenti (anche quelli già pronti: pizza, frittata, tiramisù…, che si segnano come un alimento), sotto le ricette
+  const alimenti = ingr + piatti;
+  box.innerHTML = (alimenti && ricetteHTML ? `<div class="autoc-titolo">🥕 Alimenti</div>` : "") + alimenti + ricetteHTML;
 }
 // -------- Cambiare un ingrediente: tocchi il nome e scrivi il nuovo --------
 // Il nome di un ingrediente è un testo (si legge per intero, anche su due righe); toccandolo diventa un campo dove scrivere il nuovo
@@ -890,7 +889,9 @@ function rimettiNelDiario(c, tolto, primaPasti) {
     if (!prima) return;
     const ora = g.pasti.filter(x => x.pasto === c.pasto && x.ricetta)[tolto.grp];
     if (ora && ora.ricetta === prima.ricetta) { aggiungiIngredienteA(ora, riga); rinominaLibero(ora); }
-    else g.pasti.push(clone(prima));
+    else {   // la ricetta non c'è più (si è divisa togliendo un ingrediente del nome): il pasto torna com'era, senza doppioni
+      g.pasti = g.pasti.filter(x => x.pasto !== c.pasto).concat(clone(primaPasti));
+    }
   }
   scriviGiorno(c.data, g);
   if (typeof renderOggi === "function") renderOggi();
@@ -1236,7 +1237,7 @@ function liberoHTML() {
       ${sopraGiornoHTML(c.data, c.bozza ? m.kcal : 0)}
       ${ingrLive}
       <div class="lib-risultato">
-        <div class="r-macro">${macroHaObiettivoHTML(mPasto, T, true)}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
+        <div class="r-macro">${c.bozza || schede.length > 1 ? macroHaObiettivoHTML(mPasto, T, true) : ""}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
       </div>
       ${pastoPassatoC(c) ? "" : furboBlocco}
       ${bloccato ? "" : altreIdeeHTML(c)}
@@ -1372,6 +1373,68 @@ function nomeVariante(nomeRicetta, nomeBase, items) {
   const r = ricettaDaNome(nomeRicetta);
   if (!r || !ricettaMantenuta(r, items)) return null;
   return String(nomeBase || nomeRicetta).replace(/^✍️\s*/, "").replace(/\s*\(con [^)]*\)\s*$/, "");
+}
+// ---- Nome del piatto quando cambi un ingrediente di una ricetta ----
+// «Petto di pollo» nel nome del piatto è solo «pollo»: i tagli e le note (0%, (cotto)) non si scrivono
+const TAGLI_NOME = /^(petto|petti|fesa|filetto|filetti|fettina|fettine|bocconcini|coscia|cosce|sovracoscia|sovracosce|macinato|trancio|tranci|lonza|polpa|carpaccio|straccetti)\s+(di\s+|d['’]\s*)/i;
+const PAROLE_NON_NOME = new Set(["integrale", "integrali", "light", "scremato", "parzialmente", "intero", "magro", "magra", "fresco", "fresca", "cotto", "cotta", "crudo", "cruda", "secco", "secca", "proteico", "proteica", "greco", "bianco", "bianca", "naturale", "amaro", "polvere", "scatola", "surgelato", "surgelati"]);
+function nomeCortoAlimento(nome) {
+  return String(nome).replace(TAGLI_NOME, "").replace(/\s*\([^)]*\)/g, "").replace(/\s*\d+([.,]\d+)?\s*%/g, "").replace(/\s+(al naturale|sott['’]olio|in scatola|sgocciolat[oaie])$/i, "").trim();
+}
+// minuscole e senza accenti, stessa lunghezza del testo (così le posizioni valgono anche sul nome vero)
+const normPos = (s) => String(s).normalize("NFC").toLowerCase().replace(/’/g, "'").split("").map(ch => ch.normalize("NFD").replace(/[̀-ͯ]/g, "") || ch).join("");
+// dove compare l'alimento nel nome del piatto: prima il nome intero («salmone affumicato»), poi le sue parole importanti («pollo», «basmati»). null se non c'è
+function ingredienteNelNome(nomePiatto, nomeAlimento) {
+  const t = normPos(nomePiatto), corto = normPos(nomeCortoAlimento(nomeAlimento));
+  const cerca = (w) => {
+    const re = new RegExp(`(^|[^a-z0-9'])(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})(?=$|[^a-z0-9])`);
+    const m = re.exec(t);
+    return m ? { i: m.index + m[1].length, n: w.length } : null;
+  };
+  const candidati = [corto, normPos(nomeAlimento), ...corto.split(/[\s']+/).filter(w => w.length > 3 && !PAROLE_NON_NOME.has(w)).sort((a, b) => b.length - a.length)];
+  for (const w of candidati) { if (!w) continue; const r = cerca(w); if (r) return r; }
+  return null;
+}
+// articolo della preposizione «a»/«di» giusto per il nuovo alimento: al/allo/alla/all'/ai/agli/alle
+function generePerArticolo(parola) {
+  const w = normPos(parola).split(/\s+/)[0] || "";
+  const z = /^(s[^aeiou]|z|gn|ps|x|y)/.test(w), voc = /^[aeiouh]/.test(w);
+  let g;
+  if (w === "uova") g = "fp";
+  else if (/a$/.test(w)) g = "fs";
+  else if (/i$/.test(w)) g = "mp";
+  else if (/e$/.test(w)) g = /(one|ale|ile|ore|ume|ce|me)$/.test(w) ? "ms" : "fp";
+  else g = "ms";
+  return { g, z, voc };
+}
+const ARTICOLI = {
+  a:  { ms: "al", msz: "allo", fs: "alla", sv: "all'", mp: "ai", mpz: "agli", mpv: "agli", fp: "alle" },
+  di: { ms: "del", msz: "dello", fs: "della", sv: "dell'", mp: "dei", mpz: "degli", mpv: "degli", fp: "delle" }
+};
+function articoloPer(base, parola) {
+  const { g, z, voc } = generePerArticolo(parola), A = ARTICOLI[base];
+  if ((g === "ms" || g === "fs") && voc) return A.sv;
+  if (g === "ms") return z ? A.msz : A.ms;
+  if (g === "mp") return voc ? A.mpv : z ? A.mpz : A.mp;
+  return A[g];
+}
+// «Pollo con basmati» + (Petto di pollo → Coniglio) = «Coniglio con basmati»; «Pancake ai mirtilli» + (Mirtilli → Banana) = «Pancake alla banana».
+// null se il vecchio alimento non compare nel nome
+function nomeConSostituzione(nomePiatto, vecchio, nuovo) {
+  const pos = ingredienteNelNome(nomePiatto, vecchio);
+  if (!pos) return null;
+  let nuovoTxt = nomeCortoAlimento(nuovo);
+  nuovoTxt = /.[A-ZÀ-Ý]/.test(nuovoTxt) ? nuovoTxt : nuovoTxt.toLowerCase();   // le marche restano con la maiuscola
+  let prima = nomePiatto.slice(0, pos.i);
+  const dopo = nomePiatto.slice(pos.i + pos.n);
+  // preposizione articolata subito prima: si adatta al nuovo alimento
+  const mArt = /(^|\s)(al|allo|alla|ai|agli|alle|del|dello|della|dei|degli|delle)\s+$/i.exec(prima) || /(^|\s)(all|dell)'$/i.exec(prima);
+  if (mArt) {
+    const base = /^a/i.test(mArt[2]) ? "a" : "di", art = articoloPer(base, nuovoTxt);
+    prima = prima.slice(0, mArt.index + mArt[1].length) + art + (art.endsWith("'") ? "" : " ");
+  }
+  if (!prima.trim()) nuovoTxt = nuovoTxt.charAt(0).toUpperCase() + nuovoTxt.slice(1);
+  return prima + nuovoTxt + dopo;
 }
 // I cambi "Più fit" accettati restano nella ricetta: dalle prossime volte è già la versione più leggera. Una tua versione sostituisce quella di base.
 function aggiornaRicettaDaFit(nome, mods) {
