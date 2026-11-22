@@ -881,6 +881,13 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .lib-autoc:empty { display: none; }
 .autoc-voce { text-align: left; background: var(--card); border: 1px solid var(--line2); border-radius: var(--r-s); color: var(--text); font: inherit; font-size: 16px; padding: 11px 14px; cursor: pointer; }
 .autoc-voce:active { background: var(--lilla-bg); border-color: var(--lilla); }
+.autoc-voce:has(.autoc-dose) { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.autoc-dose { font-style: normal; font-size: 13px; color: var(--muted, #8a8f98); white-space: nowrap; }
+.lib-preset { display: flex; gap: 6px; padding: 0 12px 10px; flex-wrap: wrap; }
+.lib-preset-b { flex: 1 1 0; min-width: 52px; min-height: 36px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; color: var(--text); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.lib-preset-b small { font-weight: 400; font-size: 12px; opacity: .75; }
+.lib-preset-b.on { background: var(--lilla-bg); border-color: var(--lilla); }
+.lib-preset-b:active { transform: scale(.97); }
 .sr-dur { width: 58px; text-align: center; flex: 0 0 auto; }
 .sr-kcal { margin-left: auto; white-space: nowrap; }
 .lib-riga .lib-peso { margin: -10px 0 0; padding-right: 44px; }
