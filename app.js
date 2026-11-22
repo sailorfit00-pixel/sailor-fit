@@ -1010,7 +1010,8 @@ function leggiInCasaRaw() { try { return JSON.parse(localStorage.getItem("mp_inc
 function leggiScorte() { try { return JSON.parse(localStorage.getItem("mp_incasa_q")) || {}; } catch (e) { return {}; } }
 function segnaInCasa(nome, si, grammi) {
   const c = leggiInCasaRaw(), q = leggiScorte();
-  if (si) { c[nome] = oggiISO(); q[nome] = Math.max(grammi || 0, paccoG(nome)); } else { delete c[nome]; delete q[nome]; }
+  // la scorta è quello che la lista ti ha detto di comprare (5 banane = 600 g, non una «confezione» da 700 g che non finiresti mai); senza quantità, una confezione tipica
+  if (si) { c[nome] = oggiISO(); q[nome] = grammi > 0 ? grammi : paccoG(nome); } else { delete c[nome]; delete q[nome]; }
   try { localStorage.setItem("mp_incasa", JSON.stringify(c)); localStorage.setItem("mp_incasa_q", JSON.stringify(q)); } catch (e) {}
 }
 // Quanto ne hai in casa: alla spesa si assume una confezione tipica (in grammi, per il riso e la pasta da crudo);
@@ -1029,9 +1030,13 @@ function consumatoDa(nome, da) {
   const d = typeof leggiDiario === "function" ? leggiDiario() : {};
   let g = 0;
   Object.keys(d).filter(x => x >= da && x <= oggiISO()).forEach(x => (d[x].pasti || []).forEach(p => (p.ingredienti || []).forEach(i => {
-    if (nomeSpesa(i.nome).toLowerCase() !== nome.toLowerCase() || !(window.ALIMENTI || {})[i.nome]) return;
-    const f = /cott/i.test(i.nome) && (window.CRUDO_FATTORE || []).find(([re]) => re.test(i.nome));
-    g += grammiIng(i) / (f ? f[1] : 1);
+    if (!(window.ALIMENTI || {})[i.nome] || i.unita === "q.b.") return;
+    // anche dentro i piatti: la banana del frullato, il latte del cappuccino, le uova della frittata
+    (ingredientiSpesa(i.nome) || [[i.nome, 1]]).forEach(([n, fr]) => {
+      if (nomeSpesa(n).toLowerCase() !== nome.toLowerCase()) return;
+      const f = /cott/i.test(n) && (window.CRUDO_FATTORE || []).find(([re]) => re.test(n));
+      g += grammiIng(i) * fr / (f ? f[1] : 1);
+    });
   })));
   return g;
 }
@@ -1041,7 +1046,25 @@ function restoInCasa(nome) { const da = leggiInCasaRaw()[nome]; return da ? scor
 const finito = (nome) => { if (scortaG(nome) <= 1) return false; const r = restoInCasa(nome);   // le cose non alimentari (detersivo, carta…) non hanno grammi: restano spuntate
    return r !== null && r < Math.max(30, scortaG(nome) * 0.12); };
 const GIORNI_PRESI = 10;
+// v365: prima la scorta non scendeva mai sotto la confezione tipica (banane 700 g anche se ne avevi prese 5 = 600 g),
+// così finite le banane restavano «già prese». Una volta sola: le scorte gonfiate tornano alla quantità suggerita dalla lista.
+function correggiScorteGonfiate() {
+  try {
+    if (localStorage.getItem("mp_scorte_v365")) return;
+    const q = leggiScorte(), { st } = statSpesa();
+    Object.keys(q).forEach(nome => {
+      if (q[nome] !== paccoG(nome)) return;
+      const fonti = Object.entries(st).filter(([n]) => nomeSpesa(n).toLowerCase() === nome.toLowerCase());
+      if (fonti.length !== 1) return;
+      const sugg = qtaSettimanaG(fonti[0][0], fonti[0][1].g);
+      if (sugg > 0 && sugg < q[nome]) q[nome] = sugg;
+    });
+    localStorage.setItem("mp_incasa_q", JSON.stringify(q));
+    localStorage.setItem("mp_scorte_v365", "1");
+  } catch (e) {}
+}
 function scadiPresi() {
+  correggiScorteGonfiate();
   const presi = leggiPresi(); if (!presi.size) return presi;
   const c = leggiInCasaRaw(), da = addGiorniISO(oggiISO(), -GIORNI_PRESI);
   let cambiato = false;
