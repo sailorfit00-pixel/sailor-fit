@@ -1915,3 +1915,24 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 .pm-sezione .pm-card .pm-testa .pm-freccia::before { width: 7px; height: 7px; border-color: var(--muted); }
 .pm-sezione .pm-dett, .pm-sezione .lib-voce .pm-dett, .pm-sezione .pm-ricetta .pm-dett { border-top-color: var(--line2); }
 .lib-risultato .r-macro:empty { display: none; }
+
+/* v367: obiettivo della settimana scelto da te */
+.bs-totale { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: transparent; border: 1px solid var(--line2); border-radius: var(--r-s); color: var(--text); font: inherit; font-size: 15px; padding: 10px 12px; margin-bottom: 10px; cursor: pointer; text-align: left; }
+.bs-totale:active { background: var(--lilla-bg); border-color: var(--lilla); }
+.bs-scelto { font-style: normal; font-size: 12px; color: var(--lilla); margin-left: 4px; }
+.gs-kcal { background: transparent; border: 0; color: var(--text); font: inherit; padding: 4px 6px; border-radius: 8px; cursor: pointer; text-decoration: underline dotted var(--muted); text-underline-offset: 4px; }
+.gs-kcal:active { background: var(--lilla-bg); }
+.bsp-campo { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; }
+.bsp-campo input { flex: 1; font-size: 26px; font-weight: 700; text-align: center; }
+.bsp-campo span { color: var(--muted); }
+.bsp-media { color: var(--muted); font-size: 13px; margin: 6px 0 12px; min-height: 1em; text-align: center; }
+.bsp-lista { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+.bsp-riga { display: grid; grid-template-columns: 1fr auto 70px; gap: 10px; align-items: center; padding: 7px 4px; border-bottom: 1px solid var(--line2); font-size: 15px; }
+.bsp-riga b { text-align: right; }
+.bsp-riga.passato { opacity: .5; }
+.bsp-tot { border-bottom: 0; font-weight: 700; }
+.bsp-azioni { display: flex; gap: 10px; }
+.bsp-azioni > * { flex: 1; }
+.bsp-reset { display: block; margin: 14px auto 0; }
+.gsp-cont { justify-content: center; margin: 14px 0 4px; }
+.gsp-cont input { width: 120px; font-size: 26px; font-weight: 700; text-align: center; }

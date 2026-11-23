@@ -21,7 +21,19 @@ function salvaRecuperi(r) { localStorage.setItem("mp_recuperi", JSON.stringify(r
 
 const dateSettimanaDi = (data) => { const lun = addGiorniISO(data, -indiceSettimana(data)); return [0, 1, 2, 3, 4, 5, 6].map(k => addGiorniISO(lun, k)); };
 const targetBase = (data) => TIPI_GIORNATA[giornoDiario(data).tipo].target;
-function limitiGiorno(base) { return [Math.max(leggiProfilo().bmr, Math.round(base * 0.8)), Math.round(base * 1.2)]; }
+// un giorno scelto da te: dal metabolismo basale a +50% (una cena fuori ci sta); i giorni che si adattano da soli restano entro ±20%
+function limitiGiorno(base) { return [Math.round(leggiProfilo().bmr), Math.round(base * 1.5)]; }
+function limitiAuto(base) { return [Math.max(leggiProfilo().bmr, Math.round(base * 0.8)), Math.round(base * 1.2)]; }
+// -------- Obiettivo della settimana scelto da te --------
+// { sempre: { kcal, da: lunedì } | null, settimane: { lunedì: kcal } }: una settimana sola, oppure da quel lunedì in poi
+function leggiBudgetSett() { try { const b = JSON.parse(localStorage.getItem("mp_budget_sett")) || {}; return { sempre: b.sempre || null, settimane: b.settimane || {} }; } catch (e) { return { sempre: null, settimane: {} }; } }
+function salvaBudgetSett(b) { localStorage.setItem("mp_budget_sett", JSON.stringify(b)); }
+function budgetScelto(lun) {
+  const b = leggiBudgetSett();
+  if (b.settimane[lun] > 0) return b.settimane[lun];
+  if (b.sempre && b.sempre.kcal > 0 && lun >= b.sempre.da) return b.sempre.kcal;
+  return null;
+}
 const limita = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
 const arr10 = (v) => Math.round(v / 10) * 10;
 
@@ -32,17 +44,40 @@ const arr10 = (v) => Math.round(v / 10) * 10;
 // Il piano è costoso (legge tutta la settimana dal diario) e viene richiesto decine di volte per ogni disegno: si ricorda finché i dati non cambiano
 let _memoPianoChiave = "", _memoPiano = new Map();
 function pianoSettimana(data) {
-  let k; try { k = ["mp_diario", "mp_spostamenti", "mp_recuperi", "mp_profilo", "mp_tipi"].map(x => localStorage.getItem(x) || "").join("\u0001") + "|" + oggiISO(); } catch (e) { return pianoSettimanaCalc(data); }
+  let k; try { k = ["mp_diario", "mp_spostamenti", "mp_recuperi", "mp_profilo", "mp_tipi", "mp_budget_sett"].map(x => localStorage.getItem(x) || "").join("\u0001") + "|" + oggiISO(); } catch (e) { return pianoSettimanaCalc(data); }
   if (k !== _memoPianoChiave) { _memoPiano = new Map(); _memoPianoChiave = k; }
   const lun = dateSettimanaDi(data)[0];
   if (!_memoPiano.has(lun)) _memoPiano.set(lun, pianoSettimanaCalc(data));
   return _memoPiano.get(lun);
 }
-function pianoSettimanaCalc(data) {
+// Divide il totale in proporzione agli obiettivi naturali dei giorni (allenamento > riposo). Chi scenderebbe sotto il basale resta al basale
+// e il resto si divide tra gli altri; gli arrotondamenti vanno sul giorno più grande, così la somma è proprio il totale scelto.
+function distribuisciTotale(nat, totale, minimo) {
+  const fermi = new Set();
+  let out = nat.slice();
+  for (let giro = 0; giro < 7; giro++) {
+    const restoT = totale - [...fermi].length * minimo, natLiberi = nat.reduce((a, b, i) => a + (fermi.has(i) ? 0 : b), 0) || 1;
+    out = nat.map((b, i) => fermi.has(i) ? minimo : b * restoT / natLiberi);
+    const nuovi = out.map((v, i) => v < minimo && !fermi.has(i) ? i : -1).filter(i => i >= 0);
+    if (!nuovi.length) break;
+    nuovi.forEach(i => fermi.add(i));
+  }
+  out = out.map(v => Math.max(minimo, arr10(v)));
+  const diff = totale - out.reduce((a, b) => a + b, 0), iMax = out.indexOf(Math.max(...out));
+  out[iMax] += diff;
+  return out;
+}
+// `totaleProva`: per l'anteprima, il piano con un totale settimanale diverso (senza salvarlo)
+function pianoSettimanaCalc(data, totaleProva) {
   const date = dateSettimanaDi(data);
   const oggi = oggiISO();
   const sp = leggiSpostamenti(), rec = leggiRecuperi();
-  const base = date.map(d => targetBase(d).kcal);
+  const naturale0 = date.map(d => targetBase(d).kcal);
+  const naturale = naturale0.reduce((a, b) => a + b, 0);
+  // totale scelto da te: ogni giorno si scala nella stessa proporzione, così un giorno di allenamento resta sopra uno di riposo (mai sotto il basale)
+  const scelto = totaleProva > 0 ? totaleProva : budgetScelto(date[0]);
+  const bmr = Math.round(leggiProfilo().bmr);
+  const base = scelto ? distribuisciTotale(naturale0, scelto, bmr) : naturale0;
   const budget = base.reduce((a, b) => a + b, 0);
   const fisso = date.map((d, i) => sp[d] ? limita(base[i] + sp[d], limitiGiorno(base[i])) : null);
   const g = date.map(d => giornoDiario(d));
@@ -56,13 +91,13 @@ function pianoSettimanaCalc(data) {
     else {
       const fissiDopo = fisso.reduce((a, f, j) => a + (j > i && f !== null ? f : 0), 0);
       const liberi = base.reduce((a, b, j) => a + (j >= i && fisso[j] === null ? b : 0), 0) || base[i];
-      target[i] = arr10(limita((resto - fissiDopo) * base[i] / liberi, limitiGiorno(base[i])));
+      target[i] = arr10(limita((resto - fissiDopo) * base[i] / liberi, limitiAuto(base[i])));
     }
     const recupera = d < oggi && completo[i] && rec[d] === "si";
     resto -= recupera ? mangiato[i] : target[i];
   });
   const finoAOggi = date.reduce((a, d, i) => a + (d <= oggi ? mangiato[i] : 0), 0);
-  return { date, base, fisso, target, budget, mangiato, completo, finoAOggi, scarto: Math.round(-resto) };
+  return { date, base, fisso, target, budget, mangiato, completo, finoAOggi, scarto: Math.round(-resto), naturale, scelto };
 }
 
 // Obiettivo del giorno (kcal e macro) tenendo conto del budget settimanale
@@ -157,7 +192,9 @@ function budgetSettimanaHTML(dataRif) {
   const k = (x) => Math.round(x).toLocaleString("it-IT");
   // una riga sola: quanto resta (o come è andata) e, solo se non basta il margine, ⚠ con di quanto
   const riga = finita ? `${k(p.finoAOggi)} / ${k(p.budget)} kcal` : `Restano <b>${k(restano)} kcal</b> · ${giorniRestanti} ${giorniRestanti === 1 ? "giorno" : "giorni"}`;
+  const tot = `<button class="bs-totale" data-sett-budget="${p.date[0]}" aria-label="Cambia l'obiettivo della settimana"><span>🎯 Settimana <b>${k(p.budget)} kcal</b>${p.scelto ? ` <em class="bs-scelto">scelto da te</em>` : ""}</span><span class="bs-matita">✏️</span></button>`;
   return `<div class="budget-sett">
+    ${finita ? "" : tot}
     <div class="bs-top"><span>${riga}</span>${!finita && p.scarto > 20 ? `<span class="bs-warn" aria-label="L'obiettivo della settimana non basta">⚠️ +${p.scarto}</span>` : ""}</div>
     <div class="ss-striscia">${striscia}</div>
     ${p.fisso.some((f, i) => f !== null && p.date[i] >= oggi) ? `<button class="btn-link" data-sett-azzera="${p.date[0]}" aria-label="Azzera le modifiche della settimana">↺</button>` : ""}
@@ -178,7 +215,7 @@ function giorniSettimanaHTML(dataRif) {
         <div class="gs-nome"><b>${d === oggi ? "Oggi" : nomi[i]} ${fmtData(d).split(" ")[0]}</b></div>
         <div class="gs-contatore">
           <button class="nav-btn" data-sett-passo="-1" data-giorno="${d}" ${p.target[i] <= lo ? "disabled" : ""} aria-label="100 kcal in meno">−</button>
-          <span><b>${p.target[i]}</b><small>kcal</small></span>
+          <button class="gs-kcal" data-sett-giorno-kcal="${d}" aria-label="Scrivi le kcal di questo giorno"><b>${p.target[i]}</b><small>kcal</small></button>
           <button class="nav-btn" data-sett-passo="1" data-giorno="${d}" ${p.target[i] >= hi ? "disabled" : ""} aria-label="100 kcal in più">＋</button>
         </div>
       </div>
@@ -190,7 +227,7 @@ function giorniSettimanaHTML(dataRif) {
 
 function impostaSpostamento(data, valore) {
   const sp = leggiSpostamenti();
-  const base = targetBase(data).kcal;
+  const p0 = pianoSettimana(data), base = p0.base[p0.date.indexOf(data)];   // rispetto all'obiettivo del giorno (già scalato sul totale che hai scelto)
   const v = Math.round(limita(base + valore, limitiGiorno(base)) - base);
   if (v) sp[data] = v; else delete sp[data];
   salvaSpostamenti(sp);
@@ -213,7 +250,107 @@ function aggiornaSettimana() {
   if (document.querySelector("#modal-content .budget-sett") && !document.getElementById("modal").hidden) rirenderAndamento();
   renderOggi();
 }
+// -------- Pannello: obiettivo della settimana --------
+const NOMI_GIORNI = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
+const kIt = (x) => Math.round(x).toLocaleString("it-IT");
+const numDa = (v) => { const n = parseInt(String(v).replace(/[^\d]/g, ""), 10); return isNaN(n) ? 0 : n; };
+function anteprimaBudgetHTML(lun, totale) {
+  const p = pianoSettimanaCalc(lun, totale), oggi = oggiISO();
+  return p.date.map((d, i) => `<div class="bsp-riga${d < oggi ? " passato" : ""}"><span>${NOMI_GIORNI[i].slice(0, 3)} ${fmtData(d).split(" ")[0]}</span><span class="bsp-tipo">${TIPI_GIORNATA[giornoDiario(d).tipo].icone}</span><b>${kIt(p.target[i])}</b></div>`).join("")
+    + `<div class="bsp-riga bsp-tot"><span>Totale</span><span></span><b>${kIt(p.target.reduce((a, b) => a + b, 0))}</b></div>`;
+}
+function apriBudgetSett(lun) {
+  const p = pianoSettimana(lun), b = leggiBudgetSett();
+  const sempreAttivo = b.sempre && lun >= b.sempre.da;
+  openModal(`<h3 class="modal-title">🎯 Obiettivo della settimana</h3>
+    <p class="hint">Scrivi quante kcal vuoi mangiare in tutta la settimana: l'app le divide tra i giorni in base agli allenamenti. Calcolato dal tuo profilo: <b>${kIt(p.naturale)} kcal</b>.</p>
+    <div class="bsp-campo"><input id="bs-input" class="qta-input" type="text" inputmode="numeric" value="${p.budget}" data-lun="${lun}" aria-label="kcal della settimana"><span>kcal</span></div>
+    <p class="bsp-media" id="bs-media">≈ ${kIt(p.budget / 7)} kcal al giorno in media</p>
+    <div class="bsp-lista" id="bs-anteprima">${anteprimaBudgetHTML(lun, p.budget)}</div>
+    <div class="bsp-azioni">
+      <button class="btn-sec" data-bs-salva="settimana" data-lun="${lun}">Solo questa settimana</button>
+      <button class="btn" data-bs-salva="sempre" data-lun="${lun}">Da ora in poi</button>
+    </div>
+    ${p.scelto || sempreAttivo ? `<button class="btn-link bsp-reset" data-bs-reset="${lun}">↺ Torna al calcolato dal profilo</button>` : ""}`);
+}
+function salvaBudgetDa(lun, modo) {
+  const v = numDa((document.getElementById("bs-input") || {}).value), bmr = Math.round(leggiProfilo().bmr);
+  if (v < bmr * 7) { avviso(`Troppo poco: almeno ${kIt(bmr * 7)} kcal (il tuo metabolismo basale × 7)`); return; }
+  const b = leggiBudgetSett();
+  if (modo === "sempre") { b.sempre = { kcal: v, da: lun }; Object.keys(b.settimane).forEach(l => { if (l >= lun) delete b.settimane[l]; }); }
+  else b.settimane[lun] = v;
+  salvaBudgetSett(b); closeModal(); aggiornaSettimana();
+  avviso(`✓ Obiettivo settimana: ${kIt(v)} kcal${modo === "sempre" ? " da ora in poi" : ""}`);
+}
+// -------- Pannello: un giorno --------
+function apriGiornoSett(data, kcal) {
+  const p = pianoSettimana(data), i = p.date.indexOf(data), [lo, hi] = limitiGiorno(p.base[i]);
+  const v = limita(kcal || p.target[i], [lo, hi]);
+  openModal(`<h3 class="modal-title">${data === oggiISO() ? "Oggi" : NOMI_GIORNI[i]} ${fmtData(data).split(" ")[0]} ${TIPI_GIORNATA[giornoDiario(data).tipo].icone}</h3>
+    <p class="hint">Previsto: <b>${kIt(p.target[i])} kcal</b> · settimana ${kIt(p.budget)} kcal</p>
+    <div class="gs-contatore gsp-cont">
+      <button class="nav-btn" data-gd-passo="-100" aria-label="100 kcal in meno">−</button>
+      <input id="gd-input" class="qta-input" type="text" inputmode="numeric" value="${v}" data-data="${data}" data-lo="${lo}" data-hi="${hi}" aria-label="kcal del giorno">
+      <button class="nav-btn" data-gd-passo="100" aria-label="100 kcal in più">＋</button>
+    </div>
+    <p class="bsp-media" id="gd-diff"></p>
+    <div class="bsp-azioni">
+      <button class="btn-sec" data-gd-salva="compensa">Compensa negli altri giorni</button>
+      <button class="btn" data-gd-salva="totale">Cambia anche il totale</button>
+    </div>
+    ${p.fisso[i] !== null ? `<button class="btn-link bsp-reset" data-gd-reset="${data}">↺ Come previsto</button>` : ""}`);
+  aggiornaDiffGiorno();
+}
+function aggiornaDiffGiorno() {
+  const inp = document.getElementById("gd-input"), out = document.getElementById("gd-diff"); if (!inp || !out) return;
+  const p = pianoSettimana(inp.dataset.data), i = p.date.indexOf(inp.dataset.data), d = numDa(inp.value) - p.target[i];
+  const resto = p.date.filter((x, j) => j !== i && x >= oggiISO() && p.fisso[j] === null).length;
+  out.innerHTML = !d ? "" : `${d > 0 ? "+" : "−"}${kIt(Math.abs(d))} kcal · compensando: ${resto ? `${d > 0 ? "−" : "+"}${kIt(Math.abs(d) / resto)} negli altri ${resto} giorni` : "nessun altro giorno da adattare"} · oppure settimana ${kIt(p.budget + d)} kcal`;
+}
+function salvaGiorno(modo) {
+  const inp = document.getElementById("gd-input"); if (!inp) return;
+  const data = inp.dataset.data, v = limita(numDa(inp.value), [+inp.dataset.lo, +inp.dataset.hi]);
+  const p = pianoSettimana(data), i = p.date.indexOf(data), d = v - p.target[i];
+  if (modo === "totale" && d) {   // il giorno cambia e la settimana con lui: gli altri giorni restano come sono
+    const b = leggiBudgetSett(); b.settimane[p.date[0]] = p.budget + d; salvaBudgetSett(b);
+  }
+  const p2 = pianoSettimana(data);
+  impostaSpostamento(data, v - p2.base[p2.date.indexOf(data)]);
+  giornoSelSett = data; closeModal(); aggiornaSettimana();
+  avviso(`✓ ${kIt(v)} kcal${modo === "totale" && d ? ` · settimana ${kIt(p.budget + d)}` : ""}`);
+}
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("modal-content").addEventListener("input", (e) => {
+    if (e.target.id === "bs-input") {
+      const v = numDa(e.target.value), box = document.getElementById("bs-anteprima"), m = document.getElementById("bs-media");
+      if (v >= 1000 && box) { box.innerHTML = anteprimaBudgetHTML(e.target.dataset.lun, v); if (m) m.textContent = `≈ ${kIt(v / 7)} kcal al giorno in media`; }
+    }
+    if (e.target.id === "gd-input") aggiornaDiffGiorno();
+  });
+});
 function clickSettimana(e) {
+  const bb = e.target.closest("[data-sett-budget]");
+  if (bb) { apriBudgetSett(bb.dataset.settBudget); return true; }
+  const bs = e.target.closest("[data-bs-salva]");
+  if (bs) { salvaBudgetDa(bs.dataset.lun, bs.dataset.bsSalva); return true; }
+  const br = e.target.closest("[data-bs-reset]");
+  if (br) {
+    const lun = br.dataset.bsReset;
+    chiediConferma("Tornare al calcolato?", "L'obiettivo della settimana torna quello calcolato dal tuo profilo, da questa settimana in poi", "Sì, torna", () => {
+      const b = leggiBudgetSett(); Object.keys(b.settimane).forEach(l => { if (l >= lun) delete b.settimane[l]; });
+      if (b.sempre) b.sempre = null;
+      salvaBudgetSett(b); closeModal(); aggiornaSettimana(); avviso("✓ Obiettivo calcolato dal profilo");
+    });
+    return true;
+  }
+  const gk = e.target.closest("[data-sett-giorno-kcal]");
+  if (gk) { apriGiornoSett(gk.dataset.settGiornoKcal); return true; }
+  const gp = e.target.closest("[data-gd-passo]");
+  if (gp) { const inp = document.getElementById("gd-input"); if (inp) { inp.value = limita(numDa(inp.value) + +gp.dataset.gdPasso, [+inp.dataset.lo, +inp.dataset.hi]); aggiornaDiffGiorno(); } return true; }
+  const gs = e.target.closest("[data-gd-salva]");
+  if (gs) { salvaGiorno(gs.dataset.gdSalva); return true; }
+  const gr = e.target.closest("[data-gd-reset]");
+  if (gr) { const sp = leggiSpostamenti(); delete sp[gr.dataset.gdReset]; salvaSpostamenti(sp); closeModal(); aggiornaSettimana(); avviso("✓ Come previsto"); return true; }
   const g = e.target.closest("[data-sett-giorno]");
   if (g) {
     giornoSelSett = g.dataset.settGiorno;
@@ -225,8 +362,8 @@ function clickSettimana(e) {
   if (ps) {
     giornoSelSett = ps.dataset.giorno;
     const p = pianoSettimana(giornoSelSett), i = p.date.indexOf(giornoSelSett);
-    impostaSpostamento(giornoSelSett, p.target[i] - p.base[i] + +ps.dataset.settPasso * PASSO_SPOSTAMENTO);
-    aggiornaSettimana(); return true;
+    apriGiornoSett(giornoSelSett, p.target[i] + +ps.dataset.settPasso * PASSO_SPOSTAMENTO);   // si sceglie: compensare negli altri giorni o cambiare il totale
+    return true;
   }
   const co = e.target.closest("[data-sett-compila]");
   if (co) {
