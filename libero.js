@@ -261,6 +261,7 @@ function apriEditorPasto(ctx, items, nome, ricalcola = true) {
   liberoCtx = Object.assign({ items: items || [], nome: nome || "", ignoto: null }, ctx);
   if (ricalcola && liberoCtx.items.length) ricalcolaLibero();
   openModal(liberoHTML());
+  if (liberoCtx.vivo && !liberoCtx.items.length) rifocusInput();   // pasto vuoto: si scrive subito
 }
 // -------- Suggerimenti mentre scrivi: già dalla prima lettera --------
 const AUTOC_LEAD = /^\s*(?:\d+(?:[.,]\d+)?|[½¼¾])?\s*(?:(?:g|gr|ml|pz|cucchiai[o]?|cucchiaini?)\b\.?)?\s*(?:di\s+)?/i;
@@ -313,7 +314,9 @@ function mostraAutocompleta(testo) {
   // prima quelli che iniziano per quello che hai scritto
   trovati.sort((a, b) => (norm(b).startsWith(nq) - norm(a).startsWith(nq)));
   const ricetteHTML = String(testo || "").includes(",") ? "" : ricetteTestoHTML(q, "data-autoc-ricetta");
-  const voce = (n) => `<button class="autoc-voce" data-autoc="${esc(n)}">${esc(n)}</button>`;
+  const conQta = !(ultima.match(AUTOC_LEAD) || [""])[0].trim();   // hai già scritto una quantità ("200 pol…")? allora niente dose suggerita
+  const dose = (n) => { if (!conQta) return ""; const g = porzioneSolita(n), a = window.ALIMENTI[n]; return g > 0 && a ? `<em class="autoc-dose">${etichettaDose(n, g)} · ${Math.round(a[0] * g / 100)} kcal</em>` : ""; };
+  const voce = (n) => `<button class="autoc-voce" data-autoc="${esc(n)}"><span class="autoc-nome">${esc(n)}</span>${dose(n)}</button>`;
   const ingr = trovati.filter(n => !PIATTI_PRONTI.has(n)).slice(0, 6).map(voce).join("");       // alimenti singoli
   const piatti = trovati.filter(n => PIATTI_PRONTI.has(n)).slice(0, 4).map(voce).join("");      // già composti
   // sopra tutti gli alimenti (anche quelli già pronti: pizza, frittata, tiramisù…, che si segnano come un alimento), sotto le ricette
@@ -1159,6 +1162,19 @@ function liberoHTML() {
       ${aperta ? `<div class="pm-dett">${bloccato ? righeSolaLetturaHTML(c.items.filter(x => x.grp === n)) : cont + htmlRighe}${passi.length ? `<ol class="pm-passi">${passi.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}</div>` : ""}
     </div>`;
   };
+  // pulsanti rapidi della quantità: ½·1·2 pezzi, ½·1·2·3 cucchiai, oppure metà / solita / una volta e mezza / doppia in grammi
+  const presetHTML = (k) => {
+    const it = c.items[k], u = unitaDi(it), gu = grammiPerUnita(it.nome, u);
+    let vals, suff;
+    if (gu) {
+      const n = u === "pz" ? (passoQuantita(it).passo === 1 ? [1, 2, 3, 4] : [0.5, 1, 1.5, 2]) : [0.5, 1, 2, 3];
+      vals = n.map(x => [Math.round(x * gu * 10) / 10, fmtQta(x)]); suff = sigleUnita(u);
+    } else {
+      const b = porzioneSolita(it.nome) || 100, r = (g) => g >= 100 ? Math.round(g / 10) * 10 : Math.max(5, Math.round(g / 5) * 5);
+      vals = [...new Set([0.5, 1, 1.5, 2].map(f => r(b * f)))].map(g => [g, String(g)]); suff = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
+    }
+    return `<div class="lib-preset" role="group" aria-label="Quantità rapida">${vals.map(([g, t]) => `<button class="lib-preset-b${Math.abs(g - it.qta) < 0.6 ? " on" : ""}" data-lib-preset="${k}|${g}">${t}<small> ${suff}</small></button>`).join("")}</div>`;
+  };
   const voceHTML = (k) => {   // ingrediente singolo = scheda come la ricetta: ✓ nome, − N porzione +, P/C/G, kcal
     const it = c.items[k], m = macroDa([it]);
     const u = unitaDi(it), gu = grammiPerUnita(it.nome, u), conta = gu ? it.qta / gu : 0;
@@ -1186,7 +1202,7 @@ function liberoHTML() {
         <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${avvT && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}${frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
-      </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
+      </div>${!bloccato && (aperta || c.ultimoAgg === it.nome) ? presetHTML(k) : ""}${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
     </div>`;
   };
   const parti = [];
@@ -1219,7 +1235,7 @@ function liberoHTML() {
 
   const avvPre = pre ? c.items.filter(it => troppiGrassiPre(it.nome, it.qta)) : [];   // legenda del ⚠: cosa segnala e perché, così si impara
   const fmtG = (n) => String(Math.round(n * 10) / 10).replace(".", ",");
-  const righeBozza = ordine.map(k => righeK[k]).join("");
+  const righeBozza = ordine.map(k => righeK[k] + (c.items[k].grp == null ? presetHTML(k) : "")).join("");   // mentre componi: pulsanti rapidi sotto ogni alimento
   const ingrLive = `<div class="lib-righe">${c.bozza ? righeBozza : righe}</div>
       ${avvPre.length ? `<div class="lib-legenda-avv" role="note">${avvPre.map(it => `<p><span aria-hidden="true">⚠</span> <b>${esc(it.nome)}</b>: ${fmtG(grassiAlimento(it.nome, it.qta))} g di grassi. Prima di allenarti meglio senza grassi: rallentano la digestione.</p>`).join("")}</div>` : ""}`;
   // inserendo un alimento nuovo si vede solo quello: niente idee né consigli; salvato o annullato, si torna al pasto
@@ -1292,6 +1308,23 @@ function quantitaUsuale(nome) {
   if (v.length >= 2) { v.sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; }
   return QTA_USUALE[nome] || 0;
 }
+// Dose «solita» di un alimento scritto senza quantità: niente calcoli a sorpresa, si cambia coi pulsanti rapidi.
+// Prima la porzione intera (pizza, bevande…), poi quella che usi di solito, poi 1 pezzo (o qualche galletta), poi una porzione normale della sua categoria
+function porzioneSolita(nome) {
+  const pz = (window.PESO_PZ || {})[nome] || 0;
+  if ((window.PORZIONE_INTERA || /$^/).test(nome) && pz) return pz;
+  const u = quantitaUsuale(nome); if (u > 0) return u;
+  if (pz && window.pzPredefinito && window.pzPredefinito(nome)) return pz < 30 ? Math.max(1, Math.min(pz < 5 ? 99 : 4, Math.round(Math.max(20, profiloBase(nome).tip) / pz))) * pz : pz;   // piccoli (mandorle, noci, gallette): quanti ne fanno una porzione
+  return profiloAlimento(nome).tip;
+}
+const sigleUnita = (u) => u === "pz" ? "pz" : u === "cucchiaio" ? "cucc." : u === "cucchiaino" ? "c.ino" : u;
+// "1 pz", "150 g", "2 cucc." per una dose in grammi, nell'unità in cui leggi quell'alimento
+function etichettaDose(nome, g) {
+  const u = unitaDi({ nome }), gu = grammiPerUnita(nome, u);
+  return gu ? `${fmtQta(g / gu)} ${sigleUnita(u)}` : `${Math.round(g)} ${UNITA_LIQUIDI.test(nome) ? "ml" : "g"}`;
+}
+// dopo un'aggiunta il campo resta pronto per il prossimo alimento (la tastiera non si chiude)
+function rifocusInput() { const i = document.getElementById("lib-input"); if (i && liberoCtx && !liberoCtx.ignoto) i.focus({ preventScroll: true }); }
 function aggiungiDaTesto(testo) {
   const c = liberoCtx;
   // prima si divide sulle virgole; la "e" divide solo se la frase intera non è un piatto
@@ -1307,13 +1340,13 @@ function aggiungiDaTesto(testo) {
     let qta = 0, lock = false;
     if (r.unita !== "q.b.") { qta = Math.round(grammiIng(r)); lock = qta > 0; }
     else if ((window.PORZIONE_INTERA || /$^/).test(r.nome) && (window.PESO_PZ || {})[r.nome]) { qta = window.PESO_PZ[r.nome]; lock = true; }
-    if (!qta && r.unita === "q.b.") { const u = quantitaUsuale(r.nome); if (u > 0) { qta = u; lock = true; } }   // niente quantità scritta: quella che usi di solito, poi la cambi tu
+    if (!qta && r.unita === "q.b.") { qta = porzioneSolita(r.nome); lock = qta > 0; }   // niente quantità scritta: la dose solita, poi la cambi coi pulsanti rapidi
     const gia = c.items.find(x => x.grp == null && x.nome === r.nome);
     if (gia) {   // c'è già nel pasto: le quantità si sommano (come nel diario) e te lo diciamo, invece di ignorarlo in silenzio
       if (!qta) qta = (window.PESO_PZ || {})[r.nome] || 0;   // senza quantità: un pezzo in più, se si conta a pezzi
       if (!qta) { avviso(`${r.nome} c'è già: cambia la quantità nella sua riga`); continue; }
       const prima = +gia.qta || 0;
-      gia.qta = Math.round((prima + qta) * 10) / 10; gia.lock = true;
+      gia.qta = Math.round((prima + qta) * 10) / 10; gia.lock = true; c.ultimoAgg = gia.nome;
       const u = unitaDi(gia), gu = grammiPerUnita(gia.nome, u), ug = UNITA_LIQUIDI.test(gia.nome) ? "ml" : "g";
       const f = (q) => gu ? fmtQta(q / gu) : Math.round(q);
       avviso(`${gia.nome}: ${f(prima)} → ${f(gia.qta)} ${gu ? (u === "cucchiaio" ? "cucc." : u === "cucchiaino" ? "c.ino" : u) : ug}`);
@@ -1321,6 +1354,7 @@ function aggiungiDaTesto(testo) {
     }
     const unita = ["g", "ml"].includes(r.unita) ? "g" : ["pz", "cucchiaio", "cucchiaino"].includes(r.unita) ? r.unita : undefined; // l'unità che hai scritto
     c.items.push({ nome: r.nome, cercato: r.cercato, qta, lock, unita });
+    c.ultimoAgg = r.nome;   // l'ultimo aggiunto mostra subito i pulsanti rapidi della quantità
   }
   ricalcolaLibero();
 }
@@ -1471,7 +1505,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const b = e.target.closest("[data-lib]");
     if (b) {
       const a = b.dataset.lib;
-      if (a === "aggiungi") { const inp = document.getElementById("lib-input"); aggiungiDaTesto(inp.value); c.addAperto = false; rirenderLibero(); }
+      if (a === "aggiungi") { const inp = document.getElementById("lib-input"); aggiungiDaTesto(inp.value); c.addAperto = false; rirenderLibero(); rifocusInput(); }
       else if (a === "mostra-add") { c.addAperto = true; rirenderLibero(); const i2 = document.getElementById("lib-input"); if (i2) i2.focus(); }
       else if (a === "annulla-modifiche") {   // il pasto torna com'era quando l'hai aperto
         if (c._giorno0 !== undefined) { const d = leggiDiario(); if (c._giorno0 === "null") delete d[c.data]; else d[c.data] = JSON.parse(c._giorno0); salvaDiario(d); }
@@ -1568,6 +1602,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const av = e.target.closest("[data-lib-avv]");
     if (av) { const k = +av.dataset.libAvv; c.avvAperto = c.avvAperto === k ? null : k; rirenderLibero(); return; }
     if (e.target.closest("[data-furbo-altro]")) { c.furbiGiro = (c.furbiGiro || 0) + 1; rirenderLibero(); return; }   // ↻ un'altra idea
+    const pr = e.target.closest("[data-lib-preset]");
+    if (pr) { const [k, g] = pr.dataset.libPreset.split("|").map(Number); if (c.items[k]) { c.items[k].qta = g; c.items[k].lock = true; c.ultimoAgg = c.items[k].nome; ricalcolaLibero(); rirenderLibero(); } return; }   // pulsante rapido: quella quantità, fissa
     const sq = e.target.closest("[data-lib-setq]");
     if (sq) { const [k, g] = sq.dataset.libSetq.split("|").map(Number); if (c.items[k]) { c.items[k].qta = g; c.items[k].lock = true; ricalcolaLibero(); rirenderLibero(); } return; }   // consiglio furbo: porta la quantità a quella proposta
     const add = e.target.closest("[data-lib-add]");
@@ -1634,7 +1670,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const parti = String(inp ? inp.value : "").split(/[,;+]/);
       const ultima = parti.pop();
       const lead = (ultima.match(AUTOC_LEAD) || [""])[0];
-      aggiungiDaTesto([...parti, lead + av.dataset.autoc].join(", ")); rirenderLibero();
+      aggiungiDaTesto([...parti, lead + av.dataset.autoc].join(", ")); rirenderLibero(); rifocusInput();
     }
   });
   mc.addEventListener("keydown", (e) => {
@@ -1643,7 +1679,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (liberoCtx && e.key === "Enter" && e.target.id === "lib-input") {
       e.preventDefault();
-      aggiungiDaTesto(e.target.value); liberoCtx.addAperto = false; rirenderLibero(); // la tastiera si chiude: si vede il risultato
+      aggiungiDaTesto(e.target.value); liberoCtx.addAperto = false; rirenderLibero(); rifocusInput(); // il campo resta pronto per il prossimo alimento
     }
   });
   // chiudendo il modale si esce dal pasto libero
