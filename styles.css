@@ -2019,3 +2019,10 @@ button.ant-fit.on { border-style: solid; background: rgba(var(--lilla-rgb),.20);
 /* un po' d'aria tra campi e note nel Profilo */
 #modal-content .qta-input + .campo-nota, #modal-content .pf-ora + .hint, #modal-content .escl-altro + .campo-nota { margin-top: 8px; }
 #modal-content .wiz-l em, #modal-content .hint em { font-style: normal; color: var(--muted); font-weight: 400; }
+
+/* Tastiera aperta (iPhone): il pannello sta tutto sopra la tastiera, così anche l'ultima voce dei suggerimenti si raggiunge.
+   La barra «Salva pasto» e quella in basso si nascondono finché scrivi (tornano quando chiudi la tastiera). */
+body.tastiera .modal { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-h, 100%); }
+body.tastiera .modal-sheet { max-height: calc(var(--vv-h, 100vh) - 8px); }
+body.tastiera .barra-salva, body.tastiera .tabbar { display: none; }
+body.tastiera .lib-autoc { margin-bottom: 16px; }

@@ -119,6 +119,27 @@ function alimentoEscluso(nome) {
 // una ricetta è esclusa se uno dei suoi ingredienti lo è (il nome della ricetta non conta: «pancake» senza uova restano)
 const ricettaConEsclusi = (r) => ((r && (r._orig || r).ingredienti) || []).some(i => alimentoEscluso(i.nome));
 
+// -------- Tastiera del telefono: quando è aperta, lo spazio visibile è solo quello sopra la tastiera --------
+// (su iPhone la pagina non si accorcia da sola: senza questo le ultime voci dei suggerimenti restano nascoste sotto la tastiera)
+if (window.visualViewport) {
+  const vv = window.visualViewport, root = document.documentElement;
+  // altezza visibile senza tastiera: la più grande vista finché nessun campo è attivo (su alcuni iPhone anche innerHeight si accorcia con la tastiera)
+  let altezzaPiena = Math.max(vv.height, window.innerHeight);
+  window.addEventListener("orientationchange", () => { altezzaPiena = 0; });
+  const aggiornaTastiera = () => {
+    const campo = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) && !/^(checkbox|radio|button|file|range|color)$/.test(document.activeElement.type);
+    if (!campo || vv.height > altezzaPiena) altezzaPiena = Math.max(campo ? altezzaPiena : 0, vv.height, campo ? 0 : window.innerHeight);
+    const aperta = campo && altezzaPiena - vv.height > 120;
+    root.style.setProperty("--vv-h", `${Math.round(vv.height)}px`);
+    root.style.setProperty("--vv-top", `${Math.round(vv.offsetTop)}px`);
+    document.body && document.body.classList.toggle("tastiera", aperta);
+  };
+  vv.addEventListener("resize", aggiornaTastiera);
+  vv.addEventListener("scroll", aggiornaTastiera);
+  document.addEventListener("focusin", () => setTimeout(aggiornaTastiera, 300));
+  document.addEventListener("focusout", () => setTimeout(aggiornaTastiera, 300));
+}
+
 // -------- Personalizzazione: colore, nome e icona dell'app, saluto --------
 const ICONE_APP = ["🌙", "⛵", "🌸", "🔥", "⭐", "🌿", "🍓", "💪", "🦋", "🌊", "☀️", "🍀"];
 function applicaPersonalizzazione() {
@@ -1569,7 +1590,8 @@ function segnaTab(nome) { document.body.dataset.tab = nome || ""; }
 let _profiloPrima = null;   // profilo e settimana tipo com'erano quando hai aperto il Profilo
 const statoProfilo = () => ({ profilo: localStorage.getItem("mp_profilo"), tipi: localStorage.getItem("mp_tipi") });
 // confronto per contenuto (non per ordine delle voci): toccare e ritoccare una scelta non conta come modifica
-const canonico = (raw) => { try { const ord = (v) => Array.isArray(v) ? v.map(ord) : v && typeof v === "object" ? Object.keys(v).sort().reduce((o, k) => (o[k] = ord(v[k]), o), {}) : v; return JSON.stringify(ord(JSON.parse(raw))); } catch (e) { return raw; } };
+// (un elenco vuoto vale come «niente»: es. «Non mangio» vuoto dal questionario = nessuna voce dal Profilo)
+const canonico = (raw) => { try { const ord = (v) => Array.isArray(v) ? v.map(ord) : v && typeof v === "object" ? Object.keys(v).sort().filter(k => !(Array.isArray(v[k]) && !v[k].length)).reduce((o, k) => (o[k] = ord(v[k]), o), {}) : v; return JSON.stringify(ord(JSON.parse(raw))); } catch (e) { return raw; } };
 const profiloModificato = () => { if (!_profiloPrima) return false; const s = statoProfilo(); return canonico(s.profilo) !== canonico(_profiloPrima.profilo) || canonico(s.tipi) !== canonico(_profiloPrima.tipi); };
 function aggiornaBarraProfilo() { const b = document.getElementById("pf-barra"); if (b) b.hidden = !profiloModificato(); }
 function ripristinaProfiloPrima() {

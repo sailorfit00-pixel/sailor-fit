@@ -13,7 +13,7 @@ const QUOTA_PASTO = { colazione: 0.22, mattina: 0.08, pranzo: 0.30, spuntino: 0.
 const ICONA_PASTO = { colazione: "☕", mattina: "🍎", pranzo: "🍽️", spuntino: "🍌", cena: "🌙" };
 const NOME_PASTO = { colazione: "colazione", mattina: "spuntino", pranzo: "pranzo", spuntino: "pre-workout", cena: "cena" };
 // Il pomeriggio è "pre-workout" nei giorni di sport e "merenda" nei giorni di riposo (se si passa la data)
-const nomePasto = (p, data) => p === "spuntino" && data && !preSera(data) ? "merenda" : (NOME_PASTO[p] || p);   // «merenda»: non si confonde con lo spuntino della mattina
+const nomePasto = (p, data) => p === "spuntino" && data && !preSera(data) ? "merenda" : p === "mattina" && data && preMattina(data) ? "pre-workout" : (NOME_PASTO[p] || p);   // «merenda»: non si confonde con lo spuntino della mattina
 const NomePasto = (p, data) => { const n = nomePasto(p, data); return n.charAt(0).toUpperCase() + n.slice(1); };
 // giorno con sport: lo spuntino del pomeriggio è il pre-workout
 const conSport = (data) => sportDelTipo(giornoDiario(data).tipo).some(id => id !== "camminata");   // una semplice camminata non cambia i pasti (niente pre-workout)
@@ -42,6 +42,14 @@ function sogliePasti() {
 const fmtOra = (h) => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
 const oraDa = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] + +m[2] / 60 : null; };
 const preSera = (data) => conSport(data) && orarioAllen(data) === "sera";          // il pre-workout è lo spuntino del pomeriggio
+// allenamento di mattina: il pre-workout è lo spuntino della mattina, se ti alleni dopo lo spuntino (alle 7:30 con lo spuntino alle 11 no: arriva dopo)
+const preMattina = (data) => {
+  if (!conSport(data) || orarioAllen(data) !== "mattina") return false;
+  const pf = typeof leggiProfilo === "function" ? leggiProfilo() : {};
+  return !(typeof pf.allenOra === "number" && !giornoDiario(data).orario && pf.allenOra < orariPasti().mattina);
+};
+// il pasto prima dell'allenamento (più carboidrati, pochi grassi, ricette pre-workout)
+const preWorkout = (data, pasto) => (pasto === "spuntino" && preSera(data)) || (pasto === "mattina" && preMattina(data));
 // il pasto subito dopo l'allenamento: la cena (allenamento di sera) o il pranzo (di mattina)
 const pastoPost = (data) => !conSport(data) ? null : orarioAllen(data) === "sera" ? "cena" : "pranzo";
 // i pasti di un giorno: nei giorni di riposo il pre-workout non c'è
@@ -90,12 +98,17 @@ function mancaData(data, escludiIdx = null) {
 function quotaPasto(data, pasto) {
   const m = momentiGiorno(data);
   if (!m.includes(pasto)) return 0;
-  return (QUOTA_PASTO[pasto] || 0) / m.reduce((s, p) => s + QUOTA_PASTO[p], 0);
+  // con l'allenamento di mattina il pre-workout è lo spuntino della mattina: prende la quota del pre-workout, la merenda quella piccola
+  return (quotaBase(data, pasto) || 0) / m.reduce((s, p) => s + quotaBase(data, p), 0);
+}
+function quotaBase(data, p) {
+  const scambia = (p === "mattina" || p === "spuntino") && typeof preMattina === "function" && preMattina(data);
+  return scambia ? QUOTA_PASTO[p === "mattina" ? "spuntino" : "mattina"] : QUOTA_PASTO[p];
 }
 // Il pre-workout prende più carboidrati e pochi grassi: si digerisce meglio prima di allenarsi.
 // (quello che non prende passa agli altri pasti)
 const PESO_MACRO_PRE = { carboidrati: 1.3, grassi: 0.4 };
-const pesoMacro = (data, pasto, k) => pasto === "spuntino" && preSera(data) ? (PESO_MACRO_PRE[k] || 1) : 1;
+const pesoMacro = (data, pasto, k) => preWorkout(data, pasto) ? (PESO_MACRO_PRE[k] || 1) : 1;
 // Obiettivo di un pasto = quota di ciò che manca, divisa tra i pasti non ancora mangiati
 function targetPastoDiario(data, pasto, escludiIdx = null) {
   const g = giornoDiario(data);
@@ -106,8 +119,8 @@ function targetPastoDiario(data, pasto, escludiIdx = null) {
   const restanti = momentiGiorno(data).filter(p => p !== pasto && !fatti.has(p) && !saltato(p));
   const r = {};
   MACRO_K.forEach(k => {
-    const w = (QUOTA_PASTO[pasto] || 0.2) * pesoMacro(data, pasto, k);
-    const quota = w / (w + restanti.reduce((s, p) => s + QUOTA_PASTO[p] * pesoMacro(data, p, k), 0));
+    const w = (quotaBase(data, pasto) || 0.2) * pesoMacro(data, pasto, k);
+    const quota = w / (w + restanti.reduce((s, p) => s + quotaBase(data, p) * pesoMacro(data, p, k), 0));
     r[k] = Math.max(0, Math.round(manca[k] * quota));
   });
   // le kcal seguono i macro del pasto (per il pre-workout cambiano un po')
@@ -677,7 +690,7 @@ function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
   const viste = new Set();
   return ricette
     .filter(r => r.pasto === (pasto === "mattina" ? "spuntino" : pasto) && !viste.has(r.nome) && viste.add(r.nome))
-    .filter((r, i, arr) => pasto === "mattina" ? !r.preworkout : pasto !== "spuntino" || !preSera(data) || !arr.some(x => x.preworkout) || r.preworkout)
+    .filter((r, i, arr) => !preWorkout(data, pasto) ? (pasto === "mattina" ? !r.preworkout : true) : (!arr.some(x => x.preworkout) || r.preworkout))
     .filter(r => !ricettaEsclusa(r))
     .map(r => {
       const ps = porzioneSuMisura(r, T);
@@ -924,7 +937,7 @@ function mosseCosaAggiungere(data, p, m) {
     });
   }
   // verdura: nei pasti principali ci deve essere una fonte di fibre (non prima dell'allenamento), pesa pochissimo
-  if (!oK && (p === "pranzo" || p === "cena") && !(typeof preSera === "function" && p === "spuntino" && preSera(data))) {   // sopra le kcal non si aggiunge nemmeno la verdura
+  if (!oK && (p === "pranzo" || p === "cena") && !(typeof preWorkout === "function" && preWorkout(data, p))) {   // sopra le kcal non si aggiunge nemmeno la verdura
     const X = window.NUTRIENTI_EXTRA || {}, A2 = window.ALIMENTI || {};
     const righe = (() => { try { return ingredientiRegistrati(ctx); } catch (er) { return []; } })();
     if (righe.length && !righe.some(r => /zucchin|spinac|brocc|insalat|pomodor|carot|finocch|peperon|cetriol|rucola|asparag|fagiolin|cavol|melanzan|funghi|zucca|radicchio|bietol|cipoll|lattuga|verdur|ceci|lentic|fagioli|piselli|edamame|carciof|porri|sedano|rapa|spugnole|bimi/i.test(r.nome))) {
@@ -950,7 +963,7 @@ const POOL_COMPLETAMENTI = [
   ["Banana", [40, 60, 100], "g"], ["Mela", [80, 100, 150], "g"], ["Gallette di riso", [8, 16], "g"],
 ];
 function piccoliCompletamenti(data, p, m) {
-  const A = window.ALIMENTI || {}, pre = p === "spuntino" && typeof preSera === "function" && preSera(data);
+  const A = window.ALIMENTI || {}, pre = typeof preWorkout === "function" && preWorkout(data, p);
   const cm = mancantiColmabili(m), manca = { proteine: m.proteine > 4 ? cm.proteine : 0, carboidrati: m.carboidrati > 5 ? cm.carboidrati : 0, grassi: m.grassi > 2 ? cm.grassi : 0 };
   const qualcosa = manca.proteine + manca.carboidrati + manca.grassi > 0;
   const out = [];
@@ -976,7 +989,7 @@ function piccoliCompletamenti(data, p, m) {
 }
 // i pasti ancora vuoti: ricette che ci stanno (calorie e macro che restano, quota del pasto) e riempiono quello che manca; senza ripetere base o proteina già nei pasti scritti
 function ideeCosaAggiungere(data, p, m, usate, basiC, basiP) {
-  const T = targetData(data), Tp = targetPastoDiario(data, p), pre = p === "spuntino" && preSera(data);
+  const T = targetData(data), Tp = targetPastoDiario(data, p), pre = preWorkout(data, p);
   if (m.kcal < 120 || sopraKcal(m)) return [];
   const mP = m.proteine > 10, mC = m.carboidrati > 15, mG = m.grassi > 8;
   const spuntino = p === "mattina" || p === "spuntino";
@@ -1018,7 +1031,7 @@ const PIATTI_COMPOSTI = {
 };
 function piattoComposto(data, pasto, T, scarta = () => false, giro = 0) {
   const A = window.ALIMENTI || {};
-  const pre = pasto === "spuntino" && preSera(data) || (pasto === "mattina" && conSport(data) && orarioAllen(data) === "mattina");
+  const pre = preWorkout(data, pasto);
   const chiave = pasto === "principale" ? "principale" : pre ? "pre" : (pasto === "pranzo" || pasto === "cena") ? "principale" : pasto === "colazione" ? "colazione" : "spuntino";
   const lista = PIATTI_COMPOSTI[chiave].filter(t => !scarta(t) && [t.P, t.C, t.F, t.V && t.V[0]].filter(Boolean).every(n => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n))));
   if (!lista.length) return null;
@@ -1275,7 +1288,7 @@ const FONTI_PROT_PASTO = {
   pre: [["Yogurt greco 0%", 200], ["Skyr", 200], ["Fesa di tacchino", 80], ["Proteine in polvere", 30]],   // prima dell'allenamento: niente grassi né fibre
   principale: [["Petto di pollo", 200], ["Fesa di tacchino", 200], ["Tonno in scatola al naturale", 120], ["Gamberi", 250], ["Merluzzo", 250], ["Nasello", 250], ["Albume", 250], ["Tofu", 200], ["Manzo magro", 150], ["Bresaola", 80]],
 };
-const tipoFontiPasto = (data, p) => p === "colazione" ? "colazione" : p === "mattina" ? "spuntino" : p === "spuntino" ? (preSera(data) ? "pre" : "spuntino") : "principale";
+const tipoFontiPasto = (data, p) => p === "colazione" ? "colazione" : (p === "mattina" || p === "spuntino") ? (preWorkout(data, p) ? "pre" : "spuntino") : "principale";
 const macroDi = (nome, g) => macroAlimento(nome, g);   // le kcal promesse = quelle registrate (4/4/9, come calcolaMacro)
 // quanti grammi di un alimento stanno in ciò che resta (grassi e carboidrati mai oltre; le calorie di poco)
 function grammiCheCi(nome, voluti, massimo, m) {
@@ -1353,7 +1366,7 @@ function alimentiIdeaHTML(c) {
     const m0 = mancaData(c.data), T = targetPastoDiario(c.data, c.pasto);
     const m = { kcal: Math.min(m0.kcal, T.kcal + 20), proteine: m0.proteine, carboidrati: Math.min(m0.carboidrati, T.carboidrati + 3), grassi: Math.min(m0.grassi, T.grassi + 1) };
     if (m.kcal < 40) return `<p class="hint">Niente che ci stia nelle kcal che restano</p>`;
-    const pre = c.pasto === "spuntino" && preSera(c.data), sp = c.pasto === "mattina" || c.pasto === "spuntino";
+    const pre = preWorkout(c.data, c.pasto), sp = c.pasto === "mattina" || c.pasto === "spuntino";
     let mosse = mosseSingole(c.data, c.pasto, m, false);
     // la quota di questo pasto può essere piccola (restano altri pasti da fare): soglie più basse, poi i piccoli completamenti
     if (!mosse.length && m.carboidrati >= 5) mosse = mosseCarbo(c.data, c.pasto, m);
@@ -1728,7 +1741,7 @@ function titoloIngredienteHTML(ing) {
 // A quale pasto di quel giorno va una ricetta, se non scegli tu: colazione → colazione, spuntini → spuntino (o pre-workout nei giorni di sport)
 function pastoPerRicetta(r, data) {
   if (r.pasto === "colazione") return "colazione";
-  if (r.pasto === "spuntino") return r.preworkout && preSera(data) ? "spuntino" : "mattina";
+  if (r.pasto === "spuntino") return r.preworkout && preSera(data) ? "spuntino" : "mattina";   // con l'allenamento di mattina lo spuntino della mattina è già il pre-workout
   if (r.pasto === "pranzo" || r.pasto === "cena") return r.pasto;
   return oraDecimale() < orariPasti().spuntino ? "pranzo" : "cena";   // prima della merenda/pre-workout è il pranzo
 }

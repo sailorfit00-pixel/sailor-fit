@@ -513,7 +513,7 @@ const PRE_GRASSI_MAX = 3;                  // g di grassi in un alimento del pre
 const POST_PROT_KG = 0.4, POST_CARBO_KG = 0.5;   // minimi del post-workout, in g per kg di peso
 // pre = pasto prima dell'allenamento (spuntino del pomeriggio, o di metà mattina se ti alleni al mattino); post = pasto dopo
 function contestoAllenamento(c) {
-  const pre = typeof preSera === "function" && ((c.pasto === "spuntino" && preSera(c.data)) || (c.pasto === "mattina" && conSport(c.data) && orarioAllen(c.data) === "mattina"));
+  const pre = typeof preWorkout === "function" && preWorkout(c.data, c.pasto);
   const post = typeof pastoPost === "function" && pastoPost(c.data) === c.pasto;
   return { pre: !!pre, post: !!post };
 }
