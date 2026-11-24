@@ -1653,7 +1653,10 @@ summary { min-height: 40px; display: flex; align-items: center; }
 /* Pasto già passato (l'ora è trascorsa, o giorno finito): si «illumina» di viola, con la spunta piena.
    Pasto ancora da venire: dentro resta vuoto e la spunta è solo il contorno. */
 .pasto-gruppo:not(.passato) .pasto-riga.fatto { background: transparent; }
-.pasto-gruppo:not(.passato) .pr-check { background: transparent; color: var(--lilla); box-shadow: inset 0 0 0 1px var(--lilla); }
+.pasto-gruppo:not(.passato) .pr-check { background: transparent; color: rgba(142,160,173,.75); box-shadow: inset 0 0 0 1px rgba(142,160,173,.55); }
+/* prima dell'orario la spunta grigia si tocca per segnare «Ho mangiato»: area di tocco più grande del cerchio */
+.pr-check.tocca { cursor: pointer; position: relative; }
+.pr-check.tocca::after { content: ""; position: absolute; inset: -11px; }
 .pasto-gruppo.passato .pasto-riga.fatto { border-color: var(--lilla); background: var(--lilla-bg); }
 .pasto-gruppo.passato .pr-check { background: var(--lilla); color: #1a1426; box-shadow: none; }
 

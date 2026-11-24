@@ -40,7 +40,7 @@ function salvaDiario(d) { localStorage.setItem("mp_diario", JSON.stringify(d)); 
 function giornoDiario(data) {
   const g0 = leggiDiarioSolaLettura()[data];
   const d = g0 ? JSON.parse(JSON.stringify(g0)) : {};
-  return { tipo: d.tipo || tipoDefault(data), pasti: d.pasti || [], ...(d.orario ? { orario: d.orario } : {}) };
+  return { tipo: d.tipo || tipoDefault(data), pasti: d.pasti || [], ...(d.orario ? { orario: d.orario } : {}), ...(Array.isArray(d.mangiati) && d.mangiati.length ? { mangiati: d.mangiati } : {}) };
 }
 function scriviGiorno(data, g) { const ora = Date.now(); (g.pasti || []).forEach(p => { if (!p.ts) p.ts = ora; });   // quando è stato aggiunto: serve a mostrare per primo l'ultimo arrivato
   const d = leggiDiario(); d[data] = g; salvaDiario(d); }
@@ -108,13 +108,20 @@ const oraDecimale = () => typeof window.__ora === "number" ? window.__ora : new 
 // Un momento resta "in corso" fino a un po' dopo il suo orario, poi passa al successivo
 const indiceOra = () => { const h = oraDecimale(); return h < 9.5 ? 0 : h < 12.5 ? 1 : h < 15.5 ? 2 : h < 17.5 ? 3 : h < 22 ? 4 : 5; };   // dopo le 22 anche la cena è passata
 // un pasto è "passato" se è di un giorno precedente, o di oggi ma di un momento già trascorso: lì non si propongono cambi a ciò che hai già mangiato
-function pastoPassato(data, pasto) {
+// (solo per l'orario: serve a sapere se la spunta «Ho mangiato» si può ancora toccare)
+function pastoPassatoOrario(data, pasto) {
   const oggi = oggiISO();
   if (data < oggi) return true;
   if (data > oggi) return false;
   const i = ORDINE_TEMPO.indexOf(pasto);
   return i >= 0 && i < indiceOra();
 }
+// un pasto segnato a mano «Ho mangiato» (spunta in Oggi) conta come passato anche prima dell'orario, se ha almeno un piatto
+function pastoSegnato(data, pasto) {
+  const g = leggiDiarioSolaLettura()[data];
+  return !!(g && Array.isArray(g.mangiati) && g.mangiati.includes(pasto) && (g.pasti || []).some(p => p.pasto === pasto));
+}
+function pastoPassato(data, pasto) { return pastoPassatoOrario(data, pasto) || pastoSegnato(data, pasto); }
 function prossimoPasto(data) {
   const fatti = new Set(giornoDiario(data).pasti.map(p => p.pasto));
   const liberi = momentiGiorno(data).filter(p => !fatti.has(p));
@@ -1569,11 +1576,14 @@ function renderOggi() {
     if (inseriti.length) {
       const kcal = inseriti.reduce((a, x) => a + (x.p.kcal || 0), 0);
       const nomi = inseriti.map(x => nomeConQuantita(x.p)).join(", ");
+      // spunta «Ho mangiato»: toccabile solo oggi e prima dell'orario del pasto; dopo diventa viola da sola e non si tocca più
+      const toccabile = data === oggiISO() && !pastoPassatoOrario(data, momento), segnato = pastoSegnato(data, momento);
+      const attrCheck = toccabile ? `role="button" tabindex="0" data-segna-mangiato="${momento}" aria-label="${segnato ? "Annulla «Ho mangiato»" : "Segna come mangiato"}"` : `aria-label="${pastoPassato(data, momento) ? "mangiato" : "registrato"}"`;
       return `<div class="pasto-gruppo ${data >= oggiISO() && !pastoPassato(data, momento) ? "auto" : ""}${pastoPassato(data, momento) ? " passato" : ""}" data-momento="${momento}">
         <button class="pasto-riga fatto" data-oggi-momento="${momento}">
         <span class="pr-icona">${ICONA_PASTO[momento]}</span>
         <span class="pr-testo"><small>${etichettaMomento(data, momento)}</small><b class="pr-nomi">${esc(nomi)}</b></span>
-        <span class="pr-kcal">${Math.round(kcal)}<small> kcal</small></span><span class="pr-check" aria-label="registrato"><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M6.2 11.4l3.3 3.3 6.3-6.9" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+        <span class="pr-kcal">${Math.round(kcal)}<small> kcal</small></span><span class="pr-check${toccabile ? " tocca" : ""}" ${attrCheck}><svg viewBox="0 0 22 22" aria-hidden="true"><path d="M6.2 11.4l3.3 3.3 6.3-6.9" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
       </div>`;
     }
     const next = momento === prox;
@@ -1750,6 +1760,14 @@ document.addEventListener("DOMContentLoaded", () => {
       try { localStorage.setItem("mp_avvisi", JSON.stringify(tutti)); } catch (err) {}
       if (p) { p.classList.add("sparisce"); setTimeout(() => renderOggi(), 220); } else renderOggi();
       return;
+    }
+    const sm = e.target.closest("[data-segna-mangiato]");
+    if (sm) {   // spunta «Ho mangiato»: segna o toglie il segno, senza aprire il pasto
+      e.stopPropagation(); e.preventDefault();
+      const momento = sm.dataset.segnaMangiato, g = giornoDiario(dataDiario), m = new Set(g.mangiati || []);
+      if (m.has(momento)) m.delete(momento); else m.add(momento);
+      if (m.size) g.mangiati = [...m]; else delete g.mangiati;
+      scriviGiorno(dataDiario, g); renderOggi(); return;
     }
     const mom = e.target.closest("[data-oggi-momento]");
     if (mom) { apriPastoDiario(dataDiario, null, mom.dataset.oggiMomento); return; }
