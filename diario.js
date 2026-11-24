@@ -35,8 +35,11 @@ function leggiDiario() { try { return JSON.parse(localStorage.getItem("mp_diario
 let _rawLS = null, _objLS = {};
 function leggiDiarioSolaLettura() { try { const raw = localStorage.getItem("mp_diario") || ""; if (raw !== _rawLS) { _objLS = raw ? (JSON.parse(raw) || {}) : {}; _rawLS = raw; } return _objLS; } catch (e) { return {}; } }
 function salvaDiario(d) { localStorage.setItem("mp_diario", JSON.stringify(d)); }
+// copia del solo giorno richiesto (si può modificare e poi salvare con scriviGiorno): il diario intero si rilegge solo se è cambiato,
+// non a ogni chiamata (con mesi di diario rileggerlo ogni volta rallentava l'apertura)
 function giornoDiario(data) {
-  const d = leggiDiario()[data] || {};
+  const g0 = leggiDiarioSolaLettura()[data];
+  const d = g0 ? JSON.parse(JSON.stringify(g0)) : {};
   return { tipo: d.tipo || tipoDefault(data), pasti: d.pasti || [], ...(d.orario ? { orario: d.orario } : {}) };
 }
 function scriviGiorno(data, g) { const ora = Date.now(); (g.pasti || []).forEach(p => { if (!p.ts) p.ts = ora; });   // quando è stato aggiunto: serve a mostrare per primo l'ultimo arrivato
