@@ -220,7 +220,9 @@ function passaggiDaTesto(testo) {
     // prima i paragrafi (righe vuote), poi una frase per passaggio
     passi = testo.split(/\n\s*\n/).flatMap(par => par.replace(/\n/g, " ").split(/(?<=[.!?])\s+(?=[A-ZÀ-Ù0-9])/));
   }
-  return passi.map(p => p.replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").replace(/([.!?])\s+\S$/, "$1").trim()).filter(p => p.length > 2).slice(0, 25);
+  return passi.map(p => p.replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").replace(/([.!?])\s+\S$/, "$1").trim())
+    .filter(p => p.length > 2 && !/^(tempo|porzioni|dosi|difficolt\w*|calorie|kcal)\b\s*:?/i.test(p))   // «Tempo: 15 minuti» è un dato, non un passaggio
+    .slice(0, 25);
 }
 
 // Nome, porzioni e tempo si ricavano dal testo dell'immagine (titolo in alto, "per 4 pancake", "porzioni: 2", "20 minuti")
@@ -264,8 +266,10 @@ function metadatiDaTesto(testo) {
     else if ((q = testo.match(/teglia\s*(\d{2})\s*[x×]\s*(\d{2})/i))) { out.porzioni = Math.max(4, Math.min(16, Math.round(q[1] * q[2] / 45))); out.pezzo = "quadrato"; out.stima = true; }
     else if ((q = testo.match(/(?:tortiera|stampo|teglia)[^\n]{0,30}?(\d{2})\s*cm/i))) { const d = +q[1]; out.porzioni = d >= 26 ? 12 : d >= 22 ? 8 : d >= 18 ? 6 : 4; out.pezzo = "fetta"; out.stima = true; }
   }
-  // tempo: "20 minuti", "tempo: 15 min"
-  if ((m = testo.match(/\b(\d{1,3})\s*(?:min\b|minuti)/i))) out.tempo = +m[1];
+  // tempo: prima quello scritto come tempo ("Tempo: 15 minuti", "pronto in 20 min"), altrimenti il più lungo tra i minuti citati
+  // (non il primo: "cuoci 2 minuti per lato" è un passaggio, non il tempo della ricetta)
+  if ((m = testo.match(/\b(?:tempo|pronto in|pronta in|in tutto|totale)[^\n\d]{0,25}(\d{1,3})\s*(?:min\b|minuti)/i))) out.tempo = +m[1];
+  else { const tutti = [...testo.matchAll(/\b(\d{1,3})\s*(?:min\b|minuti)/gi)].map(x => +x[1]); if (tutti.length) out.tempo = Math.max(...tutti); }
   return out;
 }
 

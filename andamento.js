@@ -134,7 +134,7 @@ function analisi(giorni, pesiPeriodo) {
   const kcalM = media(compl.map(g => g.t.kcal)), targM = media(compl.map(g => g.T.kcal));
   const diffK = Math.round(kcalM - targM);
   if (diffK > targM * 0.05)
-    out.push({ liv: "warn", peso: 10, testo: `In media mangi <b>${diffK} kcal in più</b> al giorno rispetto all'obiettivo. È la prima cosa da sistemare per dimagrire.` });
+    out.push({ liv: "warn", peso: 10, testo: `In media mangi <b>${diffK} kcal in più</b> al giorno rispetto all'obiettivo. È la prima cosa da sistemare.` });
   else if (diffK < -targM * 0.15)
     out.push({ liv: "warn", peso: 8, testo: `In media mangi <b>${-diffK} kcal in meno</b> dell'obiettivo. Troppo poco: rischi di perdere muscolo ed energia in allenamento.` });
   else out.push({ liv: "ok", peso: 6, testo: `Calorie in linea con l'obiettivo (media ${Math.round(kcalM)} kcal su ${Math.round(targM)}). 👏` });
@@ -176,7 +176,7 @@ function analisi(giorni, pesiPeriodo) {
   if (riposo.length && media(riposo.map(g => g.t.carboidrati / g.T.carboidrati)) > 1.25)
     out.push({ liv: "info", peso: 5, testo: `Nei giorni di riposo i carboidrati sono alti (+${Math.round((media(riposo.map(g => g.t.carboidrati / g.T.carboidrati)) - 1) * 100)}%). Spostali sui giorni di allenamento, dove servono davvero.` });
   if (allen.length && media(allen.map(g => g.t.carboidrati / g.T.carboidrati)) < 0.7)
-    out.push({ liv: "info", peso: 5, testo: `Nei giorni di allenamento i carboidrati sono bassi: se ti senti scarica al CrossFit, aggiungi pane, riso o frutta prima dell'allenamento.` });
+    out.push({ liv: "info", peso: 5, testo: `Nei giorni di allenamento i carboidrati sono bassi: se ti senti senza energia quando ti alleni, aggiungi pane, riso o frutta prima dell'allenamento.` });
 
   // zuccheri aggiunti, fibre e sale (medie)
   const zM = media(compl.map(g => g.ex.aggiunti)), fM = media(compl.map(g => g.ex.fibre)), sM = media(compl.map(g => g.ex.sale));
@@ -196,6 +196,14 @@ function analisi(giorni, pesiPeriodo) {
     // obiettivo scritto da te: non so se vuoi scendere, restare o salire, quindi solo il dato
     if (Math.abs(trend) >= 0.1) out.push({ liv: "info", peso: 6, testo: `Il peso ${trend < 0 ? "scende" : "sale"} di <b>${fmtKg(Math.abs(trend))} kg a settimana</b> nelle ultime settimane.` });
     else out.push({ liv: "info", peso: 4, testo: `Il peso è stabile nelle ultime settimane.` });
+  } else if (trend !== null && leggiProfilo().deficit < 0) {
+    // obiettivo «aumentare massa» (deficit negativo = surplus)
+    if (trend >= 0.1) out.push({ liv: "ok", peso: 6, testo: `Il peso sale di <b>${fmtKg(trend)} kg a settimana</b>: in linea con l'obiettivo di aumentare massa. 💪` });
+    else out.push({ liv: "info", peso: 7, testo: `Il peso ${trend <= -0.1 ? `scende di <b>${fmtKg(-trend)} kg a settimana</b>` : "è stabile"}, ma il tuo obiettivo è aumentare massa: controlla di arrivare davvero all'obiettivo di calorie ogni giorno.` });
+  } else if (trend !== null && leggiProfilo().deficit === 0) {
+    // obiettivo «mantenere»
+    if (Math.abs(trend) >= 0.15) out.push({ liv: "info", peso: 6, testo: `Il peso ${trend < 0 ? "scende" : "sale"} di <b>${fmtKg(Math.abs(trend))} kg a settimana</b>: se vuoi mantenerlo, ${trend < 0 ? "alza" : "abbassa"} un po' le calorie.` });
+    else out.push({ liv: "ok", peso: 4, testo: `Il peso è stabile: in linea con l'obiettivo di mantenerlo. 👍` });
   } else if (trend !== null) {
     if (atteso > 0.15 && trend > -0.05)
       out.push({ liv: "warn", peso: 8, testo: `Dal diario dovresti perdere ~${fmtKg(atteso)} kg a settimana, ma il peso è fermo. Di solito vuol dire che alcune quantità sono sottostimate: pesa gli alimenti per qualche giorno e registra anche condimenti, assaggi e bevande.` });
@@ -339,6 +347,10 @@ function andamentoHTML() {
       : `<div><span>${deficitTot >= 0 ? "Grasso perso" : "Grasso in più"}</span><b>${compl.length ? fmtKg(Math.abs(deficitTot) / 7700) : "—"}</b><small>kg (stima dal diario)</small></div>`}
       <div><span>Peso</span><b>${ultimoPeso ? fmtKg(ultimoPeso.kg) : "—"}</b><small>${varPeso !== null ? `${varPeso > 0 ? "+" : ""}${fmtKg(varPeso)} kg nel periodo` : "kg"}</small></div>
     </div>
+
+    ${(() => { const cons = analisi(giorni, pesiP).slice(0, 5);   // i consigli del periodo: i 5 più importanti
+      const icona = { ok: "✅", warn: "⚠️", info: "💡" };
+      return cons.length ? `<section class="and-sez"><h4>Cosa dice l'analisi</h4><ul class="insight">${cons.map(x => `<li class="ins-${x.liv}"><span>${icona[x.liv] || "💡"}</span><p>${x.testo}</p></li>`).join("")}</ul></section>` : ""; })()}
 
     <section class="and-sez"><h4>kcal giorno per giorno</h4>
     ${graficoKcalSVG(giorni)}

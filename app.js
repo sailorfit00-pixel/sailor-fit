@@ -1972,7 +1972,7 @@ function iniziaDaBenvenuto() {
   const ob = (box.querySelector('input[name="bv-obiettivo"]:checked') || {}).value || "dimagrire";
   const pf = leggiProfilo();
   Object.assign(pf, { sesso: uomo ? "uomo" : "donna", eta: Math.round(eta), altezza: Math.round(cm), peso: Math.round(kg * 10) / 10, bmr, bmrAuto: true,
-    deficit: (OBIETTIVI_BENVENUTO.find(o => o[0] === ob) || OBIETTIVI_BENVENUTO[0])[2], recupero: 80, protKg: 1.8, grassiKg: 0.9 });
+    deficit: (OBIETTIVI_BENVENUTO.find(o => o[0] === ob) || OBIETTIVI_BENVENUTO[0])[2], recupero: 80, protKg: 1.8, grassiKg: 0.9, allenOrario: "sera" });
   salvaProfilo(pf);
   localStorage.setItem("mp_benvenuto", "fatto");
   apriProfilo();
@@ -1980,6 +1980,17 @@ function iniziaDaBenvenuto() {
 }
 document.addEventListener("click", (e) => {
   if (e.target.closest && e.target.closest("[data-benvenuto-inizia]")) iniziaDaBenvenuto();
+  const ad = e.target.closest && e.target.closest("[data-allen-def]");   // Profilo: quando ti alleni di solito
+  if (ad) { const pf = leggiProfilo(); pf.allenOrario = ad.dataset.allenDef; salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi(); }
+});
+// Profilo: orari dei pasti (devono essere in ordine: colazione prima dello spuntino, e così via)
+document.addEventListener("change", (e) => {
+  if (!e.target.matches || !e.target.matches("[data-orario]")) return;
+  const nuovi = {}; document.querySelectorAll("[data-orario]").forEach(i => { const h = oraDa(i.value); if (h !== null) nuovi[i.dataset.orario] = h; });
+  const seq = ORDINE_TEMPO.map(p => nuovi[p]);
+  if (seq.some(h => h === undefined) || seq.some((h, i) => i && h <= seq[i - 1])) { avviso("Gli orari dei pasti devono essere in ordine, dalla colazione alla cena"); riapriProfilo(); return; }
+  const pf = leggiProfilo(); pf.orari = nuovi; salvaProfilo(pf);
+  if (typeof renderOggi === "function") renderOggi();
 });
 function apriBackup() {
   editCtx = null;
@@ -2060,6 +2071,17 @@ function apriProfilo() {
     <h4>La tua settimana tipo</h4>
     <div class="sett-tipo">${["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"].map((n, i) => { const t = TIPI_GIORNATA[leggiTipi()[i]]; return `<div class="st-riga"><span>${n}</span>
       <button class="tipo-btn" data-scegli-allen-sett="${i}">${tipoSportHTML(t)} <span class="caret">▾</span></button></div>`; }).join("")}</div>
+    <h4>I tuoi orari</h4>
+    <p class="campo-nota">Servono a capire quale pasto è il prossimo e quando un pasto è passato (si spunta da solo).</p>
+    ${(() => { const o = orariPasti(), hh = (h) => fmtOra(h).padStart(5, "0");
+      return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].map(([k, l]) =>
+        `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
+    <label class="wiz-l">Di solito ti alleni</label>
+    <div class="chips">
+      <button class="chip ${pf.allenOrario === "mattina" ? "attivo" : ""}" data-allen-def="mattina">☀️ Mattina</button>
+      <button class="chip ${pf.allenOrario === "sera" ? "attivo" : ""}" data-allen-def="sera">🌙 Pomeriggio / sera</button>
+    </div>
+    ${pf.allenOrario ? "" : `<p class="hint">Ora: di sera, il sabato di mattina. Puoi sempre cambiarlo giorno per giorno.</p>`}
     <h4>Obiettivi che ne risultano</h4>
     <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
 `);
@@ -2778,11 +2800,27 @@ document.addEventListener("DOMContentLoaded", () => {
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 // Service worker (solo in contesto sicuro: https o localhost)
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("service-worker.js").catch(() => {});
+  const registrazione = navigator.serviceWorker.register("service-worker.js").catch(() => null);
   // quando arriva una versione nuova dell'app, ricarica una volta da sola (niente "apri due volte")
   const avevaVersione = !!navigator.serviceWorker.controller;
-  let ricaricata = false;
+  let ricaricata = false, ricaricaInAttesa = false;
+  const ricarica = () => { if (!ricaricata) { ricaricata = true; location.reload(); } };
+  // con un pannello aperto (es. un pasto a metà) non si ricarica sotto le dita: si aspetta che lo chiudi o che esci dall'app
+  const pannelloAperto = () => { const m = document.getElementById("modal"); return !!(m && !m.hidden); };
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (avevaVersione && !ricaricata) { ricaricata = true; location.reload(); }
+    if (!avevaVersione) return;
+    if (pannelloAperto()) ricaricaInAttesa = true; else ricarica();
+  });
+  document.addEventListener("DOMContentLoaded", () => {
+    const m = document.getElementById("modal");
+    if (m) new MutationObserver(() => { if (ricaricaInAttesa && m.hidden) ricarica(); }).observe(m, { attributes: true, attributeFilter: ["hidden"] });
+  });
+  // l'app ripresa dal sottofondo (non riaperta da zero): controlla subito se c'è una versione nuova, al massimo una volta al minuto
+  let ultimoControllo = Date.now();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { if (ricaricaInAttesa) ricarica(); return; }
+    if (Date.now() - ultimoControllo < 60000) return;
+    ultimoControllo = Date.now();
+    registrazione.then(r => r && r.update()).catch(() => {});
   });
 }

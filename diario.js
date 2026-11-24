@@ -17,8 +17,25 @@ const nomePasto = (p, data) => p === "spuntino" && data && !preSera(data) ? "mer
 const NomePasto = (p, data) => { const n = nomePasto(p, data); return n.charAt(0).toUpperCase() + n.slice(1); };
 // giorno con sport: lo spuntino del pomeriggio è il pre-workout
 const conSport = (data) => sportDelTipo(giornoDiario(data).tipo).some(id => id !== "camminata");   // una semplice camminata non cambia i pasti (niente pre-workout)
-// a che ora ti alleni: di sera (ore 18) tranne il sabato mattina; si può cambiare giorno per giorno
-const orarioAllen = (data) => giornoDiario(data).orario || (indiceSettimana(data) === 5 ? "mattina" : "sera");
+// a che ora ti alleni: quello scelto per quel giorno, altrimenti il tuo orario abituale (Profilo);
+// senza orario abituale (i profili di prima): di sera tranne il sabato mattina
+const orarioAllen = (data) => giornoDiario(data).orario || (typeof leggiProfilo === "function" && leggiProfilo().allenOrario) || (indiceSettimana(data) === 5 ? "mattina" : "sera");
+
+// -------- I tuoi orari dei pasti (Profilo) --------
+// ore decimali (13.5 = 13:30); senza orari salvati valgono questi, quelli di sempre
+const ORARI_DEFAULT = { colazione: 8, mattina: 11, pranzo: 13.5, spuntino: 16, cena: 20.5 };
+function orariPasti() {
+  const o = (typeof leggiProfilo === "function" && leggiProfilo().orari) || {};
+  const out = {}; ORDINE_TEMPO.forEach(p => { out[p] = typeof o[p] === "number" ? o[p] : ORARI_DEFAULT[p]; });
+  return out;
+}
+// un pasto è «passato» un'ora e mezza dopo il suo orario (il pranzo due), ma al più tardi quando inizia il pasto dopo
+function sogliePasti() {
+  const o = orariPasti();
+  return ORDINE_TEMPO.map((p, i) => { const dopo = ORDINE_TEMPO[i + 1]; const s = o[p] + (p === "pranzo" ? 2 : 1.5); return dopo ? Math.min(s, o[dopo]) : s; });
+}
+const fmtOra = (h) => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+const oraDa = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] + +m[2] / 60 : null; };
 const preSera = (data) => conSport(data) && orarioAllen(data) === "sera";          // il pre-workout è lo spuntino del pomeriggio
 // il pasto subito dopo l'allenamento: la cena (allenamento di sera) o il pranzo (di mattina)
 const pastoPost = (data) => !conSport(data) ? null : orarioAllen(data) === "sera" ? "cena" : "pranzo";
@@ -106,7 +123,7 @@ function etichettaMomento(data, momento) {
 const oraDecimale = () => typeof window.__ora === "number" ? window.__ora : new Date().getHours() + new Date().getMinutes() / 60;
 // i tuoi orari: colazione 8–8:30, spuntino 11–11:30, pranzo 13:30–14:30, pre-workout 16–16:30 (allenamento ~18), cena 20:30–21:30.
 // Un momento resta "in corso" fino a un po' dopo il suo orario, poi passa al successivo
-const indiceOra = () => { const h = oraDecimale(); return h < 9.5 ? 0 : h < 12.5 ? 1 : h < 15.5 ? 2 : h < 17.5 ? 3 : h < 22 ? 4 : 5; };   // dopo le 22 anche la cena è passata
+const indiceOra = () => { const h = oraDecimale(); return sogliePasti().filter(s => h >= s).length; };   // quanti pasti sono già passati (con i tuoi orari: dopo le 22 anche la cena)
 // un pasto è "passato" se è di un giorno precedente, o di oggi ma di un momento già trascorso: lì non si propongono cambi a ciò che hai già mangiato
 // (solo per l'orario: serve a sapere se la spunta «Ho mangiato» si può ancora toccare)
 function pastoPassatoOrario(data, pasto) {
@@ -1673,7 +1690,7 @@ function pastoPerRicetta(r, data) {
   if (r.pasto === "colazione") return "colazione";
   if (r.pasto === "spuntino") return r.preworkout && preSera(data) ? "spuntino" : "mattina";
   if (r.pasto === "pranzo" || r.pasto === "cena") return r.pasto;
-  return new Date().getHours() < 16 ? "pranzo" : "cena";
+  return oraDecimale() < orariPasti().spuntino ? "pranzo" : "cena";   // prima della merenda/pre-workout è il pranzo
 }
 function aggiungiRicettaAlPasto(nome, mod) {   // mod: le quantità scelte nel riepilogo (se le hai modificate prima di aggiungere)
   const c0 = contestoAgg || { data: dataDiario, pasto: null, fatte: new Set() };

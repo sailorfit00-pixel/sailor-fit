@@ -225,7 +225,11 @@ async function cercaProdottiOFF(q) {
     liberoCtx.ricercaOFF = { q, stato: "fatto", risultati };
   } catch (e) {
     if (!liberoCtx) return;
-    liberoCtx.ricercaOFF = { q, stato: "errore", messaggio: "Ricerca non disponibile in questo momento (serve internet)." };
+    // il servizio di ricerca per nome esiste solo dove l'app è pubblicata su Netlify (su GitHub Pages non c'è): lì il messaggio dice cosa fare
+    const senzaServizio = navigator.onLine && !/netlify\.app$/.test(location.hostname) && location.hostname !== "localhost";
+    liberoCtx.ricercaOFF = { q, stato: "errore", messaggio: senzaServizio
+      ? "La ricerca per nome dei prodotti confezionati non è disponibile in questa versione dell'app: usa 📷 il codice a barre o fotografa la tabella nutrizionale."
+      : "Ricerca non disponibile in questo momento (serve internet)." };
   }
   rirenderLibero();
 }
