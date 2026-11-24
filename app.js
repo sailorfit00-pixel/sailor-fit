@@ -1943,6 +1943,9 @@ const CAMPI_PROFILO = [
 const CAMPI_MANUALI = [["kcalMan", "Calorie (kcal)", 10], ["protMan", "Proteine (g)", 1], ["grassiMan", "Grassi (g)", 1]];
 const CHIAVI_MANUALI = CAMPI_MANUALI.map(c => c[0]);
 const obiettiviManuali = (pf) => CHIAVI_MANUALI.some(k => pf[k] > 0);
+// con le kcal scritte da te il «fabbisogno» stimato (basale × 1,2 + sport) non dice nulla sul tuo obiettivo
+// (mantenimento, massa…): le stime «kg a settimana» e «grasso perso / in più» non si mostrano
+const kcalManuali = (pf = leggiProfilo()) => pf.kcalMan > 0;
 // Perdita di peso attesa a settimana con la settimana tipo attuale (7700 kcal ≈ 1 kg)
 function perditaSettimanale() {
   const deficit = leggiTipi().reduce((s, t) => s + TIPI_GIORNATA[t].fabbisogno - TIPI_GIORNATA[t].target.kcal, 0);
@@ -1959,7 +1962,7 @@ function anteprimaProfiloHTML() {
   const pf = leggiProfilo(), rip = TIPI_GIORNATA.riposo.target;
   const manuali = obiettiviManuali(pf) ? `<p class="hint">✍️ Obiettivi impostati da te attivi${pf.kcalMan > 0 ? "" : " (kcal automatiche)"}.</p>` : "";
   const stretto = rip.proteine * 4 + rip.grassi * 9 > rip.kcal - 200 ? `<p class="hint">⚠️ Proteine e grassi occupano quasi tutte le kcal: restano pochi carboidrati.</p>` : "";
-  return `${manuali}${stretto}<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno · <b>${kgTxt}</b></p>
+  return `${manuali}${stretto}<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno${kcalManuali(pf) ? "" : ` · <b>${kgTxt}</b>`}</p>
     <table class="pf-tabella"><thead><tr><th>Giornata</th><th>kcal</th><th>P</th><th>C</th><th>G</th></tr></thead><tbody>
     ${chiavi.map(k => { const tg = TIPI_GIORNATA[k], t = tg.target, n = quanti(k);
       return `<tr><td><span class="pf-ico">${tg.icone}</span> ${esc(tg.label)}${n ? ` <em>×${n}</em>` : ""}</td><td><b>${t.kcal}</b></td><td>${t.proteine}</td><td>${t.carboidrati}</td><td>${t.grassi}</td></tr>`; }).join("")}

@@ -192,7 +192,11 @@ function analisi(giorni, pesiPeriodo) {
   const deficit = compl.reduce((s, g) => s + (g.fabbisogno - g.t.kcal), 0) / compl.length; // kcal/giorno
   const atteso = deficit * 7 / 7700; // kg/settimana
   const trend = andamento(pesiPeriodo.length >= 3 ? pesiPeriodo : leggiPesi());
-  if (trend !== null) {
+  if (trend !== null && kcalManuali()) {
+    // obiettivo scritto da te: non so se vuoi scendere, restare o salire, quindi solo il dato
+    if (Math.abs(trend) >= 0.1) out.push({ liv: "info", peso: 6, testo: `Il peso ${trend < 0 ? "scende" : "sale"} di <b>${fmtKg(Math.abs(trend))} kg a settimana</b> nelle ultime settimane.` });
+    else out.push({ liv: "info", peso: 4, testo: `Il peso è stabile nelle ultime settimane.` });
+  } else if (trend !== null) {
     if (atteso > 0.15 && trend > -0.05)
       out.push({ liv: "warn", peso: 8, testo: `Dal diario dovresti perdere ~${fmtKg(atteso)} kg a settimana, ma il peso è fermo. Di solito vuol dire che alcune quantità sono sottostimate: pesa gli alimenti per qualche giorno e registra anche condimenti, assaggi e bevande.` });
     else if (trend <= -0.15) out.push({ liv: "ok", peso: 6, testo: `Il peso scende di <b>${fmtKg(-trend)} kg a settimana</b>: il piano sta funzionando. 💪` });
@@ -330,7 +334,9 @@ function andamentoHTML() {
 
     <div class="and-stat">
       <div><span>Media al giorno</span><b>${kcalM ?? "—"}</b><small>${targM ? `obiettivo ${targM} kcal` : "kcal"}</small></div>
-      <div><span>${deficitTot >= 0 ? "Grasso perso" : "Grasso in più"}</span><b>${compl.length ? fmtKg(Math.abs(deficitTot) / 7700) : "—"}</b><small>kg (stima dal diario)</small></div>
+      ${kcalManuali() ? (() => { const sc = kcalM !== null && targM ? kcalM - targM : null;   // obiettivo scritto da te: quanto sei lontana dall'obiettivo, non una stima di grasso
+        return `<div><span>Rispetto all'obiettivo</span><b>${sc === null ? "—" : `${sc > 0 ? "+" : sc < 0 ? "−" : ""}${Math.abs(sc)}`}</b><small>kcal al giorno</small></div>`; })()
+      : `<div><span>${deficitTot >= 0 ? "Grasso perso" : "Grasso in più"}</span><b>${compl.length ? fmtKg(Math.abs(deficitTot) / 7700) : "—"}</b><small>kg (stima dal diario)</small></div>`}
       <div><span>Peso</span><b>${ultimoPeso ? fmtKg(ultimoPeso.kg) : "—"}</b><small>${varPeso !== null ? `${varPeso > 0 ? "+" : ""}${fmtKg(varPeso)} kg nel periodo` : "kg"}</small></div>
     </div>
 
