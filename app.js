@@ -97,19 +97,21 @@ const CATEGORIE_CIBO = {
 // le scelte del questionario e del Profilo → categorie
 const ESCLUSIONI_DIETA = { tutto: [], vegetariana: ["carneRossa", "pollame", "maiale", "altraCarne", "pesce", "crostacei"], vegana: ["carneRossa", "pollame", "maiale", "altraCarne", "pesce", "crostacei", "uova", "latticini", "miele"] };
 const ALLERGIE = [["glutine", "Glutine", "🌾"], ["latticini", "Lattosio", "🥛"], ["uova", "Uova", "🥚"], ["fruttaSecca", "Frutta secca", "🥜"], ["pesce", "Pesce", "🐟"], ["crostacei", "Crostacei/molluschi", "🦐"], ["soia", "Soia", "🫛"]];
-const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/tacchino", "🍗"], ["maiale", "Maiale/salumi", "🥓"], ["pesce", "Pesce", "🐟"], ["uova", "Uova", "🥚"], ["latticini", "Latticini", "🧀"], ["legumi", "Legumi", "🫘"], ["funghi", "Funghi", "🍄"], ["piccante", "Piccante", "🌶️"]];
+const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/tacchino", "🍗"], ["maiale", "Maiale/salumi", "🥓"], ["pesce", "Pesce e frutti di mare", "🐟"], ["uova", "Uova", "🥚"], ["latticini", "Latticini", "🧀"], ["legumi", "Legumi", "🫘"], ["funghi", "Funghi", "🍄"], ["piccante", "Piccante", "🌶️"]];
 function categorieEscluse(pf = leggiProfilo()) {
   const e = pf.esclusioni || {};
-  return new Set([...(ESCLUSIONI_DIETA[e.dieta] || []), ...(e.allergie || []), ...(e.nonMangio || [])]);
+  const nm = (e.nonMangio || []).flatMap(c => c === "pesce" ? ["pesce", "crostacei"] : [c]);   // «non mangio pesce» vale anche per gamberi, cozze, polpo…
+  return new Set([...(ESCLUSIONI_DIETA[e.dieta] || []), ...(e.allergie || []), ...nm]);
 }
 // cibi scritti a mano («kiwi», «sedano»): minuscole e senza accenti; per le parole lunghe senza la vocale finale, così «fragola» esclude anche «Fragole»
 const normCibo = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 const radiceCibo = (w) => { w = normCibo(w); return w.length >= 5 ? w.replace(/[aeio]$/, "") : w; };
-const ciboScrittoAMano = (nome, pf = leggiProfilo()) => { const n = normCibo(nome); return ((pf.esclusioni || {}).altri || []).some(w => { const r = radiceCibo(w); return r.length >= 3 && n.includes(r); }); };
+const paroleScritte = (pf) => { const e = pf.esclusioni || {}; return [...(e.allergieAltre || []), ...(e.altri || [])]; };   // allergie e cibi scritti a mano
+const ciboScrittoAMano = (nome, pf = leggiProfilo()) => { const n = normCibo(nome); return paroleScritte(pf).some(w => { const r = radiceCibo(w); return r.length >= 3 && n.includes(r); }); };
 let _escluseFirma = null, _escluseCache = new Map();
 // true se l'alimento (dal nome) è in una categoria che hai escluso
 function alimentoEscluso(nome) {
-  const pf = leggiProfilo(), cat = categorieEscluse(pf), altri = (pf.esclusioni || {}).altri || [], firma = [...cat].sort().join(",") + "|" + altri.join(",");
+  const pf = leggiProfilo(), cat = categorieEscluse(pf), altri = paroleScritte(pf), firma = [...cat].sort().join(",") + "|" + altri.join(",");
   if (!cat.size && !altri.length) return false;
   if (firma !== _escluseFirma) { _escluseFirma = firma; _escluseCache = new Map(); }
   if (_escluseCache.has(nome)) return _escluseCache.get(nome);
@@ -2162,11 +2164,14 @@ function apriProfilo() {
     <label class="wiz-l">Di solito ti alleni alle</label>
     <div class="pf-ora"><input class="qta-input" type="time" step="900" data-allen-ora value="${typeof pf.allenOra === "number" ? fmtOra(pf.allenOra).padStart(5, "0") : ""}">
       ${typeof pf.allenOra === "number" || pf.allenOrario ? `<button class="btn-link" data-allen-ora-togli>✕ Nessun orario</button>` : ""}</div>
-    <p class="hint">${typeof pf.allenOra === "number" ? (pf.allenOra < 14 ? "Allenamento di mattina: il pasto dopo è il pranzo." : "Allenamento nel pomeriggio/sera: prima la merenda (pre-workout), dopo la cena.")
+    <p class="hint">${typeof pf.allenOra === "number" ? (() => { const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_TEMPO;
+        const dopo = scelti.find(p => o[p] >= pf.allenOra), prima = pf.allenOra < 14 ? (scelti.includes("mattina") && o.mattina <= pf.allenOra ? "lo spuntino" : null) : (scelti.includes("spuntino") ? "la merenda" : null);
+        const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena" };
+        return `Allenamento alle ${fmtOra(pf.allenOra)}: ${prima ? `prima ${prima} (pre-workout), ` : ""}${dopo ? `il pasto dopo è ${art[dopo]}.` : "dopo non ci sono altri pasti."}`; })()
       : pf.allenOrario ? `Ora: sempre di ${pf.allenOrario === "mattina" ? "mattina" : "pomeriggio/sera"}.` : "Senza orario: di sera, il sabato di mattina."} Giorno per giorno puoi sempre cambiarlo in Oggi.</p>
     <h4>Obiettivi che ne risultano</h4>
     <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
-    <h4>Cosa non mangi</h4>
+    <h4>Alimentazione e allergie</h4>
     ${esclusioniHTML(pf)}
     <h4>Personalizza</h4>
     <label class="wiz-l">Il nome della tua app</label>
@@ -2184,11 +2189,14 @@ function apriProfilo() {
 // Dieta, allergie e cose che non mangi (le stesse scelte del questionario): le ricette con quei cibi non si propongono
 function esclusioniHTML(pf) {
   const e = pf.esclusioni || {}, chip = (gr, k, l, ic, on) => `<button class="chip ${on ? "attivo" : ""}" data-escl="${gr}|${k}">${ic} ${l}</button>`;
-  return `<p class="hint">Che alimentazione segui? <em>(tocca di nuovo per togliere)</em></p><div class="chips chips-capo">${[["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, e.dieta === k)).join("")}</div>
-    <p class="hint">Allergie o intolleranze</p><div class="chips chips-capo">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}</div>
-    <p class="hint">Non mangio</p><div class="chips chips-capo">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}
-      ${(e.altri || []).map((w, i) => `<button class="chip attivo" data-escl-togli="${i}" aria-label="Togli ${esc(w)}">✍️ ${esc(w)} ✕</button>`).join("")}</div>
-    <div class="escl-altro"><input class="qta-input" id="escl-altro" type="text" maxlength="30" placeholder="Altro: scrivi un alimento (es. kiwi)"><button class="btn lib-piu" data-escl-aggiungi aria-label="Aggiungi">＋</button></div>
+  // voci scritte a mano (un chip con ✕ per toglierle) e il campo per aggiungerne
+  const scritte = (gr) => (e[gr] || []).map((w, i) => `<button class="chip attivo" data-escl-togli="${gr}|${i}" aria-label="Togli ${esc(w)}">✍️ ${esc(w)} ✕</button>`).join("");
+  const campo = (gr, ph) => `<div class="escl-altro"><input class="qta-input" id="escl-altro-${gr}" data-escl-campo="${gr}" type="text" maxlength="30" placeholder="${ph}"><button class="btn lib-piu" data-escl-aggiungi="${gr}" aria-label="Aggiungi">＋</button></div>`;
+  return `<p class="hint">Che alimentazione segui? <em>(facoltativo · tocca di nuovo per togliere)</em></p><div class="chips chips-capo">${[["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, e.dieta === k)).join("")}</div>
+    <p class="hint">Allergie o intolleranze</p><div class="chips chips-capo">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}${scritte("allergieAltre")}</div>
+    ${campo("allergieAltre", "Altra allergia (es. sedano)")}
+    <p class="hint">Cibi che non mangi</p><div class="chips chips-capo">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}${scritte("altri")}</div>
+    ${campo("altri", "Altro cibo (es. kiwi)")}
     <p class="campo-nota">Le ricette con questi cibi non ti vengono proposte. L'app riconosce gli alimenti dal nome e può sbagliare: per le allergie controlla sempre gli ingredienti.</p>`;
 }
 // Profilo: tocchi su cibi esclusi, icona e colore; testi del nome
@@ -2198,13 +2206,15 @@ document.addEventListener("click", (e) => {
   const ea = e.target.closest("[data-escl-aggiungi]"), et = e.target.closest("[data-escl-togli]");
   if (!es && !ic && !co && !ea && !et) return;
   const pf = leggiProfilo();
-  if (ea || et) {   // cibi scritti a mano
-    const x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {}), altri = x.altri = (x.altri || []).slice();
-    if (et) altri.splice(+et.dataset.esclTogli, 1);
+  if (ea || et) {   // allergie e cibi scritti a mano
+    const x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {});
+    const [gr, idx] = et ? et.dataset.esclTogli.split("|") : [ea.dataset.esclAggiungi];
+    const lista = x[gr] = (x[gr] || []).slice();
+    if (et) lista.splice(+idx, 1);
     else {
-      const inp = document.getElementById("escl-altro"), v = String((inp && inp.value) || "").trim();
+      const inp = document.getElementById("escl-altro-" + gr), v = String((inp && inp.value) || "").trim();
       if (normCibo(v).length < 3) { avviso("Scrivi almeno 3 lettere"); return; }
-      if (!altri.some(w => normCibo(w) === normCibo(v))) altri.push(v);
+      if (!lista.some(w => normCibo(w) === normCibo(v))) lista.push(v);
     }
   }
   if (es) {
@@ -2215,12 +2225,12 @@ document.addEventListener("click", (e) => {
   if (ic) pf.iconaApp = ic.dataset.persIcona;
   if (co) pf.colore = co.dataset.persColore;
   { const x = pf.esclusioni;   // niente escluso: il profilo torna esattamente com'era (anche per la barra «Salva»)
-    if (x) { ["allergie", "nonMangio", "altri"].forEach(k => { if (Array.isArray(x[k]) && !x[k].length) delete x[k]; }); if (!Object.keys(x).length) delete pf.esclusioni; } }
+    if (x) { ["allergie", "nonMangio", "altri", "allergieAltre"].forEach(k => { if (Array.isArray(x[k]) && !x[k].length) delete x[k]; }); if (!Object.keys(x).length) delete pf.esclusioni; } }
   salvaProfilo(pf); applicaPersonalizzazione(); riapriProfilo();
   if (typeof renderOggi === "function") renderOggi();
 });
-document.addEventListener("keydown", (e) => {   // «Altro: scrivi un alimento»: Invio = aggiungi
-  if (e.key === "Enter" && e.target.id === "escl-altro") { e.preventDefault(); const b = document.querySelector("[data-escl-aggiungi]"); if (b) b.click(); }
+document.addEventListener("keydown", (e) => {   // campi «Altra allergia…» e «Altro cibo…»: Invio = aggiungi
+  if (e.key === "Enter" && e.target.dataset && e.target.dataset.esclCampo) { e.preventDefault(); const b = document.querySelector(`[data-escl-aggiungi="${e.target.dataset.esclCampo}"]`); if (b) b.click(); }
 });
 document.addEventListener("input", (e) => {
   if (!e.target.matches || !e.target.matches("[data-pers]")) return;

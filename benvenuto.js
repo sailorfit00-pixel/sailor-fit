@@ -38,9 +38,10 @@ const QZ = [
   { k: "orari", t: "orari", e: "⏰", q: "A che ora mangi, più o meno?", nota: "Servono a sapere qual è il prossimo pasto e quando un pasto è passato." },
   { k: "dieta", t: "u", e: "🥗", q: "Segui un'alimentazione particolare?", o: QZ_DIETA, opz: 1, nota: "Se no, vai avanti. Tocca di nuovo per togliere la scelta." },
   { k: "allergie", t: "m", e: "⚠️", q: "Hai allergie o intolleranze?", o: [["Nessuna", "👍", QZ_NESSUNO]].concat(ALLERGIE.map(([v, l, e]) => [l, e, v])), excl: QZ_NESSUNO,
+    altro: "allergieAltri", altroPh: "Altra allergia (es. sedano)",
     nota: "Le ricette con questi alimenti non ti verranno proposte. L'app riconosce gli alimenti dal nome e può sbagliare: controlla sempre gli ingredienti." },
   { k: "nonMangio", t: "m", e: "🚫", q: "C'è qualcosa che non mangi proprio?", o: [["Niente, mangio tutto", "👍", QZ_NESSUNO]].concat(NON_MANGIO.map(([v, l, e]) => [l, e, v])), excl: QZ_NESSUNO,
-    altro: "nonMangioAltri", altroPh: "Altro: scrivi tu (es. kiwi, sedano)" },
+    altro: "nonMangioAltri", altroPh: "Altro cibo (es. kiwi)" },
   { k: "colore", t: "colore", e: "🎨", q: "Scegli il colore della tua app" },
   { k: "nomeApp", t: "nomeApp", e: "✏️", q: "Come vuoi chiamare la tua app?" },
   { k: "fine", t: "riepilogo", e: "🎉", q: "Ecco il tuo punto di partenza" },
@@ -67,7 +68,7 @@ function qzRisposteAttuali() {
     oraAllen: typeof pf.allenOra === "number" ? (pf.allenOra < 11 ? "mattina" : pf.allenOra < 14 ? "pranzo" : pf.allenOra < 18 ? "pomeriggio" : "sera") : pf.allenOrario === "mattina" ? "mattina" : pf.allenOrario === "sera" ? "sera" : "",
     pasti: Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_TEMPO.slice(),
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, o[p]])),
-    dieta: e.dieta || "", nonMangioAltri: (e.altri || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
+    dieta: e.dieta || "", nonMangioAltri: (e.altri || []).join(", "), allergieAltri: (e.allergieAltre || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
     colore: pf.colore || "lilla", iconaApp: pf.iconaApp || "🌙", nomeApp: pf.nomeApp || "Sailor Fit",
   };
 }
@@ -161,7 +162,15 @@ document.addEventListener("input", (e) => {
   if (!qz || !e.target.closest || !e.target.closest("#qz")) return;
   const q = QZ[qz.step];
   if (e.target.id === "qz-inp") { qz.R[q.k] = e.target.value; qzSalva(); qzAggiornaBtn(); }
-  if (e.target.id === "qz-altro") { qz.R[q.altro] = e.target.value; qzSalva(); return; }
+  if (e.target.id === "qz-altro") {
+    qz.R[q.altro] = e.target.value;
+    // scrivendo un'allergia o un cibo, «Nessuna» / «Niente» non ha più senso: si toglie (senza ridisegnare, così la tastiera resta aperta)
+    if (q.excl && e.target.value.trim() && (qz.R[q.k] || []).includes(q.excl)) {
+      qz.R[q.k] = qz.R[q.k].filter(x => x !== q.excl);
+      const i = q.o.findIndex(o => o[2] === q.excl), b = document.querySelector(`[data-qz-o="${i}"]`); if (b) b.classList.remove("on");
+    }
+    qzSalva(); return;
+  }
   if (e.target.id === "qz-nome-app") { qz.R.nomeApp = e.target.value; const a = document.querySelector(".qz-anteprima"); if (a) a.textContent = `${qz.R.iconaApp} ${qz.R.nomeApp || "Sailor Fit"}`; qzSalva(); qzAggiornaBtn(); }
 });
 document.addEventListener("change", (e) => {
@@ -212,11 +221,12 @@ function qzFine() {
     pasti: ORDINE_TEMPO.filter(p => (R.pasti || []).includes(p)),
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, R.orari[p]])),
     esclusioni: { allergie: (R.allergie || []).filter(x => x !== QZ_NESSUNO), nonMangio: (R.nonMangio || []).filter(x => x !== QZ_NESSUNO),
-      altri: String(R.nonMangioAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3) },
+      altri: String(R.nonMangioAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3),
+      allergieAltre: String(R.allergieAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3) },
     colore: R.colore || "lilla", iconaApp: R.iconaApp || "🌙", nomeApp: String(R.nomeApp || "").trim() || "Sailor Fit",
   });
   if (R.dieta) pf.esclusioni.dieta = R.dieta;
-  if (!pf.esclusioni.altri.length) delete pf.esclusioni.altri;
+  ["altri", "allergieAltre", "allergie", "nonMangio"].forEach(k => { if (!pf.esclusioni[k].length) delete pf.esclusioni[k]; });
   if (!senzaSport(R) && R.oraAllen) { pf.allenOra = (QZ_ORA_ALLEN.find(x => x[2] === R.oraAllen) || [])[3]; delete pf.allenOrario; }
   if (!pf.nome) delete pf.nome;
   if (nuovo) Object.assign(pf, { protKg: 1.8, grassiKg: 0.9, recupero: 80 });   // chi rifà il questionario tiene i suoi macro
