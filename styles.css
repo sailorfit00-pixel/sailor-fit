@@ -2038,3 +2038,6 @@ body.tastiera .lib-autoc { margin-bottom: 16px; }
 /* alimento che hai escluso (allergie, dieta, cibi che non mangi): avviso sotto il nome */
 .autoc-escluso { display: block; font-size: 12.5px; font-weight: 600; color: #c2410c; margin-top: 2px; }
 .autoc-ricetta .autoc-escluso { margin: 2px 0; }
+/* Niente barre di scorrimento grigie (pagina, pannelli, liste): si scorre col dito come sempre, ma la barra non si vede */
+html, body, * { scrollbar-width: none; -ms-overflow-style: none; }
+::-webkit-scrollbar, *::-webkit-scrollbar { display: none; width: 0; height: 0; background: transparent; }
