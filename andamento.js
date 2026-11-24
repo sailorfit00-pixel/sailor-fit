@@ -360,7 +360,7 @@ function andamentoHTML() {
       <div><span>Media al giorno</span><b>${kcalM ?? "—"}</b><small>${targM ? `obiettivo ${targM} kcal` : "kcal"}</small></div>
       ${kcalManuali() ? (() => { const sc = kcalM !== null && targM ? kcalM - targM : null;   // obiettivo scritto da te: quanto sei lontana dall'obiettivo, non una stima di grasso
         return `<div><span>Rispetto all'obiettivo</span><b>${sc === null ? "—" : `${sc > 0 ? "+" : sc < 0 ? "−" : ""}${Math.abs(sc)}`}</b><small>kcal al giorno</small></div>`; })()
-      : `<div><span>${deficitTot >= 0 ? "Grasso perso" : "Grasso in più"}</span><b>${compl.length ? fmtKg(Math.abs(deficitTot) / 7700) : "—"}</b><small>kg (stima dal diario)</small></div>`}
+      : `<div><span>${leggiProfilo().deficit < 0 ? (deficitTot > 0 ? "Calo stimato" : "Aumento stimato") : deficitTot >= 0 ? "Grasso perso" : "Grasso in più"}</span><b>${compl.length ? fmtKg(Math.abs(deficitTot) / 7700) : "—"}</b><small>kg (stima dal diario)</small></div>`}
       <div><span>Peso</span><b>${ultimoPeso ? fmtKg(ultimoPeso.kg) : "—"}</b><small>${varPeso !== null ? `${varPeso > 0 ? "+" : ""}${fmtKg(varPeso)} kg nel periodo` : "kg"}</small></div>
     </div>
 

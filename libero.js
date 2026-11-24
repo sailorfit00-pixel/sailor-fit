@@ -287,13 +287,14 @@ function cercaRicetteTesto(q, n = 5) {
     const ok = nomeCorrisponde(r.nome, q);
     if (ok) viste.add(r.nome);
     return ok;
-  }).map(quota).sort((a, b) => (b.q - a.q) || (a.k - b.k)).slice(0, n);
+  }).map(quota).map(x => Object.assign(x, { no: typeof ricettaConEsclusi === "function" && ricettaConEsclusi(x.r) }))
+    .sort((a, b) => (a.no - b.no) || (b.q - a.q) || (a.k - b.k)).slice(0, n);   // quelle con ingredienti che hai escluso in fondo
 }
 function ricetteTestoHTML(q, attr) {
   const lista = cercaRicetteTesto(q);
   if (!lista.length) return "";
-  return `<div class="autoc-titolo">📖 Ricette</div>` + lista.map(({ r, ps }) =>
-    `<button class="autoc-voce autoc-ricetta" ${attr}="${esc(r.nome)}"><b>${esc(r.nome)}</b>${macroStileHTML(ps.tot)}</button>`).join("");
+  return `<div class="autoc-titolo">📖 Ricette</div>` + lista.map(({ r, ps, no }) =>
+    `<button class="autoc-voce autoc-ricetta" ${attr}="${esc(r.nome)}"><b>${esc(r.nome)}</b>${no ? avvisoEsclusoHTML(((r._orig || r).ingredienti || []).map(i => i.nome).find(alimentoEscluso)) : ""}${macroStileHTML(ps.tot)}</button>`).join("");
 }
 // Piatti composti da più alimenti diversi: non sono ingredienti. (Il modo di cuocere o preparare un alimento — lesso, al forno, arrosto, carpaccio — resta un ingrediente.) Nel pasto si trovano tra gli alimenti, sopra le ricette; nelle ricette non si propongono.
 const PIATTI_PRONTI = new Set(["Hamburger di manzo", "Pizza margherita", "Pizza marinara", "Pizza diavola", "Pizza capricciosa", "Pizza quattro formaggi", "Pizza al taglio", "Pizza bianca mozzarella funghi e speck", "Sushi", "Panino hamburger", "Panino con prosciutto", "Aperitivo condiviso (tagliere)", "Crostata alla marmellata", "Torta (ciambellone)", "Tiramisù",
@@ -302,6 +303,8 @@ const PIATTI_PRONTI = new Set(["Hamburger di manzo", "Pizza margherita", "Pizza 
   "Pasta al pomodoro", "Pasta al ragù", "Pasta alla carbonara", "Pasta cacio e pepe", "Pasta al pesto", "Pasta all'amatriciana", "Lasagne", "Tortellini", "Ravioli ricotta e spinaci", "Risotto ai funghi", "Risotto alla milanese", "Riso alla cantonese", "Insalata di riso", "Minestrone", "Zuppa di legumi", "Vellutata di zucca", "Crema di verdure",
   "Caponata", "Bruschetta al pomodoro", "Tramezzino", "Toast prosciutto e formaggio", "Burger vegetale", "Falafel", "Porridge (avena col latte)", "Brownie", "Muffin", "Pancake", "Cheesecake",
   "Nachos con formaggio", "Quesadilla", "Paella", "Pad thai", "Hot dog", "Club sandwich", "Nuggets di pollo", "Waffle", "Crepes dolci", "Supplì", "Crostini", "Caprese", "Ossobuco", "Saltimbocca alla romana", "Brasato", "Stufato di manzo", "Ribollita", "Panzanella", "Smoothie di frutta", "Frullato proteico", "Poke bowl"]);
+// sotto il nome di un alimento che hai escluso (allergie, dieta, cibi che non mangi): «⚠️ contiene lattosio»
+const avvisoEsclusoHTML = (n) => { const m = typeof motivoEscluso === "function" ? motivoEscluso(n) : ""; return m ? `<small class="autoc-escluso">⚠️ ${esc(m)}</small>` : ""; };
 function mostraAutocompleta(testo) {
   const box = document.getElementById("lib-autoc");
   if (!box) return;
@@ -312,11 +315,13 @@ function mostraAutocompleta(testo) {
   const nq = norm(q);
   const trovati = cercaAlimenti(q).filter(n => !gia.has(n));
   // prima quelli che iniziano per quello che hai scritto
-  trovati.sort((a, b) => (norm(b).startsWith(nq) - norm(a).startsWith(nq)));
+  // prima quelli adatti a te (gli esclusi in fondo, con l'avviso), poi quelli che iniziano per quello che hai scritto
+  const escl = (n) => typeof alimentoEscluso === "function" && alimentoEscluso(n);
+  trovati.sort((a, b) => (escl(a) - escl(b)) || (norm(b).startsWith(nq) - norm(a).startsWith(nq)));
   const ricetteHTML = String(testo || "").includes(",") ? "" : ricetteTestoHTML(q, "data-autoc-ricetta");
   const conQta = !(ultima.match(AUTOC_LEAD) || [""])[0].trim();   // hai già scritto una quantità ("200 pol…")? allora niente dose suggerita
   const dose = (n) => { if (!conQta) return ""; const g = porzioneSolita(n), a = window.ALIMENTI[n]; return g > 0 && a ? `<em class="autoc-dose">${etichettaDose(n, g)} · ${Math.round(a[0] * g / 100)} kcal</em>` : ""; };
-  const voce = (n) => `<button class="autoc-voce" data-autoc="${esc(n)}"><span class="autoc-nome">${esc(n)}</span>${dose(n)}</button>`;
+  const voce = (n) => `<button class="autoc-voce" data-autoc="${esc(n)}"><span class="autoc-nome">${esc(n)}${avvisoEsclusoHTML(n)}</span>${dose(n)}</button>`;
   const ingr = trovati.filter(n => !PIATTI_PRONTI.has(n)).slice(0, 6).map(voce).join("");       // alimenti singoli
   const piatti = trovati.filter(n => PIATTI_PRONTI.has(n)).slice(0, 4).map(voce).join("");      // già composti
   // sopra tutti gli alimenti (anche quelli già pronti: pizza, frittata, tiramisù…, che si segnano come un alimento), sotto le ricette
@@ -354,11 +359,12 @@ function mostraSostituzioni(inp) {
       + (n > 3 ? `<button class="autoc-voce sost-altri" data-sost-altri="${k}" aria-label="Altri sostituti">↻</button>` : "");
     return;
   }
-  const trovati = cercaAlimenti(q).filter(n => n !== c.items[k].nome).slice(0, 6);
+  const escl = (n) => typeof alimentoEscluso === "function" && alimentoEscluso(n);
+  const trovati = cercaAlimenti(q).filter(n => n !== c.items[k].nome).sort((a, b) => escl(a) - escl(b)).slice(0, 6);
   if (!box) { box = document.createElement("div"); box.id = "lib-sost"; box.className = "lib-sost-lista"; cont.appendChild(box); }
   const riga = inp.closest(".sw") || inp.closest(".lib-riga");
   box.style.top = (riga.offsetTop + riga.offsetHeight + 2) + "px";
-  box.innerHTML = trovati.length ? trovati.map(n => `<button class="autoc-voce" data-sost-scegli="${k}" data-nome="${esc(n)}">${esc(n)}</button>`).join("") : `<p class="hint">Nessun alimento trovato</p>`;
+  box.innerHTML = trovati.length ? trovati.map(n => `<button class="autoc-voce" data-sost-scegli="${k}" data-nome="${esc(n)}">${esc(n)}${avvisoEsclusoHTML(n)}</button>`).join("") : `<p class="hint">Nessun alimento trovato</p>`;
 }
 function sostituisciIngrediente(k, nome, grammi) {
   const c = liberoCtx, vecchio = c && c.items[k];
@@ -440,7 +446,7 @@ const FAMIGLIE_PROT = [
   ["vegetale", ["Tofu", "Seitan", "Tempeh"]],
   ["carne", ["Manzo magro", "Manzo magro macinato", "Hamburger di manzo", "Vitello magro", "Lonza di maiale", "Salsiccia", "Coniglio", "Agnello (carne magra)"]],
   ["salumi", ["Bresaola", "Prosciutto cotto", "Prosciutto crudo", "Mortadella", "Salumi misti", "Wurstel"]],
-  ["polvere", ["Proteine in polvere"]],
+  ["polvere", ["Proteine in polvere", "Proteine vegetali in polvere (pisello)"]],
 ];
 const famigliaProt = (n) => (FAMIGLIE_PROT.find(([, v]) => v.includes(n)) || [])[0] || null;
 const MACRO_ZERO = { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 };
@@ -472,7 +478,7 @@ const POOL_SOSTITUZIONE = [
   ["Latte intero", "Latte parzialmente scremato", "Latte scremato", "Bevanda di soia", "Bevanda di avena", "Bevanda di mandorla"],
 ];
 const VERDURE_CONSIGLI = ["Zucchine", "Spinaci", "Broccoli", "Insalata", "Pomodoro", "Carote", "Finocchi", "Cetriolo", "Rucola", "Asparagi", "Fagiolini"];
-const GRAMMI_MAX_FONTI = { "Proteine in polvere": 30, "Albume": 200, "Yogurt greco 0%": 250, "Yogurt greco intero": 200, "Fiocchi di latte": 200, "Quark magro": 250, "Ricotta": 150, "Petto di pollo": 220, "Fesa di tacchino": 200, "Merluzzo": 250, "Nasello": 250, "Branzino": 200, "Orata": 200, "Tofu": 200, "Ceci cotti": 200, "Lenticchie cotte": 200, "Uova": 220, "Salmone fresco": 180 };
+const GRAMMI_MAX_FONTI = { "Proteine in polvere": 30, "Proteine vegetali in polvere (pisello)": 30, "Albume": 200, "Yogurt greco 0%": 250, "Yogurt greco intero": 200, "Fiocchi di latte": 200, "Quark magro": 250, "Ricotta": 150, "Petto di pollo": 220, "Fesa di tacchino": 200, "Merluzzo": 250, "Nasello": 250, "Branzino": 200, "Orata": 200, "Tofu": 200, "Ceci cotti": 200, "Lenticchie cotte": 200, "Uova": 220, "Salmone fresco": 180 };
 const FONTI_PROTEINE = {
   leggero: ["Yogurt greco 0%", "Fiocchi di latte", "Quark magro"],      // colazione e spuntini: latticini magri
   pasto: ["Petto di pollo", "Fesa di tacchino", "Merluzzo", "Nasello", "Albume", "Tofu", "Fiocchi di latte", "Ceci cotti", "Lenticchie cotte"],   // niente tonno in scatola: per il mercurio si mangia con moderazione
@@ -703,7 +709,7 @@ function elencoConsigli(c, m) {
   // se nel piatto c'è già una fonte di proteine (pollo, yogurt, uova…) non se ne aggiunge un'altra (carne + pesce non si mischiano): si può solo portarla a una quantità diversa o cambiarla
   if (gap.proteine > 5 && !famDentro.size) aggiungi(protTutte, [30, 40, 50, 60, 70, 90, 100, 120, 150, 180, 200], undefined, "prot");
   else if (principale && manca.prot && gap.proteine > 4) aggiungi(protTutte, [50, 70, 90, 100, 120, 150], undefined, "prot", 1);   // nel piatto serve comunque una fonte di proteine
-  if (gap.proteine > 10 && !famDentro.size && proteinePasto < 12) aggiungi(["Proteine in polvere"], [20, 25, 30], undefined, "prot");
+  if (gap.proteine > 10 && !famDentro.size && proteinePasto < 12) aggiungi(["Proteine in polvere", "Proteine vegetali in polvere (pisello)"], [20, 25, 30], undefined, "prot");
   const aggiungiCarbo = !principale || manca.carbo;   // nei pasti principali non si aggiunge una seconda base di carboidrati (pasta + pane, riso + patate): si porta quella che c'è a un'altra quantità
   if (aggiungiCarbo && principale && manca.carbo && gap.carboidrati > 8 && gap.kcal > 80 && gap.carboidrati <= 15) aggiungi(["Riso integrale cotto", "Patate lesse", "Quinoa cotta", "Pane integrale"], [30, 40, 50, 60, 80, 100], "carbo", "carbo", 1);
   if (aggiungiCarbo && gap.carboidrati > 15 && gap.kcal > 80) aggiungi(principale ? ["Riso integrale cotto", "Patate lesse", "Quinoa cotta", "Pane integrale"] : ["Banana", "Mela", "Fiocchi d'avena", "Pane integrale", "Gallette di riso"], [30, 40, 50, 60, 80, 100, 120, 150, 180, 200], "carbo");   // una sola proposta di carboidrati, non quattro alternative

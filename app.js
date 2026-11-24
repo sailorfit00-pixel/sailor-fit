@@ -120,10 +120,16 @@ function categorieEscluse(pf = leggiProfilo()) {
 const normCibo = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 const radiceCibo = (w) => { w = normCibo(w); return w.length >= 5 ? w.replace(/[aeio]$/, "") : w; };
 const paroleScritte = (pf) => { const e = pf.esclusioni || {}; return [...(e.allergieAltre || []), ...(e.altri || [])]; };   // allergie e cibi scritti a mano
-const ciboScrittoAMano = (nome, pf = leggiProfilo()) => { const n = normCibo(nome); return paroleScritte(pf).some(w => {
-  const r = radiceCibo(w), cat = categoriaDiParola(w);
-  return (r.length >= 3 && n.includes(r)) || (cat && CATEGORIE_CIBO[cat] && CATEGORIE_CIBO[cat].test(String(nome).toLowerCase()));   // anche gli ingredienti che lo contengono
-}); };
+// cibi comuni che si nascondono nei piatti pronti: «pomodoro» esclude anche pizza, ketchup, bruschetta…
+const NASCOSTI_IN = [[/^pomodor/, /pizza(?! bianca)|ketchup|bruschetta|caprese|amatriciana|ragù|lasagne|panzanella|sugo|passata|concentrato|caponata|salsa barbecue|chili|ribollita|minestrone|parmigiana|gazpacho|baked beans/],
+  [/^cipoll/, /soffritto|ragù|caponata|minestrone|ribollita|stufato|spezzatino|brasato|chili|kebab/], [/^aglio$/, /pesto|bruschetta|tzatziki|hummus|aioli/],
+  [/^peperon[ei]$/, /caponata|paella|chili/], [/^melanzan/, /caponata|parmigiana|moussaka/], [/^patat/, /purè|crocchette|gnocchi|hash brown/],
+  [/^cioccolat|^cacao/, /cioccolat|nutella|brownie|cacao|tiramisù/], [/^caffe/, /tiramisù|cappuccino|espresso|caffelatte|macchiato/]];
+const parolaTrova = (w, nome) => {   // la parola scritta a mano trova questo alimento? (nome, allergene noto o piatto che lo nasconde)
+  const n = normCibo(nome), l = String(nome).toLowerCase(), r = radiceCibo(w), cat = categoriaDiParola(w), nw = normCibo(w), nasc = NASCOSTI_IN.find(([re]) => re.test(nw));
+  return (r.length >= 3 && n.includes(r)) || !!(cat && CATEGORIE_CIBO[cat] && CATEGORIE_CIBO[cat].test(l)) || !!(nasc && nasc[1].test(l));
+};
+const ciboScrittoAMano = (nome, pf = leggiProfilo()) => paroleScritte(pf).some(w => parolaTrova(w, nome));
 let _escluseFirma = null, _escluseCache = new Map();
 // true se l'alimento (dal nome) è in una categoria che hai escluso
 function alimentoEscluso(nome) {
@@ -133,6 +139,21 @@ function alimentoEscluso(nome) {
   if (_escluseCache.has(nome)) return _escluseCache.get(nome);
   const n = String(nome).toLowerCase(), si = [...cat].some(c => CATEGORIE_CIBO[c] && CATEGORIE_CIBO[c].test(n)) || ciboScrittoAMano(nome, pf);
   _escluseCache.set(nome, si); return si;
+}
+// perché un alimento è escluso, in parole brevi («contiene lattosio», «non è vegano»); "" se non lo è
+const NOMI_ALLERGIA = Object.fromEntries(ALLERGIE.map(([k, t]) => [k, t.toLowerCase()]));   // «contiene lattosio» per l'intolleranza…
+const NOMI_CATEGORIA = Object.assign({ carneRossa: "carne", pollame: "carne", maiale: "carne", altraCarne: "carne", miele: "miele", crostacei: "crostacei/molluschi" },
+  Object.fromEntries(NON_MANGIO.map(([k, t]) => [k, t.toLowerCase()])), { pesce: "pesce" });   // …«contiene latticini» per chi non li mangia
+function motivoEscluso(nome) {
+  if (!alimentoEscluso(nome)) return "";
+  const pf = leggiProfilo(), e = pf.esclusioni || {}, l = String(nome).toLowerCase(), tocca = c => CATEGORIE_CIBO[c] && CATEGORIE_CIBO[c].test(l);
+  const allergia = (e.allergie || []).find(tocca);
+  if (allergia) return `contiene ${NOMI_ALLERGIA[allergia] || allergia}`;
+  const nonMangio = (e.nonMangio || []).flatMap(c => c === "pesce" ? ["pesce", "crostacei"] : [c]).find(tocca);
+  if (nonMangio) return `contiene ${NOMI_CATEGORIA[nonMangio] || nonMangio}`;
+  const w = paroleScritte(pf).find(w => parolaTrova(w, nome));
+  if (w) return `contiene ${normCibo(w)}`;
+  return e.dieta === "vegana" ? "non è vegano" : e.dieta === "vegetariana" ? "non è vegetariano" : "escluso";
 }
 // una ricetta è esclusa se uno dei suoi ingredienti lo è (il nome della ricetta non conta: «pancake» senza uova restano)
 const ricettaConEsclusi = (r) => ((r && (r._orig || r).ingredienti) || []).some(i => alimentoEscluso(i.nome));
@@ -1138,7 +1159,7 @@ function leggiScorte() { try { return JSON.parse(localStorage.getItem("mp_incasa
 function segnaInCasa(nome, si, grammi) {
   const c = leggiInCasaRaw(), q = leggiScorte();
   // la scorta è quello che la lista ti ha detto di comprare (5 banane = 600 g, non una «confezione» da 700 g che non finiresti mai); senza quantità, una confezione tipica
-  if (si) { c[nome] = oggiISO(); q[nome] = grammi > 0 ? grammi : paccoG(nome); } else { delete c[nome]; delete q[nome]; }
+  if (si) { c[nome] = oggiISO() + "@" + Date.now(); q[nome] = grammi > 0 ? grammi : paccoG(nome); } else { delete c[nome]; delete q[nome]; }
   try { localStorage.setItem("mp_incasa", JSON.stringify(c)); localStorage.setItem("mp_incasa_q", JSON.stringify(q)); } catch (e) {}
 }
 // Quanto ne hai in casa: alla spesa si assume una confezione tipica (in grammi, per il riso e la pasta da crudo);
@@ -1152,11 +1173,14 @@ const PACCO_TIPICO = [
 ];
 const PACCO_REPARTO = { "Frutta e verdura": 700, "Carne e pesce": 400, "Latticini e uova": 300, "Pane, pasta e cereali": 500, "Legumi e scatolame": 400, "Salse e spezie": 250, "Frutta secca": 200, "Dolci": 150, "Dispensa": 500, "Bevande": 1000, "Casa e igiene": 1 };
 const paccoG = (nome) => { const t = PACCO_TIPICO.find(([re]) => re.test(nome)); return t ? t[1] : (PACCO_REPARTO[repartoDi(nome)] || 300); };
-// grammi usati dal giorno dell'acquisto (cotto → crudo per riso, pasta…)
+// grammi usati DOPO l'acquisto (cotto → crudo per riso, pasta…). «da» = "2026-11-24@<momento>": quel giorno contano solo i pasti
+// aggiunti dopo che l'hai spuntato (prima, la banana mangiata a colazione «finiva» subito quella appena comprata e la spunta non restava).
+// Le spunte di prima (solo la data) contano dal giorno dopo.
 function consumatoDa(nome, da) {
   const d = typeof leggiDiario === "function" ? leggiDiario() : {};
+  const [giorno, ms] = String(da).split("@"), quando = +ms || Infinity;
   let g = 0;
-  Object.keys(d).filter(x => x >= da && x <= oggiISO()).forEach(x => (d[x].pasti || []).forEach(p => (p.ingredienti || []).forEach(i => {
+  Object.keys(d).filter(x => x >= giorno && x <= oggiISO()).forEach(x => (d[x].pasti || []).filter(p => x > giorno || (+p.ts || 0) > quando).forEach(p => (p.ingredienti || []).forEach(i => {
     if (!(window.ALIMENTI || {})[i.nome] || i.unita === "q.b.") return;
     // anche dentro i piatti: la banana del frullato, il latte del cappuccino, le uova della frittata
     (ingredientiSpesa(i.nome) || [[i.nome, 1]]).forEach(([n, fr]) => {
@@ -1170,8 +1194,8 @@ function consumatoDa(nome, da) {
 // la scorta è la quantità che la lista ti ha suggerito di comprare (se non c'era, una confezione tipica)
 const scortaG = (nome) => leggiScorte()[nome] || paccoG(nome);
 function restoInCasa(nome) { const da = leggiInCasaRaw()[nome]; return da ? scortaG(nome) - consumatoDa(nome, da) : null; }
-const finito = (nome) => { if (scortaG(nome) <= 1) return false; const r = restoInCasa(nome);   // le cose non alimentari (detersivo, carta…) non hanno grammi: restano spuntate
-   return r !== null && r < Math.max(30, scortaG(nome) * 0.12); };
+const finito = (nome) => { const sc = scortaG(nome); if (sc <= 1) return false; const r = restoInCasa(nome);   // le cose non alimentari (detersivo, carta…) non hanno grammi: restano spuntate
+   return r !== null && r < sc && r < Math.max(30, sc * 0.12); };   // finito solo se ne hai usato un po' (prima 10 g di cioccolato appena spuntati risultavano già «finiti»)
 const GIORNI_PRESI = 6;   // la spesa è settimanale: alla spesa dopo, quello spuntato la volta prima torna in lista (se l'hai mangiato)
 // v365: prima la scorta non scendeva mai sotto la confezione tipica (banane 700 g anche se ne avevi prese 5 = 600 g),
 // così finite le banane restavano «già prese». Una volta sola: le scorte gonfiate tornano alla quantità suggerita dalla lista.
@@ -1338,7 +1362,7 @@ function spesaHTML() {
   const conta = {};
   const viste = new Set();
   (typeof ricette !== "undefined" ? ricette : []).forEach(r => { const o = r._orig || r; if (viste.has(o.nome)) return; viste.add(o.nome);
-    new Set((o.ingredienti || []).filter(i => i.unita !== "q.b.").map(i => i.nome)).forEach(n => { if (!SPESA_SALTA.test(n) && !SPESA_COMPOSTI.test(n) && (window.ALIMENTI || {})[n]) conta[nomeSpesa(n)] = (conta[nomeSpesa(n)] || 0) + 1; }); });
+    new Set((o.ingredienti || []).filter(i => i.unita !== "q.b.").map(i => i.nome)).forEach(n => { if (!SPESA_SALTA.test(n) && !SPESA_COMPOSTI.test(n) && (window.ALIMENTI || {})[n] && !alimentoEscluso(n)) conta[nomeSpesa(n)] = (conta[nomeSpesa(n)] || 0) + 1; }); });
   const inLista = new Set(voci.map(v => v.nome.toLowerCase()));
   const dispensa = Object.entries(conta).filter(([n]) => !inLista.has(n.toLowerCase())).map(([nome, n]) => ({ nome, n, giorni: -1 }));
   const gruppi = {}, daControllare = [];
@@ -2002,7 +2026,7 @@ function wizSuggerisci(inp, soloAlternative) {
   if (!lista.length) return;
   const box = document.createElement("div");
   box.id = "wiz-sug"; box.className = "wiz-sug";
-  box.innerHTML = lista.map(n => `<button type="button" class="autoc-voce" data-wiz-sug="${esc(n)}" data-ing="${inp.dataset.ing}">${esc(n)}</button>`).join("");
+  box.innerHTML = lista.map(n => `<button type="button" class="autoc-voce" data-wiz-sug="${esc(n)}" data-ing="${inp.dataset.ing}">${esc(n)}${typeof avvisoEsclusoHTML === "function" ? avvisoEsclusoHTML(n) : ""}</button>`).join("");
   inp.closest(".wiz-ing").after(box);
 }
 
@@ -2181,7 +2205,7 @@ function apriProfilo() {
     <div class="pf-ora"><input class="qta-input" type="time" step="900" data-allen-ora value="${typeof pf.allenOra === "number" ? fmtOra(pf.allenOra).padStart(5, "0") : ""}">
       ${typeof pf.allenOra === "number" || pf.allenOrario ? `<button class="btn-link" data-allen-ora-togli>✕ Nessun orario</button>` : ""}</div>
     <p class="hint">${typeof pf.allenOra === "number" ? (() => { const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_TEMPO;
-        const dopo = scelti.find(p => o[p] >= pf.allenOra), prima = pf.allenOra < 14 ? (scelti.includes("mattina") && o.mattina <= pf.allenOra ? "lo spuntino" : null) : (scelti.includes("spuntino") ? "la merenda" : null);
+        const dopo = scelti.find(p => o[p] >= pf.allenOra), sp = spuntinoPreDa(scelti, o, pf.allenOra), prima = sp ? (sp === "mattina" ? "lo spuntino" : "la merenda") : null;
         const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena" };
         return `Allenamento alle ${fmtOra(pf.allenOra)}: ${prima ? `prima ${prima} (pre-workout), ` : ""}${dopo ? `il pasto dopo è ${art[dopo]}.` : "dopo non ci sono altri pasti."}`; })()
       : pf.allenOrario ? `Ora: sempre di ${pf.allenOrario === "mattina" ? "mattina" : "pomeriggio/sera"}.` : leggiTipi().every(t => !sportDelTipo(t).length) ? "Nella tua settimana tipo non ci sono allenamenti." : "Senza orario l'app considera l'allenamento di sera (il sabato di mattina)."}${leggiTipi().every(t => !sportDelTipo(t).length) ? "" : " Giorno per giorno puoi sempre cambiarlo in Oggi."}</p>
@@ -2369,7 +2393,12 @@ document.addEventListener("input", (e) => {
 // ================== Diario del peso ==================
 function leggiPesi() { try { return JSON.parse(localStorage.getItem("mp_pesi")) || []; } catch (e) { return []; } }
 function salvaPesi(arr) { arr.sort((a, b) => a.data.localeCompare(b.data)); localStorage.setItem("mp_pesi", JSON.stringify(arr)); }
-const oggiISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+// chi mangia tardi (un pasto dalle 22 in poi, es. turni di notte): fino alle 4 del mattino è ancora «oggi» il giorno prima,
+// così la cena delle 23:30 segnata a mezzanotte e mezza resta nel suo giorno
+let _tardiRaw = null, _tardi = false;
+const giornataTarda = () => { try { const raw = localStorage.getItem("mp_profilo") || ""; if (raw !== _tardiRaw) { _tardiRaw = raw; const o = (raw && JSON.parse(raw) || {}).orari || {}; _tardi = Object.values(o).some(h => typeof h === "number" && h >= 22); } } catch (e) { _tardi = false; } return _tardi; };
+const dopoMezzanotte = () => giornataTarda() && new Date().getHours() < 4;
+const oggiISO = () => { const d = new Date(); if (dopoMezzanotte()) d.setDate(d.getDate() - 1); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const giorniTra = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const fmtData = (iso) => new Date(iso + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" });
 const fmtKg = (x) => x.toFixed(1).replace(".", ",");

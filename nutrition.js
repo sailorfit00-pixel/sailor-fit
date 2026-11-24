@@ -97,6 +97,7 @@ const ALIMENTI = {
   "Salsa teriyaki": [130, 3, 28, 0.5],
   "Salsa yogurt-limone": [60, 4, 6, 2],
   "Proteine in polvere": [380, 80, 8, 6],
+  "Proteine vegetali in polvere (pisello)": [375, 78, 5, 7],   // per chi non mangia latticini né uova
   "Curry in polvere": [325, 14, 56, 14],
   // Ingredienti aggiunti (nuove ricette)
   "Prosciutto cotto": [145, 20, 1, 6],
@@ -260,6 +261,7 @@ const NUTRIENTI_EXTRA = {
   "Salsa teriyaki": [28, 28, 0, 9],
   "Salsa yogurt-limone": [4, 0, 0, 0.8],
   "Proteine in polvere": [4, 1, 1, 0.5],
+  "Proteine vegetali in polvere (pisello)": [1, 0, 5, 2],
   "Curry in polvere": [3, 0, 33, 0.1],
   "Prosciutto cotto": [0.8, 0.5, 0, 2],
   "Prosciutto crudo": [0, 0, 0, 5],
