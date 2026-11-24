@@ -102,14 +102,18 @@ function categorieEscluse(pf = leggiProfilo()) {
   const e = pf.esclusioni || {};
   return new Set([...(ESCLUSIONI_DIETA[e.dieta] || []), ...(e.allergie || []), ...(e.nonMangio || [])]);
 }
+// cibi scritti a mano («kiwi», «sedano»): minuscole e senza accenti; per le parole lunghe senza la vocale finale, così «fragola» esclude anche «Fragole»
+const normCibo = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+const radiceCibo = (w) => { w = normCibo(w); return w.length >= 5 ? w.replace(/[aeio]$/, "") : w; };
+const ciboScrittoAMano = (nome, pf = leggiProfilo()) => { const n = normCibo(nome); return ((pf.esclusioni || {}).altri || []).some(w => { const r = radiceCibo(w); return r.length >= 3 && n.includes(r); }); };
 let _escluseFirma = null, _escluseCache = new Map();
 // true se l'alimento (dal nome) è in una categoria che hai escluso
 function alimentoEscluso(nome) {
-  const cat = categorieEscluse(), firma = [...cat].sort().join(",");
-  if (!cat.size) return false;
+  const pf = leggiProfilo(), cat = categorieEscluse(pf), altri = (pf.esclusioni || {}).altri || [], firma = [...cat].sort().join(",") + "|" + altri.join(",");
+  if (!cat.size && !altri.length) return false;
   if (firma !== _escluseFirma) { _escluseFirma = firma; _escluseCache = new Map(); }
   if (_escluseCache.has(nome)) return _escluseCache.get(nome);
-  const n = String(nome).toLowerCase(), si = [...cat].some(c => CATEGORIE_CIBO[c] && CATEGORIE_CIBO[c].test(n));
+  const n = String(nome).toLowerCase(), si = [...cat].some(c => CATEGORIE_CIBO[c] && CATEGORIE_CIBO[c].test(n)) || ciboScrittoAMano(nome, pf);
   _escluseCache.set(nome, si); return si;
 }
 // una ricetta è esclusa se uno dei suoi ingredienti lo è (il nome della ricetta non conta: «pancake» senza uova restano)
@@ -136,6 +140,7 @@ const basaleDelProfilo = (p) => basaleMifflin({ uomo: p.sesso === "uomo", eta: p
 function salvaProfilo(p) {
   if (p.bmrAuto) { const b = basaleDelProfilo(p); if (b) p.bmr = b; }
   localStorage.setItem("mp_profilo", JSON.stringify(p)); calcolaTarget();
+  if (typeof aggiornaBarraProfilo === "function") aggiornaBarraProfilo();
 }
 // gli sport tra cui scegliere: quelli «tolti» restano salvati (nascosto: true) perché i giorni passati li usano ancora
 const leggiSport = () => leggiProfilo().sport.filter(sp => !sp.nascosto);
@@ -989,7 +994,7 @@ function leggiTipi() {
   const t = raw ? JSON.parse(raw) : null;
   return (Array.isArray(t) && t.length === 7 && t.every(x => TIPI_GIORNATA[x])) ? t : DEFAULT_TIPI.slice();
 }
-function salvaTipi(t) { localStorage.setItem("mp_tipi", JSON.stringify(t)); }
+function salvaTipi(t) { localStorage.setItem("mp_tipi", JSON.stringify(t)); if (typeof aggiornaBarraProfilo === "function") aggiornaBarraProfilo(); }
 function targetGiorno(i) { return TIPI_GIORNATA[leggiTipi()[i]].target; }
 
 function leggiRicette() {
@@ -1560,7 +1565,34 @@ document.addEventListener("click", (e) => {
 }, true);
 // sezione evidenziata nella barra in basso
 function segnaTab(nome) { document.body.dataset.tab = nome || ""; }
-function closeModal() {
+// -------- Profilo: le modifiche si vedono subito ma vanno confermate con «Salva modifiche» (o annullate) --------
+let _profiloPrima = null;   // profilo e settimana tipo com'erano quando hai aperto il Profilo
+const statoProfilo = () => ({ profilo: localStorage.getItem("mp_profilo"), tipi: localStorage.getItem("mp_tipi") });
+// confronto per contenuto (non per ordine delle voci): toccare e ritoccare una scelta non conta come modifica
+const canonico = (raw) => { try { const ord = (v) => Array.isArray(v) ? v.map(ord) : v && typeof v === "object" ? Object.keys(v).sort().reduce((o, k) => (o[k] = ord(v[k]), o), {}) : v; return JSON.stringify(ord(JSON.parse(raw))); } catch (e) { return raw; } };
+const profiloModificato = () => { if (!_profiloPrima) return false; const s = statoProfilo(); return canonico(s.profilo) !== canonico(_profiloPrima.profilo) || canonico(s.tipi) !== canonico(_profiloPrima.tipi); };
+function aggiornaBarraProfilo() { const b = document.getElementById("pf-barra"); if (b) b.hidden = !profiloModificato(); }
+function ripristinaProfiloPrima() {
+  if (!_profiloPrima) return;
+  [["mp_profilo", _profiloPrima.profilo], ["mp_tipi", _profiloPrima.tipi]].forEach(([k, v]) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
+  calcolaTarget(); applicaPersonalizzazione(); if (typeof renderOggi === "function") renderOggi();
+}
+function chiediSalvataggioProfilo() {
+  openModal(`<h3 class="modal-title">Salvare le modifiche al Profilo?</h3><p class="hint">Hai cambiato qualcosa e non l'hai ancora salvato.</p>
+    <div class="wiz-nav"><button class="btn-sec danger" data-pf-nonsalvare>Non salvare</button><button class="btn" data-pf-salva>✓ Salva</button></div>`);
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest) return;
+  if (e.target.closest("[data-pf-salva]")) { _profiloPrima = null; closeModal(true); avviso("Profilo salvato ✓"); return; }
+  if (e.target.closest("[data-pf-nonsalvare]")) { ripristinaProfiloPrima(); _profiloPrima = null; closeModal(true); avviso("Modifiche non salvate"); return; }
+  if (e.target.closest("[data-pf-annulla]")) { ripristinaProfiloPrima(); riapriProfilo(); avviso("Modifiche annullate"); return; }
+});
+function closeModal(forza) {
+  // chiudendo il Profilo con modifiche non salvate: prima si chiede
+  if (!forza && document.getElementById("form-profilo")) {
+    if (profiloModificato()) { chiediSalvataggioProfilo(); return; }
+    _profiloPrima = null;
+  }
   if (typeof fermaFotocamera === "function") fermaFotocamera();
   if (typeof sceltaAllen !== "undefined") sceltaAllen = null;
   segnaTab(typeof vistaHome !== "undefined" ? vistaHome : "oggi");
@@ -2000,8 +2032,16 @@ function apriMenu() {
 }
 // Il questionario iniziale (una domanda alla volta) è in benvenuto.js
 document.addEventListener("click", (e) => {
-  const ad = e.target.closest && e.target.closest("[data-allen-def]");   // Profilo: quando ti alleni di solito
-  if (ad) { const pf = leggiProfilo(); pf.allenOrario = ad.dataset.allenDef; salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi(); }
+  if (e.target.closest && e.target.closest("[data-allen-ora-togli]")) {   // Profilo: togli l'orario abituale di allenamento
+    const pf = leggiProfilo(); delete pf.allenOra; delete pf.allenOrario; salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi();
+  }
+});
+// Profilo: a che ora ti alleni di solito (un orario unico; vuoto = nessuno)
+document.addEventListener("change", (e) => {
+  if (!e.target.matches || !e.target.matches("[data-allen-ora]")) return;
+  const pf = leggiProfilo(), h = oraDa(e.target.value);
+  if (h === null) delete pf.allenOra; else pf.allenOra = h;
+  salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi();
 });
 // Profilo: orari dei pasti (devono essere in ordine: colazione prima dello spuntino, e così via)
 document.addEventListener("change", (e) => {
@@ -2066,6 +2106,7 @@ function anteprimaProfiloHTML() {
 function apriProfilo() {
   editCtx = null;
   const pf = leggiProfilo();
+  if (!_profiloPrima) _profiloPrima = statoProfilo();   // aperto adesso (non ridisegnato): da qui si contano le modifiche
   openModal(`
     <h3 class="modal-title">👤 Profilo</h3>
     <div id="form-profilo">
@@ -2096,51 +2137,68 @@ function apriProfilo() {
     ${(() => { const o = orariPasti(), hh = (h) => fmtOra(h).padStart(5, "0");
       return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].map(([k, l]) =>
         `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
-    <label class="wiz-l">Di solito ti alleni</label>
-    <div class="chips">
-      <button class="chip ${pf.allenOrario === "mattina" ? "attivo" : ""}" data-allen-def="mattina">☀️ Mattina</button>
-      <button class="chip ${pf.allenOrario === "sera" ? "attivo" : ""}" data-allen-def="sera">🌙 Pomeriggio / sera</button>
-    </div>
-    ${pf.allenOrario ? "" : `<p class="hint">Ora: di sera, il sabato di mattina. Puoi sempre cambiarlo giorno per giorno.</p>`}
+    <label class="wiz-l">Di solito ti alleni alle</label>
+    <div class="pf-ora"><input class="qta-input" type="time" step="900" data-allen-ora value="${typeof pf.allenOra === "number" ? fmtOra(pf.allenOra).padStart(5, "0") : ""}">
+      ${typeof pf.allenOra === "number" || pf.allenOrario ? `<button class="btn-link" data-allen-ora-togli>✕ Nessun orario</button>` : ""}</div>
+    <p class="hint">${typeof pf.allenOra === "number" ? (pf.allenOra < 14 ? "Allenamento di mattina: il pasto dopo è il pranzo." : "Allenamento nel pomeriggio/sera: prima la merenda (pre-workout), dopo la cena.")
+      : pf.allenOrario ? `Ora: sempre di ${pf.allenOrario === "mattina" ? "mattina" : "pomeriggio/sera"}.` : "Senza orario: di sera, il sabato di mattina."} Giorno per giorno puoi sempre cambiarlo in Oggi.</p>
     <h4>Obiettivi che ne risultano</h4>
     <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
     <h4>Cosa non mangi</h4>
     ${esclusioniHTML(pf)}
     <h4>Personalizza</h4>
-    <label class="wiz-l">Il tuo nome</label>
-    <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Per salutarti in alto (facoltativo)" data-pers="nome" value="${esc(pf.nome || "")}">
-    <label class="wiz-l">Nome dell'app</label>
+    <label class="wiz-l">Il nome della tua app</label>
     <div class="pers-icone">${ICONE_APP.map(i => `<button class="qz-ico ${(pf.iconaApp || "🌙") === i ? "on" : ""}" data-pers-icona="${i}">${i}</button>`).join("")}</div>
     <input class="qta-input wiz-full" type="text" maxlength="24" placeholder="Sailor Fit" data-pers="nomeApp" value="${esc(pf.nomeApp || "")}">
-    <p class="campo-nota">Il nome sotto l'icona nella schermata Home lo decide il telefono quando aggiungi l'app.</p>
+    <p class="campo-nota">Compare in alto nell'app. Il nome sotto l'icona nella schermata Home lo decide il telefono quando aggiungi l'app.</p>
+    <label class="wiz-l">Come ti chiami? <em>(facoltativo)</em></label>
+    <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Per salutarti in alto" data-pers="nome" value="${esc(pf.nome || "")}">
     <label class="wiz-l">Colore</label>
     <div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c]) => `<button class="qz-col ${(pf.colore || "lilla") === k ? "on" : ""}" data-pers-colore="${k}" style="--c:${c}"><i></i><span>${l}</span></button>`).join("")}</div>
     <button class="btn-sec block" data-azione="rifai-questionario">📝 Rifai il questionario iniziale</button>
+    <div class="barra-salva due" id="pf-barra" ${profiloModificato() ? "" : "hidden"}><button class="btn-sec" data-pf-annulla>Annulla</button><button class="btn" data-pf-salva>✓ Salva</button></div>
 `);
 }
 // Dieta, allergie e cose che non mangi (le stesse scelte del questionario): le ricette con quei cibi non si propongono
 function esclusioniHTML(pf) {
   const e = pf.esclusioni || {}, chip = (gr, k, l, ic, on) => `<button class="chip ${on ? "attivo" : ""}" data-escl="${gr}|${k}">${ic} ${l}</button>`;
-  return `<div class="chips chips-capo">${[["tutto", "Di tutto", "🍽️"], ["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, (e.dieta || "tutto") === k)).join("")}</div>
+  return `<p class="hint">Che alimentazione segui? <em>(tocca di nuovo per togliere)</em></p><div class="chips chips-capo">${[["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, e.dieta === k)).join("")}</div>
     <p class="hint">Allergie o intolleranze</p><div class="chips chips-capo">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}</div>
-    <p class="hint">Non mangio</p><div class="chips chips-capo">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}</div>
+    <p class="hint">Non mangio</p><div class="chips chips-capo">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}
+      ${(e.altri || []).map((w, i) => `<button class="chip attivo" data-escl-togli="${i}" aria-label="Togli ${esc(w)}">✍️ ${esc(w)} ✕</button>`).join("")}</div>
+    <div class="escl-altro"><input class="qta-input" id="escl-altro" type="text" maxlength="30" placeholder="Altro: scrivi un alimento (es. kiwi)"><button class="btn lib-piu" data-escl-aggiungi aria-label="Aggiungi">＋</button></div>
     <p class="campo-nota">Le ricette con questi cibi non ti vengono proposte. L'app riconosce gli alimenti dal nome e può sbagliare: per le allergie controlla sempre gli ingredienti.</p>`;
 }
 // Profilo: tocchi su cibi esclusi, icona e colore; testi del nome
 document.addEventListener("click", (e) => {
   if (!e.target.closest || !e.target.closest("#modal-content")) return;
   const es = e.target.closest("[data-escl]"), ic = e.target.closest("[data-pers-icona]"), co = e.target.closest("[data-pers-colore]");
-  if (!es && !ic && !co) return;
+  const ea = e.target.closest("[data-escl-aggiungi]"), et = e.target.closest("[data-escl-togli]");
+  if (!es && !ic && !co && !ea && !et) return;
   const pf = leggiProfilo();
+  if (ea || et) {   // cibi scritti a mano
+    const x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {}), altri = x.altri = (x.altri || []).slice();
+    if (et) altri.splice(+et.dataset.esclTogli, 1);
+    else {
+      const inp = document.getElementById("escl-altro"), v = String((inp && inp.value) || "").trim();
+      if (normCibo(v).length < 3) { avviso("Scrivi almeno 3 lettere"); return; }
+      if (!altri.some(w => normCibo(w) === normCibo(v))) altri.push(v);
+    }
+  }
   if (es) {
-    const [gr, k] = es.dataset.escl.split("|"), x = pf.esclusioni = Object.assign({ dieta: "tutto", allergie: [], nonMangio: [] }, pf.esclusioni || {});
-    if (gr === "dieta") x.dieta = k;
+    const [gr, k] = es.dataset.escl.split("|"), x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {});
+    if (gr === "dieta") { if (x.dieta === k) delete x.dieta; else x.dieta = k; }   // un secondo tocco la toglie
     else { const l = x[gr] = (x[gr] || []).slice(), p = l.indexOf(k); if (p > -1) l.splice(p, 1); else l.push(k); }
   }
   if (ic) pf.iconaApp = ic.dataset.persIcona;
   if (co) pf.colore = co.dataset.persColore;
+  { const x = pf.esclusioni;   // niente escluso: il profilo torna esattamente com'era (anche per la barra «Salva»)
+    if (x) { ["allergie", "nonMangio", "altri"].forEach(k => { if (Array.isArray(x[k]) && !x[k].length) delete x[k]; }); if (!Object.keys(x).length) delete pf.esclusioni; } }
   salvaProfilo(pf); applicaPersonalizzazione(); riapriProfilo();
   if (typeof renderOggi === "function") renderOggi();
+});
+document.addEventListener("keydown", (e) => {   // «Altro: scrivi un alimento»: Invio = aggiungi
+  if (e.key === "Enter" && e.target.id === "escl-altro") { e.preventDefault(); const b = document.querySelector("[data-escl-aggiungi]"); if (b) b.click(); }
 });
 document.addEventListener("input", (e) => {
   if (!e.target.matches || !e.target.matches("[data-pers]")) return;
@@ -2702,7 +2760,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "vai-ricette") apriListaRicette();
       else if (az.dataset.azione === "ricette-da-pasto") apriListaRicette(false, true);
       else if (az.dataset.azione === "profilo-salva") salvaProfiloForm();
-      else if (az.dataset.azione === "rifai-questionario") { closeModal(); setTimeout(() => apriQuestionario(true), 0); }
+      else if (az.dataset.azione === "rifai-questionario") { _profiloPrima = null; closeModal(true); setTimeout(() => apriQuestionario(true), 0); }
       else if (az.dataset.azione === "profilo-default") {
         document.querySelectorAll("[data-profilo]").forEach(inp => { inp.value = PROFILO_DEFAULT[inp.dataset.profilo] ?? ""; });
         aggiornaAnteprimaProfilo();

@@ -2004,3 +2004,18 @@ button.ant-fit.on { border-style: solid; background: rgba(var(--lilla-rgb),.20);
 /* righe di scelte nel Profilo: vanno a capo invece di scorrere di lato (scorrendo il Profilo non si spostano) */
 .chips.chips-capo { flex-wrap: wrap; overflow: visible; }
 .rec-testa { white-space: pre; }
+
+/* il pannello non scivola mai di lato (su iPhone alcuni campi, es. gli orari, hanno una larghezza minima propria) */
+.modal-sheet { overflow-x: hidden; }
+.bmr-griglia > * { min-width: 0; }
+.et-campo input[type="time"] { width: 100%; min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
+.qz-ora input[type="time"], .pf-ora input[type="time"] { min-width: 0; max-width: 50%; -webkit-appearance: none; appearance: none; }
+.pf-ora { display: flex; align-items: center; gap: 12px; }
+.pf-ora .qta-input { flex: 0 1 140px; }
+.escl-altro { display: flex; gap: 8px; margin: 2px 0 10px; }
+.escl-altro .qta-input { flex: 1 1 auto; min-width: 0; text-align: left; }
+.escl-altro .lib-piu { flex: 0 0 52px; width: 52px; min-width: 52px; padding: 0; margin: 0; }
+#pf-barra[hidden] { display: none; }
+/* un po' d'aria tra campi e note nel Profilo */
+#modal-content .qta-input + .campo-nota, #modal-content .pf-ora + .hint, #modal-content .escl-altro + .campo-nota { margin-top: 8px; }
+#modal-content .wiz-l em, #modal-content .hint em { font-style: normal; color: var(--muted); font-weight: 400; }

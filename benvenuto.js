@@ -16,8 +16,9 @@ const QZ_PASTI = [["Colazione", "☕", "colazione"], ["Spuntino", "🍎", "matti
 const QZ_GIORNI = [["Lunedì", "L", 0], ["Martedì", "M", 1], ["Mercoledì", "M", 2], ["Giovedì", "G", 3], ["Venerdì", "V", 4], ["Sabato", "S", 5], ["Domenica", "D", 6]];
 const QZ_OBIETTIVI = [["Dimagrire", "📉", "dimagrire", 15], ["Mantenere il peso", "⚖️", "mantenere", 0], ["Mettere massa", "💪", "massa", -10]];
 const QZ_LAVORO = [["Seduta/o quasi tutto il giorno", "🪑", "seduto", 1.2], ["In piedi o in movimento", "🚶", "piedi", 1.35], ["Lavoro fisico", "🧱", "fisico", 1.5]];
-const QZ_ORA_ALLEN = [["Mattina", "🌅", "mattina"], ["Pausa pranzo", "🍽️", "pranzo"], ["Pomeriggio", "☀️", "pomeriggio"], ["Sera", "🌙", "sera"]];
-const QZ_DIETA = [["Mangio di tutto", "🍽️", "tutto"], ["Vegetariana/o", "🥕", "vegetariana"], ["Vegana/o", "🌱", "vegana"]];
+// la fascia scelta diventa un orario (modificabile poi nel Profilo): prima delle 14 conta come mattina
+const QZ_ORA_ALLEN = [["Mattina", "🌅", "mattina", 7.5], ["Pausa pranzo", "🍽️", "pranzo", 13], ["Pomeriggio", "☀️", "pomeriggio", 17], ["Sera", "🌙", "sera", 19]];
+const QZ_DIETA = [["Vegetariana", "🥕", "vegetariana"], ["Vegana", "🌱", "vegana"]];
 const QZ_NESSUNO = "nessuno";
 
 const senzaSport = (R) => !(R.sport || []).length || (R.sport || []).includes(QZ_NESSUNO);
@@ -35,10 +36,11 @@ const QZ = [
   { k: "oraAllen", t: "u", e: "🕒", q: "A che ora ti alleni di solito?", o: QZ_ORA_ALLEN, salta: senzaSport },
   { k: "pasti", t: "m", e: "🍽️", q: "Quali pasti fai ogni giorno?", o: QZ_PASTI, req: 1 },
   { k: "orari", t: "orari", e: "⏰", q: "A che ora mangi, più o meno?", nota: "Servono a sapere qual è il prossimo pasto e quando un pasto è passato." },
-  { k: "dieta", t: "u", e: "🥗", q: "Come mangi?", o: QZ_DIETA },
+  { k: "dieta", t: "u", e: "🥗", q: "Segui un'alimentazione particolare?", o: QZ_DIETA, opz: 1, nota: "Se no, vai avanti. Tocca di nuovo per togliere la scelta." },
   { k: "allergie", t: "m", e: "⚠️", q: "Hai allergie o intolleranze?", o: [["Nessuna", "👍", QZ_NESSUNO]].concat(ALLERGIE.map(([v, l, e]) => [l, e, v])), excl: QZ_NESSUNO,
     nota: "Le ricette con questi alimenti non ti verranno proposte. L'app riconosce gli alimenti dal nome e può sbagliare: controlla sempre gli ingredienti." },
-  { k: "nonMangio", t: "m", e: "🚫", q: "C'è qualcosa che non mangi proprio?", o: [["Niente, mangio tutto", "👍", QZ_NESSUNO]].concat(NON_MANGIO.map(([v, l, e]) => [l, e, v])), excl: QZ_NESSUNO },
+  { k: "nonMangio", t: "m", e: "🚫", q: "C'è qualcosa che non mangi proprio?", o: [["Niente, mangio tutto", "👍", QZ_NESSUNO]].concat(NON_MANGIO.map(([v, l, e]) => [l, e, v])), excl: QZ_NESSUNO,
+    altro: "nonMangioAltri", altroPh: "Altro: scrivi tu (es. kiwi, sedano)" },
   { k: "colore", t: "colore", e: "🎨", q: "Scegli il colore della tua app" },
   { k: "nomeApp", t: "nomeApp", e: "✏️", q: "Come vuoi chiamare la tua app?" },
   { k: "fine", t: "riepilogo", e: "🎉", q: "Ecco il tuo punto di partenza" },
@@ -62,10 +64,10 @@ function qzRisposteAttuali() {
     nome: pf.nome || "", sesso: pf.sesso || "", eta: pf.eta || "", altezza: pf.altezza || "", peso: pf.peso || "", obiettivo: ob, lavoro: lav,
     sport: sport.length ? sport.map(daSport).filter(Boolean) : [QZ_NESSUNO],
     giorni: tipi.map((t, i) => sportDelTipo(t).length ? i : -1).filter(i => i >= 0),
-    oraAllen: pf.allenOrario === "mattina" ? "mattina" : pf.allenOrario === "sera" ? "sera" : "",
+    oraAllen: typeof pf.allenOra === "number" ? (pf.allenOra < 11 ? "mattina" : pf.allenOra < 14 ? "pranzo" : pf.allenOra < 18 ? "pomeriggio" : "sera") : pf.allenOrario === "mattina" ? "mattina" : pf.allenOrario === "sera" ? "sera" : "",
     pasti: Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_TEMPO.slice(),
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, o[p]])),
-    dieta: e.dieta || "tutto", allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
+    dieta: e.dieta || "", nonMangioAltri: (e.altri || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
     colore: pf.colore || "lilla", iconaApp: pf.iconaApp || "🌙", nomeApp: pf.nomeApp || "Sailor Fit",
   };
 }
@@ -119,6 +121,7 @@ function qzRender() {
   } else if (q.t === "u" || q.t === "m") {
     const sel = q.t === "m" ? (v || []) : (v ? [v] : []);
     h += `<div class="qz-sc ${q.k === "giorni" ? "qz-giorni" : ""}">${q.o.map((o, i) => `<button class="qz-b ${sel.includes(o[2]) ? "on" : ""}" data-qz-o="${i}">${o[1] ? `<span class="qz-e">${o[1]}</span>` : ""}<span>${esc(o[0])}</span></button>`).join("")}</div>`;
+    if (q.altro) h += `<input class="qz-inp qz-altro" id="qz-altro" type="text" placeholder="${esc(q.altroPh || "Altro")}" value="${esc(R[q.altro] || "")}">`;
     if (q.t === "m") h += `<p class="qz-pic">Puoi sceglierne più di uno</p>`;
   } else if (q.t === "orari") {
     const scelti = QZ_PASTI.filter(p => (R.pasti || []).includes(p[2]));
@@ -158,6 +161,7 @@ document.addEventListener("input", (e) => {
   if (!qz || !e.target.closest || !e.target.closest("#qz")) return;
   const q = QZ[qz.step];
   if (e.target.id === "qz-inp") { qz.R[q.k] = e.target.value; qzSalva(); qzAggiornaBtn(); }
+  if (e.target.id === "qz-altro") { qz.R[q.altro] = e.target.value; qzSalva(); return; }
   if (e.target.id === "qz-nome-app") { qz.R.nomeApp = e.target.value; const a = document.querySelector(".qz-anteprima"); if (a) a.textContent = `${qz.R.iconaApp} ${qz.R.nomeApp || "Sailor Fit"}`; qzSalva(); qzAggiornaBtn(); }
 });
 document.addEventListener("change", (e) => {
@@ -176,7 +180,7 @@ document.addEventListener("click", (e) => {
   const ob = e.target.closest("[data-qz-o]");
   if (ob) {
     const val = q.o[+ob.dataset.qzO][2];
-    if (q.t === "u") qz.R[q.k] = val;
+    if (q.t === "u") { if (qz.R[q.k] === val) delete qz.R[q.k]; else qz.R[q.k] = val; }   // un secondo tocco toglie la scelta
     else {
       let cur = (qz.R[q.k] || []).slice(); const p = cur.indexOf(val);
       if (q.excl && val === q.excl) cur = p > -1 ? [] : [val];
@@ -207,10 +211,13 @@ function qzFine() {
     fattoreAttivita: (QZ_LAVORO.find(x => x[2] === R.lavoro) || QZ_LAVORO[0])[3],
     pasti: ORDINE_TEMPO.filter(p => (R.pasti || []).includes(p)),
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, R.orari[p]])),
-    esclusioni: { dieta: R.dieta || "tutto", allergie: (R.allergie || []).filter(x => x !== QZ_NESSUNO), nonMangio: (R.nonMangio || []).filter(x => x !== QZ_NESSUNO) },
+    esclusioni: { allergie: (R.allergie || []).filter(x => x !== QZ_NESSUNO), nonMangio: (R.nonMangio || []).filter(x => x !== QZ_NESSUNO),
+      altri: String(R.nonMangioAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3) },
     colore: R.colore || "lilla", iconaApp: R.iconaApp || "🌙", nomeApp: String(R.nomeApp || "").trim() || "Sailor Fit",
   });
-  if (!senzaSport(R)) pf.allenOrario = R.oraAllen === "pomeriggio" || R.oraAllen === "sera" ? "sera" : "mattina";
+  if (R.dieta) pf.esclusioni.dieta = R.dieta;
+  if (!pf.esclusioni.altri.length) delete pf.esclusioni.altri;
+  if (!senzaSport(R) && R.oraAllen) { pf.allenOra = (QZ_ORA_ALLEN.find(x => x[2] === R.oraAllen) || [])[3]; delete pf.allenOrario; }
   if (!pf.nome) delete pf.nome;
   if (nuovo) Object.assign(pf, { protKg: 1.8, grassiKg: 0.9, recupero: 80 });   // chi rifà il questionario tiene i suoi macro
   // sport: quelli scelti si vedono (anche se erano stati tolti), quelli nuovi si aggiungono; per una persona nuova gli altri si nascondono

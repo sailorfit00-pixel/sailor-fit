@@ -19,7 +19,12 @@ const NomePasto = (p, data) => { const n = nomePasto(p, data); return n.charAt(0
 const conSport = (data) => sportDelTipo(giornoDiario(data).tipo).some(id => id !== "camminata");   // una semplice camminata non cambia i pasti (niente pre-workout)
 // a che ora ti alleni: quello scelto per quel giorno, altrimenti il tuo orario abituale (Profilo);
 // senza orario abituale (i profili di prima): di sera tranne il sabato mattina
-const orarioAllen = (data) => giornoDiario(data).orario || (typeof leggiProfilo === "function" && leggiProfilo().allenOrario) || (indiceSettimana(data) === 5 ? "mattina" : "sera");
+const orarioAllen = (data) => {
+  const g = giornoDiario(data).orario; if (g) return g;   // scelto per quel giorno in Oggi
+  const pf = typeof leggiProfilo === "function" ? leggiProfilo() : {};
+  if (typeof pf.allenOra === "number") return pf.allenOra < 14 ? "mattina" : "sera";   // il tuo orario abituale: prima delle 14 conta come mattina
+  return pf.allenOrario || (indiceSettimana(data) === 5 ? "mattina" : "sera");
+};
 
 // -------- I tuoi orari dei pasti (Profilo) --------
 // ore decimali (13.5 = 13:30); senza orari salvati valgono questi, quelli di sempre
