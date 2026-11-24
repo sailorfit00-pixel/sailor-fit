@@ -256,11 +256,23 @@ function suggerimentiMacro(diff, esclusi = []) {
 //   salva(pasto)    -> dove salvare il pasto
 //   elimina         -> (facoltativo) funzione
 //   etichettaSalva  -> testo del pulsante di salvataggio
+// Il contenuto del pannello del pasto in un solo blocco, con fuori solo la barra «Salva»: così, a pannello alto e fisso,
+// la barra sta sempre in fondo e gli spazi tra i blocchi restano quelli di sempre
+function corpoPasto(html) {
+  const t = document.createElement("template"); t.innerHTML = html;
+  const barra = [...t.content.children].find(e => e.classList.contains("barra-salva"));
+  const corpo = document.createElement("div"); corpo.className = "lib-corpo";
+  [...t.content.childNodes].filter(n => n !== barra).forEach(n => corpo.appendChild(n));
+  t.content.insertBefore(corpo, t.content.firstChild);
+  return t.innerHTML;
+}
 function apriEditorPasto(ctx, items, nome, ricalcola = true) {
   editCtx = null;
   liberoCtx = Object.assign({ items: items || [], nome: nome || "", ignoto: null }, ctx);
   if (ricalcola && liberoCtx.items.length) ricalcolaLibero();
-  openModal(liberoHTML());
+  openModal(corpoPasto(liberoHTML()));
+  // il pannello del pasto si apre subito alto quanto può: cambiando quantità o consigli il bordo in alto resta fermo (niente salti sotto il dito)
+  document.querySelector("#modal .modal-sheet").classList.add("foglio-pieno");
   if (liberoCtx.vivo && !liberoCtx.items.length) rifocusInput();   // pasto vuoto: si scrive subito
 }
 // -------- Suggerimenti mentre scrivi: già dalla prima lettera --------
@@ -421,7 +433,7 @@ function rirenderLibero() {
   const sc = sheet ? sheet.scrollTop : 0;
   const pagina = !!(cb && (cb.ignoto || cb.ignotoNuovo || cb.scansione)), cambiata = !!cb && cb._pagina !== pagina;   // entrando o uscendo dal nuovo alimento si riparte dall'alto
   if (cb) cb._pagina = pagina;
-  document.getElementById("modal-content").innerHTML = liberoHTML();
+  document.getElementById("modal-content").innerHTML = corpoPasto(liberoHTML());
   const s2 = document.querySelector(".modal-sheet");
   if (s2) s2.scrollTop = cambiata ? 0 : sc;
 }
@@ -1696,7 +1708,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (it && t.isConnected && document.activeElement !== t) { nomeComeTesto(t, it); const b = document.getElementById("lib-sost"); if (b) b.remove(); }
     }, 350);
   });
-  mc.addEventListener("focusin", (e) => {
+  // i mangiati di recente si aprono solo quando TU tocchi la barra di ricerca (non dopo ogni aggiunta, quando il campo resta attivo da solo)
+  mc.addEventListener("click", (e) => {
     if (!liberoCtx || e.target.id !== "lib-input" || e.target.value.trim()) return;
     mostraAutocompleta("");
     // la lista appare sotto il dito mentre il pannello si allunga: per un attimo non prende tocchi (niente aggiunte per sbaglio)

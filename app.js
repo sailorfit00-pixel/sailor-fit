@@ -178,6 +178,7 @@ if (window.visualViewport) {
   };
   vv.addEventListener("resize", aggiornaTastiera);
   vv.addEventListener("scroll", aggiornaTastiera);
+  window.addEventListener("resize", aggiornaTastiera);   // Android: con la tastiera si accorcia tutta la finestra (non sempre arriva l'avviso del visualViewport)
   document.addEventListener("focusin", () => setTimeout(aggiornaTastiera, 300));
   document.addEventListener("focusout", () => { setTimeout(aggiornaTastiera, 300); setTimeout(aggiornaTastiera, 700); });
   // ricontrollo dopo ogni tocco: su iPhone la tastiera a volte si chiude senza avvisare (e il pannello restava alto, con una striscia vuota sotto)
@@ -1624,6 +1625,7 @@ function openModal(html) {
   m.hidden = false;
   document.body.classList.add("no-scroll");
   m.querySelector(".modal-sheet").scrollTop = 0;
+  m.querySelector(".modal-sheet").classList.remove("foglio-pieno");   // solo il pannello del pasto resta a tutta altezza (lo rimette apriEditorPasto)
 }
 // Dopo la chiusura di un pannello, su iPhone un tocco può "ripetersi" sulla schermata
 // sotto (es. finire su 📊): per mezzo secondo i tocchi fuori dai pannelli si ignorano.
