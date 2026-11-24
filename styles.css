@@ -2078,7 +2078,7 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 /* ✕ sempre visibile: grip e ✕ stanno in una testata che resta in alto mentre scorri.
    Ferma in cima è trasparente (la ✕ resta accanto al titolo come prima); scorrendo diventa una fascia del colore del pannello,
    così il contenuto le passa sotto e la ✕ non copre più l'angolo delle schede */
-.modal-testa { position: sticky; top: -10px; z-index: 8; height: 64px; margin: -10px -18px -36px; padding: 10px 18px 0; pointer-events: none; transition: background-color .15s, box-shadow .15s; }
+.modal-testa { position: sticky; top: -10px; z-index: 8; height: 64px; margin: -10px -18px -36px; padding: 10px 18px 0; pointer-events: none; }   /* nessuna dissolvenza: la fascia compare subito, così scorrendo veloce il contenuto non passa mai sopra la ✕ */
 .modal-testa.scorre { background: var(--card); box-shadow: 0 1px 0 var(--line2); }
 .modal-testa .modal-grip { margin-top: 4px; }
 .modal-testa .modal-close { pointer-events: auto; position: absolute; top: 28px; right: 18px; margin: 0; box-shadow: none; z-index: 1; }

@@ -188,6 +188,8 @@ const puoUsareCucchiai = (nome) => A_CUCCHIAI.test(nome);
 const unitaDi = (it) => {
   const u = it.unita || unitaPreferita(it.nome);
   if (u === "pz" && !(window.PESO_PZ || {})[it.nome]) return "g";
+  // senza un'unità scelta per questa riga: i pezzi solo se tornano (interi o mezzi), altrimenti grammi («165 g di banana», non «1,4 banane»)
+  if (u === "pz" && !it.unita && +it.qta > 0 && typeof pezziPuliti === "function" && !pezziPuliti(it.nome, it.qta / window.PESO_PZ[it.nome])) return UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
   if ((u === "cucchiaio" || u === "cucchiaino") && !puoUsareCucchiai(it.nome)) return "g";
   return u;
 };
@@ -984,7 +986,8 @@ function righeSolaLetturaHTML(items) {
   return `<ul class="pm-sola-lista">${items.map(it => {
     const u = unitaDi(it), gu = grammiPerUnita(it.nome, u), ug = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
     const NOMI = { pz: "pz", cucchiaio: "cucc.", cucchiaino: "c.ino" };
-    const q = (it.unita || "g") === "q.b." && !(it.qta > 0) ? "q.b." : gu ? `${fmtQta(it.qta / gu)} ${NOMI[u] || u} <small>≈ ${Math.round(it.qta)} ${ug}</small>` : `${Math.round(it.qta)} ${ug}`;
+    const pezzi = !!gu;   // l'unità la decide unitaDi (pezzi solo se tornano, altrimenti grammi)
+    const q = (it.unita || "g") === "q.b." && !(it.qta > 0) ? "q.b." : pezzi ? `${fmtQta(it.qta / gu)} ${NOMI[u] || u} <small>≈ ${Math.round(it.qta)} ${ug}</small>` : `${Math.round(it.qta)} ${ug}`;
     return `<li><span>${esc(it.nome)}</span><b>${q}</b></li>`;
   }).join("")}</ul>`;
 }
@@ -1256,7 +1259,8 @@ function liberoHTML() {
     const pl = typeof FORME_PEZZI !== "undefined" && FORME_PEZZI[it.nome] ? FORME_PEZZI[it.nome][conta > 1 ? 1 : 0]
       : (conta > 1 && /^[a-zà-ù]+a$/.test(nm) && nm !== "uova") ? nm.replace(/cia$/, "ce").replace(/gia$/, "ge").replace(/ca$/, "che").replace(/ga$/, "ghe").replace(/a$/, "e") : nm;   // «uova» è già plurale; arancia → arance
     // riepilogo: «1 pesca», «150 g di yogurt greco», «2 cucchiai di burro di arachidi»; dentro la scheda c'è il contatore
-    const riepilogo = !gu ? `${Math.round(it.qta)} ${ug} di ${nm}`
+    const inGrammi = !gu;   // l'unità la decide unitaDi: pezzi solo se tornano, oppure se li hai scelti tu per questa riga
+    const riepilogo = inGrammi ? `${Math.round(it.qta)} ${ug} di ${nm}`
       : u === "pz" ? `${fmtQta(conta)} ${pl}`
       : `${fmtQta(conta)} ${u === "cucchiaio" ? (conta > 1 ? "cucchiai" : "cucchiaio") : (conta > 1 ? "cucchiaini" : "cucchiaino")} di ${nm}`;
     const ABBR = { pz: "pz", g: "g", ml: "ml", cucchiaio: "cucchiai", cucchiaino: "cucchiaini" };
@@ -1272,7 +1276,7 @@ function liberoHTML() {
     const aperta = !bloccato && !!(c.vociAperte && c.vociAperte.has(it.nome));
     return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
       <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura pm-fissa" : ""}"${bloccato ? "" : ` data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}"`}>
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu && !inGrammi ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${avvT && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}${bloccato ? "" : frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>${!bloccato && (aperta || c.ultimoAgg === it.nome) ? presetHTML(k) : ""}${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
@@ -1358,11 +1362,19 @@ function salvaPiattoComeRicetta(c, nomeScritto) {
   avviso(`✓ “${nome}” salvato nelle ricette`);
   return true;
 }
+// A pezzi solo se i pezzi «tornano»: interi o mezzi per quelli grandi (½ banana, 1½ mele), interi per quelli piccoli (mandorle, gallette).
+// Altrimenti si scrive in grammi, che possono essere qualsiasi («165 g di banana»): niente «1,4 banane»
+function pezziPuliti(nome, conta) {
+  const pz = (window.PESO_PZ || {})[nome] || 0, m = pz >= 30 ? 2 : 1;
+  return conta >= (m === 2 ? 0.5 : 1) - 0.02 && Math.abs(conta * m - Math.round(conta * m)) < 0.04;
+}
+// nei nomi dei pasti alcuni alimenti dal nome lungo si accorciano (il nome completo resta nella riga dell'ingrediente)
+const NOMI_BREVI = { "Proteine vegetali in polvere (pisello)": "proteine di pisello", "Whey protein (proteine del siero)": "proteine whey" };
 function nomeAutomatico(items) {
   const n = items.map(x => { // tutti gli ingredienti, uno per uno; quelli a pezzi con la quantità davanti ("1 mela")
-    const nome = (x.cercato || x.nome).toLowerCase();
+    const nome = NOMI_BREVI[x.nome] && (!x.cercato || x.cercato === x.nome) ? NOMI_BREVI[x.nome] : (x.cercato || x.nome).toLowerCase();
     const u = x.qta ? unitaDi({ nome: x.nome, unita: x.unita }) : "g", gu = u === "pz" ? grammiPerUnita(x.nome, u) : 0;
-    return gu ? nomeConNumero(x.nome, x.qta / gu) : nome; // 1 → "uovo"; più di uno → "2 uova"
+    return gu && pezziPuliti(x.nome, x.qta / gu) ? nomeConNumero(x.nome, x.qta / gu) : nome; // 1 → "uovo"; più di uno → "2 uova"; pezzi che non tornano: solo il nome
   });
   if (!n.length) return "Pasto libero";
   const s = n.join(", ");
@@ -1631,6 +1643,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const st = e.target.closest("[data-lib-step]");
     if (st) {
       const it = c.items[+st.dataset.libStep], d = +st.dataset.d, { gu, passo } = passoQuantita(it);
+      if (gu && !it.unita) it.unita = unitaDi(it);   // l'unità che vedi resta quella mentre la cambi (niente salti da pezzi a grammi)
       const att = gu ? it.qta / gu : it.qta;
       const nuovo = gu ? prossimoMultiplo(att, d, passo)
         : Math.max(1, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10)    // grammi: di 10 in 10, sotto i 10 di 1 in 1
@@ -1691,7 +1704,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const v = leggiNumero(q.value);
       const pz = +q.dataset.pz || 0;
       if (!isNaN(v) && v === 0) { const cestino = document.querySelector(`[data-lib-del="${+q.dataset.libQta}"]`); if (cestino) { cestino.click(); return; } }   // 0 = lo tolgo: come il cestino, con Annulla
-      if (!isNaN(v) && v >= 0) { it.qta = Math.round(pz ? v * pz : v); it.lock = true; }
+      if (!isNaN(v) && v >= 0) { if (!it.unita) it.unita = unitaDi(it); it.qta = Math.round(pz ? v * pz : v); it.lock = true; }   // scritto in pezzi: resta in pezzi
       ricalcolaLibero(); rirenderLibero(); return;
     }
     const us = e.target.closest("[data-lib-unita-sel]");

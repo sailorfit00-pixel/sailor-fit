@@ -1081,6 +1081,10 @@ const PIATTI_COMPOSTI = {
     { P: "Yogurt di soia", C: "Gallette di riso", F: "Semi di zucca" },
     { P: "Yogurt di soia", C: "Fiocchi d'avena", F: "Noci", V: ["Frutti rossi", 100] },
     { P: "Proteine vegetali in polvere (pisello)", C: "Fiocchi d'avena", F: "Semi di chia", V: ["Bevanda di soia", 200] },   // porridge proteico vegano
+    // vegani anche senza soia (niente yogurt di soia, tofu, edamame, bevanda di soia)
+    { P: "Proteine vegetali in polvere (pisello)", C: "Fiocchi d'avena", F: "Semi di chia", V: ["Bevanda di avena", 200] },
+    { P: "Proteine vegetali in polvere (pisello)", C: "Banana", F: "Burro di mandorle", V: ["Bevanda di riso", 200] },
+    { P: "Proteine vegetali in polvere (pisello)", C: "Gallette di riso", F: "Burro di mandorle", V: ["Frutti rossi", 100] },
     // senza latticini ma non vegani: salate all'italiana e con gli albumi (prima restava solo il tofu)
     { P: "Bresaola", C: "Pane integrale", F: "Avocado", V: ["Pomodoro", 100] },
     { P: "Fesa di tacchino", C: "Pane integrale", F: "Olio EVO", V: ["Pomodoro", 100] },
@@ -1106,6 +1110,11 @@ const PIATTI_COMPOSTI = {
     { P: "Proteine vegetali in polvere (pisello)", C: "Banana", V: ["Bevanda di soia", 200] },   // frullato proteico vegano
     { P: "Edamame", C: "Mela", F: "Mandorle" },
     { P: "Yogurt di soia", C: "Datteri", F: "Mandorle", V: ["Frutti rossi", 80] },
+    // vegani senza soia
+    { P: "Proteine vegetali in polvere (pisello)", C: "Banana", V: ["Bevanda di avena", 200] },
+    { P: "Proteine vegetali in polvere (pisello)", C: "Mela", F: "Mandorle" },
+    { P: "Hummus", C: "Gallette di riso", V: ["Carote", 100] },
+    { C: "Pera", F: "Mandorle" },
   ],
   pre: [   // prima dell'allenamento: niente grassi né fibre
     { P: "Yogurt greco 0%", C: "Banana" },
@@ -1288,6 +1297,7 @@ function ingrandisciGiorno(data, slot, largo) {   // largo: «Compila» può alz
       const wp = pesoPasto(p.pasto);
       (p.ingredienti || []).forEach((ing, ii) => {
         const a = A[ing.nome], k = pi + "|" + ii; if (!a || ing.unita === "q.b." || !(ing.qta > 0) || bloccati.has(k)) return;
+        if (ing.unita === "g" && (PZ[ing.nome] || 0) >= 60 && (!window.pzPredefinito || window.pzPredefinito(ing.nome))) return;   // frutta a pezzi: resta intera o mezza (niente «1,4 banane»)
         const base = orig.get(k) || ing.qta, passo = a[3] >= 30 ? 2 : ing.unita === "pz" ? 0.5 : 5;
         const tetto = largo && m.carboidrati > 30 && a[2] >= 20 && (p.pasto === "pranzo" || p.pasto === "cena") ? 1.6 : 1.35;
         if (ing.qta + passo > base * tetto) return;
@@ -1308,19 +1318,25 @@ function ingrandisciGiorno(data, slot, largo) {   // largo: «Compila» può alz
 // non «1,6 banane». Si arrotonda al mezzo pezzo più vicino; se il giorno poi sfora grassi o carboidrati, quella riga torna com'era
 function arrotondaPezzi(data, slot) {
   const PZ = window.PESO_PZ || {};
-  const g = giornoDiario(data);
-  g.pasti.forEach((p, pi) => { if (!(slot.has(p.pasto) && p.auto) || pastoPassato(data, p.pasto)) return;
+  const aPezzi = (n) => PZ[n] >= 60 && (!window.pzPredefinito || window.pzPredefinito(n));   // banana, mela, pera…: si leggono a pezzi
+  const g0 = giornoDiario(data); let cambiato = false;
+  g0.pasti.forEach((p, pi) => { if (!(slot.has(p.pasto) && p.auto) || pastoPassato(data, p.pasto)) return;
     (p.ingredienti || []).forEach((ing, ii) => {
-      const pz = PZ[ing.nome]; if (!pz || pz < 60 || ing.unita !== "g" || !(ing.qta > 0)) return;
-      const nuovo = Math.max(0.5, Math.round(ing.qta / pz * 2) / 2) * pz;
-      if (Math.abs(nuovo - ing.qta) < 1) return;
-      const gg = giornoDiario(data), prima = JSON.stringify(gg);
-      gg.pasti[pi].ingredienti[ii].qta = Math.round(nuovo); aggiornaMacro(gg.pasti[pi]); rinominaLibero(gg.pasti[pi]); scriviGiorno(data, gg);
-      const m = mancaData(data), T = targetData(data);
-      // all'insù non deve sforare; all'ingiù non deve lasciare la giornata più di 3% sotto l'obiettivo
-      if (m.grassi < -1 || m.carboidrati < -3 || m.kcal < -KCAL_EXTRA || m.kcal > T.kcal * 0.03) scriviGiorno(data, JSON.parse(prima));
+      const pz = PZ[ing.nome]; if (!aPezzi(ing.nome) || ing.unita !== "g" || !(ing.qta > 0)) return;
+      const n = ing.qta / pz, giu = Math.max(0.5, Math.floor(n * 2) / 2), su = Math.ceil(n * 2) / 2;
+      if (Math.abs(n - Math.round(n * 2) / 2) < 0.02) return;   // già intero o mezzo
+      // prima il mezzo pezzo più vicino; se all'insù la giornata sfora, all'ingiù (quello che manca lo recupera il resto del pasto)
+      const prove = (n - giu <= su - n ? [giu, su] : [su, giu]);
+      for (const c of prove) {
+        const gg = giornoDiario(data), prima = JSON.stringify(gg);
+        gg.pasti[pi].ingredienti[ii].qta = Math.round(c * pz); aggiornaMacro(gg.pasti[pi]); rinominaLibero(gg.pasti[pi]); scriviGiorno(data, gg);
+        const m = mancaData(data);
+        if (c > n && (m.grassi < -1 || m.carboidrati < -3 || m.kcal < -KCAL_EXTRA)) { scriviGiorno(data, JSON.parse(prima)); continue; }
+        cambiato = true; break;
+      }
     });
   });
+  if (cambiato) ingrandisciGiorno(data, slot, true);   // la frutta resta a pezzi: crescono pane, riso, olio…
 }
 // Proteine molto sopra l'obiettivo e carboidrati che mancano (es. chi mette massa): la fonte magra di proteine cala un po'
 // (mai sotto il 60% e mai sotto 60 g), così c'è posto per riso, pane, patate
