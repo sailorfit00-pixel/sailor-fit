@@ -93,10 +93,23 @@ const CATEGORIE_CIBO = {
   funghi: /fungh|porcini|champignon/,
   piccante: /piccante|peperoncino|sriracha|harissa|diavola|wasabi|curry|kimchi|garam masala/,
   miele: /miele/,
+  // allergeni che spesso sono «nascosti» in altri alimenti (tahina = sesamo, dado = sedano…): l'app è prudente
+  sesamo: /sesam|tahin|hummus|za'atar|halva/,
+  sedano: /sedano|brodo|dado|minestrone|ribollita|ragù|caponata|zuppa di legumi/,
+  senape: /senape|maionese|salsa barbecue|hot dog/,
+  arachidi: /arachid|frutta secca mista|pad thai|satay/,
+  lupini: /lupin/,
+  solfiti: /vino|spritz|prosecco|negroni|gin tonic|mojito|birra|aceto|uvetta|prugne secche|fichi secchi|albicocche secche|cranberries essiccati|frutta secca mista/,
 };
 // le scelte del questionario e del Profilo → categorie
 const ESCLUSIONI_DIETA = { tutto: [], vegetariana: ["carneRossa", "pollame", "maiale", "altraCarne", "pesce", "crostacei"], vegana: ["carneRossa", "pollame", "maiale", "altraCarne", "pesce", "crostacei", "uova", "latticini", "miele"] };
-const ALLERGIE = [["glutine", "Glutine", "🌾"], ["latticini", "Lattosio", "🥛"], ["uova", "Uova", "🥚"], ["fruttaSecca", "Frutta secca", "🥜"], ["pesce", "Pesce", "🐟"], ["crostacei", "Crostacei/molluschi", "🦐"], ["soia", "Soia", "🫛"]];
+const ALLERGIE = [["glutine", "Glutine", "🌾"], ["latticini", "Lattosio", "🥛"], ["uova", "Uova", "🥚"], ["fruttaSecca", "Frutta secca", "🌰"], ["arachidi", "Arachidi", "🥜"], ["pesce", "Pesce", "🐟"], ["crostacei", "Crostacei/molluschi", "🦐"], ["soia", "Soia", "🫛"],
+  ["sesamo", "Sesamo", "⚪"], ["sedano", "Sedano", "🥬"], ["senape", "Senape", "🟡"], ["lupini", "Lupini", "🫘"], ["solfiti", "Solfiti", "🍷"]];
+// una parola scritta a mano che è un allergene noto vale come quella categoria: «sesamo» esclude anche tahina e hummus
+const PAROLE_ALLERGENI = [[/^sesam|^tahin/, "sesamo"], [/^sedan/, "sedano"], [/^senap/, "senape"], [/^arachid|^noccioline/, "arachidi"], [/^lupin/, "lupini"], [/^solfit/, "solfiti"],
+  [/^glutin|^grano|^frument|^orzo|^segale|^farro/, "glutine"], [/^lattos|^latte|^latticin|^caseina/, "latticini"], [/^uov|^albume/, "uova"], [/^pesc[ei]$/, "pesce"], [/^crostace|^gamber|^mollusch|^frutti di mare/, "crostacei"],
+  [/^soia/, "soia"], [/^frutta (secca|a guscio)|^noci$|^nocciol|^mandorl|^pistacch|^anacard/, "fruttaSecca"]];
+const categoriaDiParola = (w) => { const n = normCibo(w); const t = PAROLE_ALLERGENI.find(([re]) => re.test(n)); return t ? t[1] : null; };
 const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/tacchino", "🍗"], ["maiale", "Maiale/salumi", "🥓"], ["pesce", "Pesce e frutti di mare", "🐟"], ["uova", "Uova", "🥚"], ["latticini", "Latticini", "🧀"], ["legumi", "Legumi", "🫘"], ["funghi", "Funghi", "🍄"], ["piccante", "Piccante", "🌶️"]];
 function categorieEscluse(pf = leggiProfilo()) {
   const e = pf.esclusioni || {};
@@ -107,7 +120,10 @@ function categorieEscluse(pf = leggiProfilo()) {
 const normCibo = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 const radiceCibo = (w) => { w = normCibo(w); return w.length >= 5 ? w.replace(/[aeio]$/, "") : w; };
 const paroleScritte = (pf) => { const e = pf.esclusioni || {}; return [...(e.allergieAltre || []), ...(e.altri || [])]; };   // allergie e cibi scritti a mano
-const ciboScrittoAMano = (nome, pf = leggiProfilo()) => { const n = normCibo(nome); return paroleScritte(pf).some(w => { const r = radiceCibo(w); return r.length >= 3 && n.includes(r); }); };
+const ciboScrittoAMano = (nome, pf = leggiProfilo()) => { const n = normCibo(nome); return paroleScritte(pf).some(w => {
+  const r = radiceCibo(w), cat = categoriaDiParola(w);
+  return (r.length >= 3 && n.includes(r)) || (cat && CATEGORIE_CIBO[cat] && CATEGORIE_CIBO[cat].test(String(nome).toLowerCase()));   // anche gli ingredienti che lo contengono
+}); };
 let _escluseFirma = null, _escluseCache = new Map();
 // true se l'alimento (dal nome) è in una categoria che hai escluso
 function alimentoEscluso(nome) {

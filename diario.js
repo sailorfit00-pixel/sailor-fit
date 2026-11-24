@@ -473,7 +473,9 @@ function porzioneSuMisura(r, target) {
     const k0 = pezziPer(r._orig, target.kcal);
     const passo = passoPezzi(r._orig);
     // mai più pezzi della ricetta intera (12 nuggets, 4 fette di frittata): il resto del pasto lo completano altri alimenti
-    const maxPz = r._orig.porzioni > 0 ? r._orig.porzioni : Infinity;
+    // ricette «a porzioni» (senza pezzo, es. udon per 3): al massimo 2 porzioni nello stesso pasto
+    const aPorzioni = !r._orig.pezzo || r._orig.pezzo === "porzione";
+    const maxPz = r._orig.porzioni > 0 ? (aPorzioni ? Math.min(2, r._orig.porzioni) : r._orig.porzioni) : (aPorzioni ? 2 : Infinity);
     let cand = [k0 - passo, k0, k0 + passo].filter(x => x >= passo && x <= maxPz);
     if (!cand.length) cand = [Math.max(passo, Math.floor(maxPz / passo) * passo)];
     const unico = r._orig.porzioni === 1;   // pezzo intero (1 wrap): non si raddoppia solo per arrivare alle kcal del pasto
@@ -645,6 +647,13 @@ function ripetiPasto(rif) {
 // Quanto un pasto si discosta dalla sua quota (più basso = meglio). Rispetto alla
 // giornata: le proteine in più pesano poco (in dimagrimento vanno bene) e i
 // grassi del singolo pasto contano meno, perché si compensano negli altri pasti.
+// proteine in più: in dimagrimento vanno bene (pesano poco); per chi mantiene o mette massa tolgono posto ai carboidrati
+let _pesoProtRaw = null, _pesoProt = 0.3;
+function pesoProteineInPiu() {
+  const raw = localStorage.getItem("mp_profilo");
+  if (raw !== _pesoProtRaw) { _pesoProtRaw = raw; let d = 15; try { const p = JSON.parse(raw) || {}; d = typeof p.deficit === "number" ? p.deficit : 15; } catch (e) {} _pesoProt = d > 0 ? 0.3 : 0.8; }
+  return _pesoProt;
+}
 function punteggioPasto(t, T) {
   const rel = (a, b) => b > 0 ? (a - b) / b : 0;
   const p = rel(t.proteine, T.proteine);
@@ -652,7 +661,7 @@ function punteggioPasto(t, T) {
   const carbo = T.carboidrati >= 8 ? Math.abs(rel(t.carboidrati, T.carboidrati)) : t.carboidrati / 15;
   const grassi = T.grassi >= 3 ? Math.abs(rel(t.grassi, T.grassi)) * 0.5 : t.grassi / 8;
   return Math.abs(rel(t.kcal, T.kcal)) * 2
-       + (p < 0 ? -p * 1.5 : p * 0.3)
+       + (p < 0 ? -p * 1.5 : p * pesoProteineInPiu())
        + carbo
        + grassi;
 }
@@ -1192,6 +1201,22 @@ function ingrandisciGiorno(data, slot, largo) {   // largo: «Compila» può alz
     if (!ok()) { scriviGiorno(data, copia); bloccati.add(best.k); }   // sforava: quell'alimento non si ritocca più
   }
 }
+// Proteine molto sopra l'obiettivo e carboidrati che mancano (es. chi mette massa): la fonte magra di proteine cala un po'
+// (mai sotto il 60% e mai sotto 60 g), così c'è posto per riso, pane, patate
+function riduciProteineInEccesso(data, slot) {
+  const A = window.ALIMENTI || {}, T = targetData(data), orig = new Map();
+  for (let giro = 0; giro < 40; giro++) {
+    const m = mancaData(data); if (-m.proteine <= T.proteine * 0.15 || m.carboidrati <= 15) return;
+    const g = giornoDiario(data); let fatto = false;
+    for (const [pi, p] of g.pasti.entries()) { if (!(slot.has(p.pasto) && p.auto) || pastoPassato(data, p.pasto)) continue;
+      for (const [ii, i] of (p.ingredienti || []).entries()) { const a = A[i.nome], k = pi + "|" + ii; if (!a || i.unita !== "g" || a[1] < 15 || a[3] > 8) continue;
+        const base = orig.get(k) || i.qta; if (i.qta - 10 < Math.max(60, base * 0.6)) continue;
+        orig.set(k, base); i.qta -= 10; aggiornaMacro(p); fatto = true; break; }
+      if (fatto) break; }
+    if (!fatto) return;
+    scriviGiorno(data, g);
+  }
+}
 // Mancano ancora grassi dopo aver ritoccato le dosi: un filo d'olio a pranzo o a cena (se non lo escludi), senza sforare
 function aggiungiCondimento(data, slot) {
   if (!(window.ALIMENTI || {})["Olio EVO"] || (typeof alimentoEscluso === "function" && alimentoEscluso("Olio EVO"))) return;
@@ -1205,6 +1230,33 @@ function aggiungiCondimento(data, slot) {
     aggiornaMacro(p); scriviGiorno(data, g);
     const dopo = mancaData(data);
     if (dopo.grassi < 0 || dopo.kcal < -KCAL_EXTRA) { scriviGiorno(data, copia); return; }   // sforava: si torna indietro
+  }
+}
+// Ancora sotto l'obiettivo di oltre il 5% (succede con pochi pasti al giorno): un contorno semplice in un pasto compilato,
+// scelto in base a cosa manca, tra gli alimenti che non escludi, senza mai superare grassi, carboidrati e kcal
+const CONTORNI = {
+  carbo: { principale: [["Riso basmati cotto", 200], ["Patate lesse", 300], ["Pane integrale", 100], ["Gallette di riso", 40]], piccolo: [["Banana", 150], ["Mela", 200], ["Gallette di riso", 30], ["Pane integrale", 60]] },   // prima i più magri
+  prot: { principale: [["Petto di pollo", 150], ["Fesa di tacchino", 150], ["Uova", 120], ["Lenticchie cotte", 200], ["Ceci cotti", 200]], piccolo: [["Yogurt greco 0%", 170], ["Skyr", 150], ["Uova", 100], ["Hummus", 60]] },
+};
+function aggiungiContorno(data, slot) {
+  const A = window.ALIMENTI || {}, T = targetData(data);
+  for (let giro = 0; giro < 3; giro++) {
+    const m = mancaData(data); if (m.kcal <= Math.max(80, T.kcal * 0.05)) return;
+    const tipo = m.carboidrati >= 20 ? "carbo" : m.proteine >= 15 ? "prot" : null; if (!tipo) return;
+    const g = giornoDiario(data), ordine = ["pranzo", "cena", "colazione", "mattina", "spuntino"];
+    const p = ordine.map(s => g.pasti.find(x => x.pasto === s && slot.has(s) && x.auto && !pastoPassato(data, s))).find(Boolean); if (!p) return;
+    const grande = p.pasto === "pranzo" || p.pasto === "cena", lista = CONTORNI[tipo][grande ? "principale" : "piccolo"];
+    const scelta = lista.find(([n]) => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n)) && !(p.ingredienti || []).some(i => i.nome === n)); if (!scelta) return;
+    const [nome, max] = scelta, a = A[nome], idx = tipo === "carbo" ? 2 : 1, manca = tipo === "carbo" ? m.carboidrati : m.proteine;
+    let gr = Math.min(max, Math.floor(manca / (a[idx] / 100) / 10) * 10, Math.floor(m.kcal / (a[0] / 100) / 10) * 10);
+    const copia = JSON.parse(JSON.stringify(g));
+    for (; gr >= 30; gr -= 10) {   // la dose più grande che sta nei limiti
+      const gg = JSON.parse(JSON.stringify(copia)), pp = gg.pasti[g.pasti.indexOf(p)];
+      pp.ingredienti.push({ nome, qta: gr, unita: "g", lock: true }); aggiornaMacro(pp); scriviGiorno(data, gg);
+      const d = mancaData(data); if (d.grassi >= -3 && d.carboidrati >= 0 && d.kcal >= -KCAL_EXTRA) break;   // i pochi grassi di riso o pane (al massimo 3 g) non contano
+      scriviGiorno(data, copia);
+    }
+    if (gr < 30) return;
   }
 }
 function riadattaSettimana(dataRif) {
@@ -1281,7 +1333,7 @@ function pianificaSettimana(dataRif, soloData, opz = {}) {   // soloData: compil
   });
   Object.entries(aggiunti).forEach(([d, set]) => {
     rifinisciGiorno(d, set); completaProteine(d, set); rifinisciGiorno(d, set);
-    ingrandisciGiorno(d, set, true); aggiungiCondimento(d, set);   // ancora sotto l'obiettivo (es. pochi grassi o pochi carboidrati): dosi un po' più grandi e un filo d'olio
+    riduciProteineInEccesso(d, set); ingrandisciGiorno(d, set, true); aggiungiCondimento(d, set); aggiungiContorno(d, set);   // ancora sotto l'obiettivo (es. pochi grassi o pochi carboidrati): dosi un po' più grandi e un filo d'olio
     const m = mancaData(d);
     if (!opz.stretto && (m.grassi < 0 || m.carboidrati < 0)) {   // il ritocco non è bastato: quei pasti si rifanno con la scelta più rigorosa
       const g = giornoDiario(d); g.pasti = g.pasti.filter(p => !(set.has(p.pasto) && p.auto)); scriviGiorno(d, g);

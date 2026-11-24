@@ -2029,3 +2029,9 @@ body.tastiera .lib-autoc { margin-bottom: 16px; }
 /* «Alimentazione e allergie»: un po' d'aria tra un gruppo e il successivo */
 #modal-content .escl-altro + .hint { margin-top: 16px; }
 .qz-altro { margin-top: 12px; }
+/* Peso su telefoni stretti: la data su una riga intera (prima si leggeva solo «24/1…»), sotto kg e Salva */
+@media (max-width: 400px) {
+  .peso-form { flex-wrap: wrap; }
+  .peso-form #peso-data { flex: 1 1 100%; }
+  .peso-form #peso-kg { flex: 1 1 auto; }
+}
