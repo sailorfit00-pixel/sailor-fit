@@ -232,6 +232,17 @@ function migraNoPeperoni() {
     if (cambiato) salvaDiario(dati);
   } catch (e) {}
 }
+// «Pasta di semola» si chiama ora «Pasta» (e «Pasta di semola cotta» → «Pasta cotta»): i dati già salvati prendono il nome nuovo, una volta sola
+function migraPastaSemola() {
+  if (localStorage.getItem("mp_migr_pasta") || typeof rinominaAlimentoTuo !== "function") return;
+  let tuoi = {}; try { tuoi = JSON.parse(localStorage.getItem("mp_alimenti_custom")) || {}; } catch (e) {}
+  [["Pasta di semola cotta", "Pasta cotta"], ["Pasta di semola", "Pasta"]].forEach(([v, n]) => {
+    if (n in tuoi) return;   // hai già un alimento tuo con quel nome: non lo tocco
+    const c = ["mp_diario", "mp_ricette_custom", "mp_ricette", "mp_piano", "mp_varianti", "mp_spesa_extra", "mp_spesa_presi", "mp_unita", "mp_incasa", "mp_incasa_q", "mp_codici", "mp_alimenti_pz", "mp_alimenti_custom"];
+    if (c.some(k => (localStorage.getItem(k) || "").includes(JSON.stringify(v)))) rinominaAlimentoTuo(v, n);
+  });
+  localStorage.setItem("mp_migr_pasta", "1");
+}
 function migraNomiRicette() {
   const A = window.ALIAS_RICETTE || {}; if (!Object.keys(A).length) return;
   let cambiato = false;
@@ -1230,7 +1241,7 @@ const FONTI_CARBO_PASTO = {
   colazione: [["Fiocchi d'avena", 80], ["Pane integrale", 100], ["Banana", 150], ["Mela", 200], ["Gallette di riso", 40]],
   spuntino: [["Banana", 150], ["Mela", 200], ["Gallette di riso", 40], ["Pane integrale", 80]],
   pre: [["Banana", 150], ["Gallette di riso", 40], ["Pane bianco", 80]],
-  principale: [["Riso basmati cotto", 300], ["Pasta di semola", 100], ["Patate", 350], ["Pane integrale", 100], ["Farro", 90]],
+  principale: [["Riso basmati cotto", 300], ["Pasta", 100], ["Patate", 350], ["Pane integrale", 100], ["Farro", 90]],
 };
 function mosseCarbo(data, p, m) {
   const A = window.ALIMENTI || {}, need = m.carboidrati, out = [];
@@ -1690,6 +1701,7 @@ document.addEventListener("DOMContentLoaded", () => {
   adattaDatiRipristinati();
   try { migraNoPeperoni(); } catch (e) {}
   try { migraNomiRicette(); } catch (e) {}
+  try { migraPastaSemola(); } catch (e) {}
   mostraVista("oggi");
   document.querySelectorAll("[data-vista]").forEach(b => b.addEventListener("click", () => mostraVista(b.dataset.vista)));
 

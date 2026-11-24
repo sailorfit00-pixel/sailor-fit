@@ -113,9 +113,13 @@ function tipoInfo(chiave) {
   const dur = durateDelTipo(k);
   const allen = sport.reduce((tot, sp) => tot + kcalSport(sp, dur[sp.id], pf), 0);
   const base = pf.bmr * 1.2;
-  const kcal = Math.max(pf.bmr, arr50(base * (1 - pf.deficit / 100) + allen * pf.recupero / 100));
-  const proteine = Math.round(pf.peso * pf.protKg / 5) * 5;
-  const grassi = Math.round(pf.peso * pf.grassiKg);
+  // obiettivi scritti da te nel Profilo (facoltativi): le kcal sono quelle di un giorno di riposo,
+  // lo sport aggiunge solo la quota «Allenamento reintegrato» (a 0% il target è uguale ogni giorno)
+  const kcal = pf.kcalMan > 0
+    ? Math.max(pf.bmr, arr50(pf.kcalMan + allen * pf.recupero / 100))
+    : Math.max(pf.bmr, arr50(base * (1 - pf.deficit / 100) + allen * pf.recupero / 100));
+  const proteine = pf.protMan > 0 ? Math.round(pf.protMan) : Math.round(pf.peso * pf.protKg / 5) * 5;
+  const grassi = pf.grassiMan > 0 ? Math.round(pf.grassiMan) : Math.round(pf.peso * pf.grassiKg);
   const carboidrati = Math.max(50, Math.round((kcal - proteine * 4 - grassi * 9) / 4 / 5) * 5);
   return (_cacheTipi[k] = {
     chiave: k,
@@ -965,7 +969,7 @@ function crudoLabel(nome, grammi) {
 }
 
 // Piatti e preparazioni che non si comprano già fatti (si preparano in casa o si mangiano fuori): non compaiono in lista
-const SPESA_COMPOSTI = /^(cappuccino|frittata|pizza|sushi|nigiri|maki|uramaki|poke|kebab|panino|hot dog|club sandwich|tramezzino|cotoletta|gyoza|involtini|lasagne|minestrone|zuppa|crema di verdure|brodo|verdure (grigliate|al forno)|caponata|rag[uù]|besciamella|suppl[iì]|crostini|caprese|ossobuco|saltimbocca|brasato|bollito|ribollita|panzanella|smoothie|frullato|cioccolata calda|gin tonic|spritz|mojito|negroni|aperitivo|salumi misti|formaggi misti|tiramis[uù]|brownie|muffin|pancake|cheesecake|crostata|torta|crepes|waffle|quesadilla|paella|pad thai|cornetto|poke|pasta (al|alla|all|cacio|ai|agli)|risotto|riso alla|insalata di riso|porridge|spremuta|pur[eèé] |purea|crocchette|vellutata|bruschetta|sugo|patate (lesse|al forno)|patatine fritte|toast|polpette|tartare|carpaccio|sashimi|arrosto|pollo arrosto|spezzatino|straccetti|tempura|pollo al curry|nachos|stufato|nuggets|bevanda isotonica|gel energetico|energy drink|maltodestrine|bcaa|glutammina|creatina|collagene|magnesio|vitamina|omega|ginseng|caseina)/i;
+const SPESA_COMPOSTI = /^(cappuccino|frittata|pizza|sushi|nigiri|maki|uramaki|poke|kebab|panino|hot dog|club sandwich|tramezzino|cotoletta|gyoza|involtini|lasagne|minestrone|zuppa|crema di verdure|brodo|verdure (grigliate|al forno)|caponata|rag[uù]|besciamella|suppl[iì]|crostini|caprese|ossobuco|saltimbocca|brasato|bollito|ribollita|panzanella|smoothie|frullato|cioccolata calda|gin tonic|spritz|mojito|negroni|aperitivo|salumi misti|formaggi misti|tiramis[uù]|brownie|muffin|pancake|french toast|cheesecake|crostata|torta|crepes|waffle|quesadilla|paella|pad thai|cornetto|poke|pasta (al|alla|all|cacio|ai|agli)|risotto|riso alla|insalata di riso|porridge|spremuta|pur[eèé] |purea|crocchette|vellutata|bruschetta|sugo|patate (lesse|al forno)|patatine fritte|toast|polpette|tartare|carpaccio|sashimi|arrosto|pollo arrosto|spezzatino|straccetti|tempura|pollo al curry|nachos|stufato|nuggets|bevanda isotonica|gel energetico|energy drink|maltodestrine|bcaa|glutammina|creatina|collagene|magnesio|vitamina|omega|ginseng|caseina)/i;
 // Reparto del supermercato per ogni ingrediente (prima regola che combacia). Non esiste «Altro»: ogni voce ha un reparto.
 function repartoDi(nome) {
   const n = nome.toLowerCase();
@@ -980,7 +984,7 @@ function repartoDi(nome) {
     ["Pane, pasta e cereali", /pane|pasta|riso|quinoa|couscous|noodles|avena|gallett|crackers|granola|tortilla|farro|bulgur|orzo|piadina|fette biscottate|polenta|miglio|grano saraceno|muesli|cornflakes|pancarr|grissini|taralli|focaccia|pita|naan|wrap|udon|spaghetti|tortellini|amaranto|pavesini|popcorn|spaghetti di soia/],
     ["Salse e spezie", /guacamole|olio|salsa|teriyaki|pesto|tahina|hummus|curry|cannella|\bsale\b|curcuma|cumino|origano|rosmarino|salvia|\btimo|alloro|zafferano|garam|peperoncino|paprika|spezie|cardamomo|chiodi di garofano|sumac|za'atar|harissa|capperi|tamari|erbe aromatiche|dado|coriandolo|erba cipollina|aceto|senape|maionese|ketchup|wasabi|zenzero|prezzemolo|basilico/],
     ["Frutta secca", /mandorl|noci|arachid|semi|sesamo|cocco|chia|datter|pistacch|nocciol|anacardi|pinoli|uvetta|prugne secche|fichi secchi|albicocche secche|bacche di goji|cranberries|frutta secca/],
-    ["Dolci", /cioccolat|biscotti|lotus|wafer|plumcake|barretta|merendin|crostata|brownie|gelato|caramell/],
+    ["Dolci", /cioccolat|biscotti|lotus|wafer|plumcake|barretta|merendin|crostata|brownie|gelato|caramell|croissant|donut/],
     ["Frutta e verdura", /avocado|banana|broccoli|carot|cetriol|fragol|frutti rossi|insalata|kiwi|lime|limone|mango|mela\b|mele\b|mirtill|arancia|peperon|pomodor|rucola|spinaci|zucchin|asparagi|cavol|funghi|cipoll|melanzan|zucca|patat|broccoletti|valeriana|rafano|porcini|scalogn|ribes|topinambur|crauti|finocchi|sedano|carota|lattuga|porri|bietol|radicch|cicoria|rape\b|ravanelli|verza|cime di rapa|indivia|carciofi|melagrana|pera\b|pesca|uva\b|ananas|anguria|melone|clementine|prugne|albicocche|mandarino|pompelmo|fichi|ciliegie|cachi|lamponi|more\b|papaya|nettarina|nespole|fico d'india|aglio|agrumi|frutta|verdur/],
   ];
   for (const [rep, re] of R) if (re.test(n)) return rep;
@@ -995,6 +999,9 @@ function repartoDi(nome) {
   }
   return "Dispensa";
 }
+// Cose che durano mesi (spezie, salse, olio, miele, frutta secca, farine…): in lista vanno in «Da controllare in dispensa», senza grammi
+const DISPENSA_FRESCHI = /hummus|pesto|guacamole|tzatziki|basilico|prezzemolo|coriandolo|erba cipollina|^zenzero$|zenzero fresco|salsa yogurt|patatine|croissant|donut|cornetto/i;   // freschi o snack che finiscono presto: restano nel loro reparto
+const durataLunga = (nome) => !DISPENSA_FRESCHI.test(nome) && (["Salse e spezie", "Dispensa", "Frutta secca"].includes(repartoDi(nome)) || /^(farina|cacao|amido|fecola|lievito)/i.test(nome));
 const ORDINE_REPARTI = [
   "Frutta e verdura", "Carne e pesce", "Latticini e uova",
   "Pane, pasta e cereali", "Legumi e scatolame", "Salse e spezie",
@@ -1045,7 +1052,7 @@ const scortaG = (nome) => leggiScorte()[nome] || paccoG(nome);
 function restoInCasa(nome) { const da = leggiInCasaRaw()[nome]; return da ? scortaG(nome) - consumatoDa(nome, da) : null; }
 const finito = (nome) => { if (scortaG(nome) <= 1) return false; const r = restoInCasa(nome);   // le cose non alimentari (detersivo, carta…) non hanno grammi: restano spuntate
    return r !== null && r < Math.max(30, scortaG(nome) * 0.12); };
-const GIORNI_PRESI = 10;
+const GIORNI_PRESI = 6;   // la spesa è settimanale: alla spesa dopo, quello spuntato la volta prima torna in lista (se l'hai mangiato)
 // v365: prima la scorta non scendeva mai sotto la confezione tipica (banane 700 g anche se ne avevi prese 5 = 600 g),
 // così finite le banane restavano «già prese». Una volta sola: le scorte gonfiate tornano alla quantità suggerita dalla lista.
 function correggiScorteGonfiate() {
@@ -1068,7 +1075,14 @@ function scadiPresi() {
   const presi = leggiPresi(); if (!presi.size) return presi;
   const c = leggiInCasaRaw(), da = addGiorniISO(oggiISO(), -GIORNI_PRESI);
   let cambiato = false;
-  [...presi].forEach(n => { if (!c[n] || c[n] < da || finito(n)) { presi.delete(n); cambiato = true; } });
+  // le voci aggiunte a mano erano da comprare una volta: comprate da 7 giorni (o già finite) spariscono, non tornano da comprare
+  const extra = leggiExtraSpesa(), da7 = addGiorniISO(oggiISO(), -7);
+  let extraCambiate = false;
+  [...presi].forEach(n => {
+    if (extra.includes(n) && (!c[n] || c[n] < da7 || finito(n))) { presi.delete(n); extra.splice(extra.indexOf(n), 1); cambiato = extraCambiate = true; return; }
+    if (!c[n] || c[n] < da || finito(n)) { presi.delete(n); cambiato = true; }
+  });
+  if (extraCambiate) salvaExtraSpesa(extra);
   if (cambiato) salvaPresi(presi);
   return presi;
 }
@@ -1078,11 +1092,9 @@ function leggiInCasa() {
 }
 
 // -------- Lista della spesa: da quello che mangi più spesso --------
-// Guarda il diario delle ultime 4 settimane: per ogni ingrediente quanti giorni
-// l'hai mangiato e quanto in media a settimana (mai meno della quantità che ne mangi di solito in un giorno). In cima ciò che mangi più spesso.
-const GIORNI_SPESA = 28;
-// Consumo per alimento nei giorni indicati: contano solo i giorni con almeno 3 pasti scritti (un giorno dimenticato non abbassa la media).
-// `g` è già «a settimana» (grammi totali / giorni validi × 7); `giorni` = in quanti dei giorni validi l'hai mangiato.
+// Guarda il diario delle ultime 2 settimane (oggi compreso): per ogni ingrediente quanti giorni l'hai mangiato
+// e quanto ne serve per una settimana di spesa (metà di quello scritto in 2 settimane, mai meno di quanto ne mangi in un giorno). In cima ciò che mangi più spesso.
+const GIORNI_SPESA = 14;
 // Piatti → ingredienti da comprare, con quanti grammi di ingrediente ci sono in 1 g di piatto (vale anche per gli alimenti che hai aggiunto tu con quel nome)
 function lattePiatto(n) {
   return /scremat/.test(n) && !/parzial/.test(n) ? "Latte scremato" : /parzial/.test(n) ? "Latte parzialmente scremato" : /intero/.test(n) ? "Latte intero"
@@ -1100,8 +1112,8 @@ const PIATTI_SPESA = [
   [/^frullato proteico/, (n) => [["Proteine in polvere", 0.1], [lattePiatto(n), 0.85]]],
   [/^(smoothie|frullato)/, () => [["Banana", 0.4], ["Frutti rossi", 0.4]]],
   [/^toast/, () => [["Pane in cassetta (toast)", 0.55], ["Prosciutto cotto", 0.2], ["Formaggio a fette (sottiletta)", 0.2]]],
-  [/^pasta al pomodoro/, () => [["Pasta di semola", 0.35], ["Passata di pomodoro", 0.4]]],
-  [/^pasta al pesto/, () => [["Pasta di semola", 0.35], ["Pesto", 0.12]]],
+  [/^pasta al pomodoro/, () => [["Pasta", 0.35], ["Passata di pomodoro", 0.4]]],
+  [/^pasta al pesto/, () => [["Pasta", 0.35], ["Pesto", 0.12]]],
   [/^insalata di riso/, () => [["Riso crudo", 0.3], ["Tonno in scatola al naturale", 0.1], ["Mais", 0.1]]],
   [/^(verdure (grigliate|al forno))/, () => [["Zucchine", 0.4], ["Melanzane", 0.3], ["Peperoni", 0.3]]],
   [/^(polpette di manzo)/, () => [["Manzo magro macinato", 0.8]]],
@@ -1120,35 +1132,35 @@ function ingredientiSpesa(nome) {
   if (!r) return null;
   return r[1](n).filter(([x]) => (window.ALIMENTI || {})[x]);
 }
+// Consumo per alimento nei giorni indicati: la somma di quello che hai scritto nel diario (conta ogni giorno con almeno un pasto; nessuna stima per i giorni mancanti)
 function consumiPerAlimento(giorniISO) {
   const d = typeof leggiDiario === "function" ? leggiDiario() : {};
-  const validi = giorniISO.filter(x => d[x] && (d[x].pasti || []).length >= 3);
+  const validi = giorniISO.filter(x => d[x] && (d[x].pasti || []).length >= 1);
   const st = {};
   validi.forEach(x => {
-    const visti = new Set(), delGiorno = {};
+    const visti = new Set();
     d[x].pasti.forEach(p => (p.ingredienti || []).forEach(i => {
       if (!(window.ALIMENTI || {})[i.nome] || i.unita === "q.b.") return;
       // un piatto (cappuccino, omelette, porridge…) in lista diventa i suoi ingredienti: si compra il latte, non il cappuccino
       const parti = ingredientiSpesa(i.nome) || [[i.nome, 1]];
       parti.forEach(([nome, fr]) => {
-        const e = st[nome] ||= { giorni: 0, g: 0, porz: [] };
+        const e = st[nome] ||= { giorni: 0, g: 0, perGiorno: {} };
         e.g += grammiIng(i) * fr;
-        delGiorno[nome] = (delGiorno[nome] || 0) + grammiIng(i) * fr;
+        e.perGiorno[x] = (e.perGiorno[x] || 0) + grammiIng(i) * fr;
         if (!visti.has(nome)) { visti.add(nome); e.giorni++; }
       });
     }));
-    Object.entries(delGiorno).forEach(([nome, g]) => st[nome].porz.push(g));   // quanto ne hai mangiato quel giorno
   });
-  const k = validi.length ? 7 / validi.length : 0;
-  // media a settimana, ma mai meno di quanto ne mangi di solito in un giorno: lo yogurt mangiato una volta (150 g) non diventa «~40 g»
-  const mediana = (a) => { const v = a.slice().sort((x, y) => x - y), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
-  Object.values(st).forEach(e => { e.g = Math.max(e.g * k, e.porz.length ? mediana(e.porz) : 0); delete e.porz; });
+  // la spesa è settimanale: quantità per 7 giorni (niente stime per i giorni non scritti),
+  // ma mai meno di quanto ne hai mangiato in un giorno: lo yogurt mangiato una volta (170 g) resta 170 g, non 85
+  const sett = 7 / Math.max(7, giorniISO.length);
+  Object.values(st).forEach(e => { e.g = Math.max(e.g * sett, ...Object.values(e.perGiorno)); delete e.perGiorno; });
   return { st, nValidi: validi.length, validi };
 }
-// La lista della spesa mostra ciò che consumi di solito: ultime 4 settimane, solo giorni passati (né oggi né quelli pianificati)
+// La lista della spesa mostra ciò che hai mangiato: oggi e i 13 giorni prima (non i giorni pianificati)
 function statSpesa() {
   const oggi = oggiISO();
-  const giorni = []; for (let k = 1; k <= GIORNI_SPESA; k++) giorni.push(addGiorniISO(oggi, -k));
+  const giorni = []; for (let k = 0; k < GIORNI_SPESA; k++) giorni.push(addGiorniISO(oggi, -k));   // anche oggi: chi fa la spesa la sera trova i pasti della giornata
   const r = consumiPerAlimento(giorni);
   return { st: r.st, nGiorni: r.nValidi };
 }
@@ -1187,9 +1199,9 @@ function spesaHTML() {
   const { st } = statSpesa();
   const presi = scadiPresi();
   // quanto ne consumi di solito in una settimana (non quello che serve per il futuro e non meno quello che hai in casa)
-  // "Pasta di semola cotta" e "Pasta di semola" sono la stessa cosa da comprare: una riga sola, coi grammi da crudo sommati
+  // "Pasta cotta" e "Pasta" sono la stessa cosa da comprare: una riga sola, coi grammi da crudo sommati
   const unite = {};
-  Object.entries(st).filter(([nome]) => !SPESA_SALTA.test(nome) && !SPESA_COMPOSTI.test(nome)).forEach(([nome, e]) => {
+  Object.entries(st).filter(([nome, e]) => e.g > 0 && !SPESA_SALTA.test(nome) && !SPESA_COMPOSTI.test(nome)).forEach(([nome, e]) => {
     const n = nomeSpesa(nome), fatt = /cott/i.test(nome) && n !== nome && (window.CRUDO_FATTORE || []).find(([re]) => re.test(nome));
     const u = unite[n] ||= { nome: n, giorni: 0, g: 0, fonti: [] };
     u.g += fatt ? e.g / fatt[1] : e.g;   // cotto → crudo (come nell'etichetta della quantità)
@@ -1201,7 +1213,7 @@ function spesaHTML() {
     return { nome: u.nome, giorni: u.giorni, info: qtaSettimanaLabel(nome0, g0), q: qtaSettimanaG(nome0, g0) };
   });
   leggiExtraSpesa().forEach(nome => { if (!voci.some(v => v.nome.toLowerCase() === nome.toLowerCase())) voci.push({ nome, giorni: -1, info: "aggiunto da te", extra: true }); });
-  const introVuota = voci.length ? "" : `<li class="hint">🛒 Si riempie con i tuoi pasti</li>`;
+  const introVuota = voci.length ? "" : `<li class="hint">🛒 Si riempie con i pasti che scrivi nel diario: quelli delle ultime 2 settimane, oggi compreso</li>`;
   // dispensa: gli ingredienti del ricettario che non sono già nella lista, i più usati nelle ricette per primi
   const conta = {};
   const viste = new Set();
@@ -1209,14 +1221,16 @@ function spesaHTML() {
     new Set((o.ingredienti || []).filter(i => i.unita !== "q.b.").map(i => i.nome)).forEach(n => { if (!SPESA_SALTA.test(n) && !SPESA_COMPOSTI.test(n) && (window.ALIMENTI || {})[n]) conta[nomeSpesa(n)] = (conta[nomeSpesa(n)] || 0) + 1; }); });
   const inLista = new Set(voci.map(v => v.nome.toLowerCase()));
   const dispensa = Object.entries(conta).filter(([n]) => !inLista.has(n.toLowerCase())).map(([nome, n]) => ({ nome, n, giorni: -1 }));
-  const gruppi = {};
-  voci.filter(v => !presi.has(v.nome)).forEach(v => (gruppi[repartoDi(v.nome)] ||= []).push(v));
+  const gruppi = {}, daControllare = [];
+  voci.filter(v => !presi.has(v.nome)).forEach(v => { if (!v.extra && durataLunga(v.nome)) daControllare.push(v); else (gruppi[repartoDi(v.nome)] ||= []).push(v); });
   let html = introVuota + ORDINE_REPARTI.map(rep => {
     const g = gruppi[rep];
     if (!g || !g.length) return "";
     g.sort((a, b) => (b.giorni - a.giorni) || a.nome.localeCompare(b.nome)); // prima ciò che mangi più spesso
     return `<li class="reparto-h">${rep}</li>` + g.map(v => voceSpesaHTML(v.nome, false, v.info, v.extra, v.q)).join("");
   }).join("");
+  // spezie, salse, olio…: le hai usate questa settimana, ma di solito ne hai ancora; dai un'occhiata in dispensa
+  if (daControllare.length) html += `<li class="reparto-h">🫙 Da controllare in dispensa</li>` + daControllare.sort((a, b) => a.nome.localeCompare(b.nome)).map(v => voceSpesaHTML(v.nome, false, "", false)).join("");
   const dGruppi = {};
   dispensa.filter(v => !presi.has(v.nome)).forEach(v => (dGruppi[repartoDi(v.nome)] ||= []).push(v));
   const nDisp = dispensa.filter(v => !presi.has(v.nome)).length;
@@ -1239,10 +1253,29 @@ function apriSpesa() {
       <input id="spesa-nuova" class="qta-input wiz-full" placeholder="Aggiungi alla lista…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
       <button class="btn lib-piu" data-azione="spesa-aggiungi" aria-label="Aggiungi">＋</button>
     </div>
+    <div id="spesa-sugg" class="lib-autoc"></div>
     <ul id="spesa">${spesaHTML()}</ul>`);
 }
-function aggiungiVoceSpesa() {
+// mentre scrivi: gli alimenti che combaciano (un tocco e sono in lista) e, in cima, quello che hai scritto così com'è (detersivo, carta…)
+function suggerimentiSpesa() {
+  const inp = document.getElementById("spesa-nuova"), box = document.getElementById("spesa-sugg");
+  if (!inp || !box) return;
+  const v = inp.value.trim();
+  if (!v) { box.innerHTML = ""; return; }
+  const nq = typeof norm === "function" ? norm(v) : v.toLowerCase(), nn = (x) => typeof norm === "function" ? norm(x) : x.toLowerCase();
+  const gia = new Set(leggiExtraSpesa().map(x => x.toLowerCase()));
+  const t = (typeof cercaAlimenti === "function" ? cercaAlimenti(v) : []).filter(n => !gia.has(n.toLowerCase()) && !SPESA_COMPOSTI.test(n))
+    .sort((a, b) => nn(b).startsWith(nq) - nn(a).startsWith(nq)).slice(0, 6);
+  const esatto = t.some(n => n.toLowerCase() === v.toLowerCase());
+  box.innerHTML = (esatto ? "" : `<button class="autoc-voce" data-spesa-sugg="" >＋ Aggiungi «${esc(v)}»</button>`) + t.map(n => `<button class="autoc-voce" data-spesa-sugg="${esc(n)}">${esc(n)}</button>`).join("");
+}
+function aggiungiVoceSpesa(scelto) {
   const inp = document.getElementById("spesa-nuova");
+  if (scelto) {   // toccato un suggerimento: va in lista con quel nome esatto
+    const extra = leggiExtraSpesa(); if (!extra.includes(scelto)) { extra.push(scelto); salvaExtraSpesa(extra); }
+    const presi = leggiPresi(); presi.delete(scelto); salvaPresi(presi);
+    renderSpesa(); if (inp) { inp.value = ""; inp.focus(); } suggerimentiSpesa(); return;
+  }
   const v = (inp && inp.value || "").trim();
   if (!v) return;
   const t = typeof cercaAlimenti === "function" ? cercaAlimenti(v) : [];
@@ -1251,7 +1284,7 @@ function aggiungiVoceSpesa() {
   if (!extra.includes(nome)) { extra.push(nome); salvaExtraSpesa(extra); }
   const presi = leggiPresi(); presi.delete(nome); salvaPresi(presi);
   renderSpesa();
-  inp.value = ""; inp.focus();
+  inp.value = ""; inp.focus(); suggerimentiSpesa();
 }
 
 // -------- Modale ricette (bottom sheet) --------
@@ -1906,6 +1939,10 @@ const CAMPI_PROFILO = [
   ["recupero", "Allenamento reintegrato (%)", 5, "% delle calorie dell'allenamento che puoi mangiare (100% = tutte)"],
   ["protKg", "Proteine (g/kg)", 0.1], ["grassiKg", "Grassi (g/kg)", 0.1],
 ];
+// Obiettivi scritti a mano (facoltativi): vuoto = calcolo automatico dai campi sopra
+const CAMPI_MANUALI = [["kcalMan", "Calorie (kcal)", 10], ["protMan", "Proteine (g)", 1], ["grassiMan", "Grassi (g)", 1]];
+const CHIAVI_MANUALI = CAMPI_MANUALI.map(c => c[0]);
+const obiettiviManuali = (pf) => CHIAVI_MANUALI.some(k => pf[k] > 0);
 // Perdita di peso attesa a settimana con la settimana tipo attuale (7700 kcal ≈ 1 kg)
 function perditaSettimanale() {
   const deficit = leggiTipi().reduce((s, t) => s + TIPI_GIORNATA[t].fabbisogno - TIPI_GIORNATA[t].target.kcal, 0);
@@ -1919,7 +1956,10 @@ function anteprimaProfiloHTML() {
   const kg = perditaSettimanale(), kgTxt = `${kg >= 0 ? "−" : "+"}${Math.abs(kg).toFixed(2).replace(".", ",")} kg a settimana`;
   const chiavi = [...new Set(tipi)]; if (!chiavi.includes("riposo")) chiavi.push("riposo");
   const quanti = (k) => tipi.filter(t => t === k).length;
-  return `<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno · <b>${kgTxt}</b></p>
+  const pf = leggiProfilo(), rip = TIPI_GIORNATA.riposo.target;
+  const manuali = obiettiviManuali(pf) ? `<p class="hint">✍️ Obiettivi impostati da te attivi${pf.kcalMan > 0 ? "" : " (kcal automatiche)"}.</p>` : "";
+  const stretto = rip.proteine * 4 + rip.grassi * 9 > rip.kcal - 200 ? `<p class="hint">⚠️ Proteine e grassi occupano quasi tutte le kcal: restano pochi carboidrati.</p>` : "";
+  return `${manuali}${stretto}<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno · <b>${kgTxt}</b></p>
     <table class="pf-tabella"><thead><tr><th>Giornata</th><th>kcal</th><th>P</th><th>C</th><th>G</th></tr></thead><tbody>
     ${chiavi.map(k => { const tg = TIPI_GIORNATA[k], t = tg.target, n = quanti(k);
       return `<tr><td><span class="pf-ico">${tg.icone}</span> ${esc(tg.label)}${n ? ` <em>×${n}</em>` : ""}</td><td><b>${t.kcal}</b></td><td>${t.proteine}</td><td>${t.carboidrati}</td><td>${t.grassi}</td></tr>`; }).join("")}
@@ -1935,6 +1975,10 @@ function apriProfilo() {
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
         <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" data-profilo="${k}" value="${pf[k]}">${k === "bmr" ? `
         <button class="btn-link bmr-link" data-bmr-apri>Non lo sai? Calcolalo ›</button><div id="bmr-calc" hidden></div>` : ""}`).join("")}
+      <h4>Obiettivi impostati da te <em>(facoltativo)</em></h4>
+      <p class="campo-nota">Lascia vuoto per il calcolo automatico. Le calorie sono quelle di un giorno di riposo: se le scrivi, il Deficit non si usa e lo sport aggiunge solo la quota «Allenamento reintegrato» (0% = stesso obiettivo ogni giorno). I carboidrati sono quello che resta.</p>
+      ${CAMPI_MANUALI.map(([k, l, st]) => `<label class="wiz-l">${l}</label>
+        <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" placeholder="automatico" data-profilo="${k}" value="${pf[k] > 0 ? pf[k] : ""}">`).join("")}
     </div>
     <h4>I tuoi sport</h4>
     <div class="sport-lista">${pf.sport.filter(sp => !sp.nascosto).map(sp => `<div class="sport-riga">
@@ -1967,6 +2011,7 @@ function leggiFormProfilo() {
   document.querySelectorAll("[data-profilo]").forEach(inp => {
     const v = parseFloat(String(inp.value).replace(",", "."));
     const k = inp.dataset.profilo, puoZero = k === "deficit" || k === "recupero";   // deficit e reintegro possono essere 0 (mantenimento, niente kcal dall'allenamento); mai negativi
+    if (CHIAVI_MANUALI.includes(k)) { if (v > 0) pf[k] = v; else if (String(inp.value).trim() === "" || v === 0) delete pf[k]; return; }   // vuoto o 0 = torna automatico
     if (!isNaN(v) && (v > 0 || (puoZero && v === 0))) pf[k] = v;
   });
   return pf;
@@ -2161,13 +2206,16 @@ function eliminaPesata(data) {
 }
 
 // ================== Backup ==================
+// Versione del formato del backup: sale quando cambia la struttura dei dati salvati.
+// I backup senza versione (fatti prima) valgono come versione 0 e si ripristinano come sempre.
+const VERSIONE_BACKUP = 1;
 function esportaBackup() {
   const dati = {};
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (k && k.startsWith("mp_") && k !== "mp_adatta" && k !== "mp_storico") dati[k] = localStorage.getItem(k);   // il "torna indietro" non entra nel backup
   }
-  const blob = new Blob([JSON.stringify({ app: "piano-pasti", creato: new Date().toISOString(), dati }, null, 1)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ app: "piano-pasti", versione: VERSIONE_BACKUP, creato: new Date().toISOString(), dati }, null, 1)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `sailor-fit-backup-${oggiISO()}.json`;
@@ -2178,8 +2226,10 @@ function ripristinaBackup(testo) {
   let b;
   try { b = JSON.parse(testo); } catch (e) { avviso("File non valido."); return; }
   if (!b || b.app !== "piano-pasti" || typeof b.dati !== "object") { avviso("Questo file non è un backup di Sailor Fit."); return; }
+  if ((+b.versione || 0) > VERSIONE_BACKUP) { avviso("Questo backup è stato creato da una versione più recente di Sailor Fit: aggiorna l'app prima di ripristinarlo."); return; }
   const quando = b.creato ? new Date(b.creato).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "data sconosciuta";
-  chiediConferma("Ripristinare il backup?", `Del ${quando}: i dati attuali verranno sostituiti`, "Ripristina", () => {
+  let giorni = 0; try { giorni = Object.keys(JSON.parse(b.dati.mp_diario || "{}") || {}).length; } catch (e) {}
+  chiediConferma("Ripristinare il backup?", `Del ${quando}${giorni ? ` · ${giorni} giorni di diario` : ""}: i dati attuali verranno sostituiti`, "Ripristina", () => {
     Object.keys(localStorage).filter(k => k.startsWith("mp_")).forEach(k => localStorage.removeItem(k));
     Object.entries(b.dati).forEach(([k, v]) => { if (k.startsWith("mp_") && k !== "mp_adatta" && k !== "mp_storico") localStorage.setItem(k, v); });
     localStorage.setItem("mp_adatta", "1");   // al riavvio i dati vecchi si adattano alla versione nuova
@@ -2459,6 +2509,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }, () => riapriProfilo(sc));
       return;
     }
+    const sg = e.target.closest("[data-spesa-sugg]");
+    if (sg) { aggiungiVoceSpesa(sg.dataset.spesaSugg || ""); return; }
     const sd = e.target.closest("[data-spesa-del]");
     if (sd) {
       const nomeVoce = sd.dataset.spesaDel, prima = leggiExtraSpesa();
@@ -2496,7 +2548,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "ricette-da-pasto") apriListaRicette(false, true);
       else if (az.dataset.azione === "profilo-salva") salvaProfiloForm();
       else if (az.dataset.azione === "profilo-default") {
-        document.querySelectorAll("[data-profilo]").forEach(inp => { inp.value = PROFILO_DEFAULT[inp.dataset.profilo]; });
+        document.querySelectorAll("[data-profilo]").forEach(inp => { inp.value = PROFILO_DEFAULT[inp.dataset.profilo] ?? ""; });
         aggiornaAnteprimaProfilo();
       }
       else if (az.dataset.azione === "peso-salva") salvaPesata();
@@ -2629,6 +2681,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Ricerca ricette per ingredienti che hai in casa
   document.getElementById("modal-content").addEventListener("input", (e) => {
     if (e.target.id === "cerca-ingredienti") aggiornaListaRicette();
+    if (e.target.id === "spesa-nuova") suggerimentiSpesa();
   });
 
   // Lista spesa: spunta una voce -> va in fondo (presa); togli la spunta -> torna in lista

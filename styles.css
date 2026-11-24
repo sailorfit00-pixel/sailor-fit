@@ -1936,3 +1936,6 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 .bsp-reset { display: block; margin: 14px auto 0; }
 .gsp-cont { justify-content: center; margin: 14px 0 4px; }
 .gsp-cont input { width: 120px; font-size: 26px; font-weight: 700; text-align: center; }
+
+/* «Già mangiato» di un pasto passato: l'alimento singolo non si apre (niente manina) */
+.pm-card .pm-testa.sola-lettura.pm-fissa { cursor: default; }

@@ -21,7 +21,7 @@ const PREFERITI = {
   sardine: "Sardine", acciughe: "Alici", trota: "Trota", spada: "Pesce spada", arachidi: "Arachidi", spremuta: "Spremuta d'arancia", te: "Tè",
   cappuccino: "Cappuccino scremato", cappuccini: "Cappuccino scremato",
   pollo: "Petto di pollo", tacchino: "Fesa di tacchino", manzo: "Manzo magro", salmone: "Salmone fresco",
-  tonno: "Tonno in scatola al naturale", riso: "Riso basmati cotto", pasta: "Pasta di semola", pane: "Pane integrale",
+  tonno: "Tonno in scatola al naturale", riso: "Riso basmati cotto", pasta: "Pasta", pane: "Pane integrale",
   yogurt: "Yogurt greco 0%", latte: "Latte parzialmente scremato", uovo: "Uova", olio: "Olio EVO",
   "olio di oliva": "Olio EVO", "manzo macinato": "Manzo magro macinato", pesca: "Pesca", pesche: "Pesca", susina: "Prugne", susine: "Prugne", melograno: "Melagrana", cocomero: "Anguria", pomelo: "Pompelmo", nespola: "Nespole", nespole: "Nespole", "fico d'india": "Fico d'India", "fichi d'india": "Fico d'India", "pesca noce": "Nettarina", "pesche noci": "Nettarina", "nettarine": "Nettarina", "pesca nettarina": "Nettarina", "carne macinata": "Manzo magro macinato", "macinato di manzo": "Manzo magro macinato", "pomodori pelati": "Passata di pomodoro", "pelati": "Passata di pomodoro", "pollo macinato": "Fesa di tacchino macinata", "macinato di pollo": "Fesa di tacchino macinata", "macinato di tacchino": "Fesa di tacchino macinata", "olio extravergine": "Olio EVO", "olio extravergine di oliva": "Olio EVO", "yogurt vegetale": "Yogurt di soia", "yogurt di soia": "Yogurt di soia", "gocce di cioccolato": "Gocce di cioccolato", "caffe solubile": "Caffè", "farina 0": "Farina 00", "latte vegetale": "Bevanda di soia", "bevanda vegetale": "Bevanda di soia", "bevanda di avena": "Bevanda di avena",
   pomodoro: "Pomodori", avena: "Fiocchi d'avena", fagioli: "Fagioli cannellini cotti", ceci: "Ceci cotti",
@@ -423,7 +423,7 @@ const SCAMBI_FURBI = {
   "Coscia di pollo": ["Petto di pollo"], "Pancetta": ["Prosciutto cotto", "Bresaola"], "Prosciutto crudo": ["Bresaola"], "Prosciutto cotto": ["Fesa di tacchino"],
   "Mortadella": ["Bresaola", "Prosciutto cotto"], "Salumi misti": ["Bresaola"], "Wurstel": ["Fesa di tacchino"],
   "Salmone fresco": ["Merluzzo", "Branzino"], "Salmone": ["Merluzzo", "Branzino"], "Orata": ["Merluzzo"],
-  "Pane bianco": ["Pane integrale"], "Pancarrè": ["Pane integrale"], "Pasta di semola": ["Pasta integrale"], "Pasta di semola cotta": ["Pasta integrale"],
+  "Pane bianco": ["Pane integrale"], "Pancarrè": ["Pane integrale"], "Pasta": ["Pasta integrale"], "Pasta cotta": ["Pasta integrale"],
   "Couscous cotto": ["Quinoa cotta", "Riso integrale cotto"], "Riso venere cotto": ["Quinoa cotta"], "Noodles di riso cotti": ["Quinoa cotta", "Riso integrale cotto"], "Uova": ["Albume"],
   "Branzino": ["Merluzzo", "Nasello"], "Orata": ["Merluzzo", "Nasello"], "Salsiccia": ["Fesa di tacchino macinata"],
   "Riso bianco cotto": ["Quinoa cotta", "Riso integrale cotto", "Patate lesse"], "Riso basmati cotto": ["Quinoa cotta", "Riso integrale cotto", "Patate lesse"], "Patatine fritte": ["Patate al forno", "Patate lesse"],
@@ -465,7 +465,7 @@ function ingredientiRegistrati(c) {
 // Idea: dall'obiettivo del pasto (che dipende da quello che hai già mangiato oggi) si calcola quanto "manca" o "avanza" per ogni macro.
 // Ogni mossa possibile (cambia un alimento, porta una quantità a un'altra, aggiungi qualcosa) si valuta in base a quanto riduce la distanza dall'obiettivo.
 const POOL_SOSTITUZIONE = [
-  ["Riso basmati cotto", "Riso integrale cotto", "Quinoa cotta", "Couscous cotto", "Patate lesse", "Patata dolce", "Pasta di semola cotta", "Riso bianco cotto", "Noodles di riso cotti"],
+  ["Riso basmati cotto", "Riso integrale cotto", "Quinoa cotta", "Couscous cotto", "Patate lesse", "Patata dolce", "Pasta cotta", "Riso bianco cotto", "Noodles di riso cotti"],
   ["Petto di pollo", "Fesa di tacchino", "Merluzzo", "Nasello", "Branzino", "Orata", "Gamberi", "Platessa", "Tofu"],
   ["Yogurt greco 0%", "Yogurt greco intero", "Yogurt bianco intero", "Fiocchi di latte", "Quark magro", "Ricotta", "Formaggio spalmabile light"],
   ["Pane integrale", "Pane bianco", "Pane di segale", "Pancarrè", "Gallette di riso", "Gallette di mais", "Gallette di quinoa", "Gallette di grano saraceno", "Fette biscottate integrali", "Crackers integrali"],
@@ -766,11 +766,11 @@ function eAlimentoTuo(nome) { try { return !!(JSON.parse(localStorage.getItem("m
 // ===== "Più fit": per ogni piatto (ricette comprese) le mosse che lo rendono più leggero e più sano, anche quando i numeri del pasto sono già in regola =====
 // Sono scambi a parità di uso (latte intero → scremato, pane bianco → integrale…) o quantità più basse di grassi e zuccheri.
 const FIT_SCAMBI = {
-  "Pasta di semola": ["Pasta integrale"], "Pasta di semola cotta": ["Pasta integrale"], "Farina 00": ["Farina integrale"], "Pancarrè": ["Pane integrale"], "Pane bianco": ["Pane integrale"],
+  "Pasta": ["Pasta integrale"], "Pasta cotta": ["Pasta integrale"], "Farina 00": ["Farina integrale"], "Pancarrè": ["Pane integrale"], "Pane bianco": ["Pane integrale"],
   "Riso bianco cotto": ["Riso integrale cotto"], "Prosciutto cotto": ["Fesa di tacchino"], "Cioccolato al latte": ["Cioccolato fondente"], "Latte di cocco": ["Latte di cocco light"],
   "Granola": ["Fiocchi d'avena"], "Sciroppo d'acero": ["Sciroppo senza zucchero", "Eritritolo"], "Uova": ["Albume"], "Olio di semi": ["Olio EVO"], "Burro": ["Olio EVO"], "Panna da cucina": ["Yogurt greco 0%"], "Formaggio spalmabile (tipo Philadelphia)": ["Formaggio spalmabile light"],
 };
-const SEMPRE_MEGLIO = new Set(["Pasta di semola>Pasta integrale", "Pasta di semola cotta>Pasta integrale", "Farina 00>Farina integrale", "Pancarrè>Pane integrale", "Pane bianco>Pane integrale", "Riso bianco cotto>Riso integrale cotto", "Olio di semi>Olio EVO", "Cioccolato al latte>Cioccolato fondente"]);   // stesse calorie, più sani
+const SEMPRE_MEGLIO = new Set(["Pasta>Pasta integrale", "Pasta cotta>Pasta integrale", "Farina 00>Farina integrale", "Pancarrè>Pane integrale", "Pane bianco>Pane integrale", "Riso bianco cotto>Riso integrale cotto", "Olio di semi>Olio EVO", "Cioccolato al latte>Cioccolato fondente"]);   // stesse calorie, più sani
 const DOLCIFICANTI = /^(Miele|Zucchero|Zucchero di canna|Sciroppo d'acero|Marmellata|Sciroppo)/;
 function mosseFit(c) {
   const A = window.ALIMENTI || {}, X = window.NUTRIENTI_EXTRA || {}, out = [];
@@ -1196,11 +1196,12 @@ function liberoHTML() {
     const avv = pre && troppiGrassiPre(it.nome, it.qta);
     const avvT = typeof avvisoTonnoRiga === "function" ? avvisoTonnoRiga(c, it) : "";
     const alt2 = avv && c.avvAperto === k ? alternativePre(c, it.nome, it.qta, k) : [];
-    const aperta = !!(c.vociAperte && c.vociAperte.has(it.nome));
+    // pasto passato: l'alimento singolo dice già tutto nel titolo («60 g di mirtilli»), quindi niente tendina; resta per le ricette
+    const aperta = !bloccato && !!(c.vociAperte && c.vociAperte.has(it.nome));
     return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
-      <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura" : ""}" data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}">
+      <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura pm-fissa" : ""}"${bloccato ? "" : ` data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}"`}>
         <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
-        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${avvT && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}${frecciaHTML()}
+        <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${avvT && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}${bloccato ? "" : frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>${!bloccato && (aperta || c.ultimoAgg === it.nome) ? presetHTML(k) : ""}${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
     </div>`;
