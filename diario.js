@@ -42,7 +42,11 @@ const pastoPost = (data) => !conSport(data) ? null : orarioAllen(data) === "sera
 // i pasti di un giorno: nei giorni di riposo il pre-workout non c'è
 // (resta solo se quel giorno c'è già qualcosa salvato lì, es. i vecchi spuntini del pomeriggio)
 function momentiTutti(data) {
-  return ORDINE_TEMPO;   // lo spuntino del pomeriggio c'è sempre, anche nei giorni di riposo (se lo salti resta tratteggiato)
+  // i pasti che fai (questionario/Profilo); senza scelta tutti e cinque. Un pasto che quel giorno ha già qualcosa resta comunque
+  const scelti = typeof leggiProfilo === "function" && leggiProfilo().pasti;
+  if (!Array.isArray(scelti) || !scelti.length) return ORDINE_TEMPO;   // lo spuntino del pomeriggio c'è sempre, anche nei giorni di riposo (se lo salti resta tratteggiato)
+  const conCibo = new Set(((leggiDiarioSolaLettura()[data] || {}).pasti || []).map(p => p.pasto));
+  return ORDINE_TEMPO.filter(p => scelti.includes(p) || conCibo.has(p));
 }
 const momentiGiorno = momentiTutti;
 
@@ -465,7 +469,7 @@ function porzioneSuMisura(r, target) {
 // Ricetta a porzioni collegata a un pasto (per il − N pancake +)
 // Ricetta con il contatore delle porzioni: quelle a teglia (pancake, banana bread…) e anche le singole (brownie al microonde, pollo al limone), che contano ¼ di porzione alla volta
 // Nessuna ricetta è esclusa (tonno e skyr li mangi): il tonno in scatola si limita con la penalità in ricetteConsigliate e con tonnoOk
-const ricettaEsclusa = (r) => false;   // nessuna ricetta è esclusa: il tonno in scatola resta solo meno frequente (penalità in ricetteConsigliate)
+const ricettaEsclusa = (r) => typeof ricettaConEsclusi === "function" && ricettaConEsclusi(r);   // con i cibi che hai escluso (dieta, allergie, cose che non mangi) nel Profilo;   // nessuna ricetta è esclusa: il tonno in scatola resta solo meno frequente (penalità in ricetteConsigliate)
 const ricettaAPezzi = (nome) => {
   const t = ricette.find(x => x.nome === nome && x._orig);
   if (t) return t;
@@ -607,7 +611,8 @@ function dolciConsigliati(data, pasto) {
   const migliori = {};
   ricette.forEach(r => {
     const f = famigliaDolce(r); if (!f) return;
-    if (f === "pancake" && !r.porzioni) return; // i pancake di casa: quelli a porzioni (farina integrale, senza burro né zuccheri)
+    if (f === "pancake" && !r.porzioni) return;
+    if (ricettaEsclusa(r)) return; // i pancake di casa: quelli a porzioni (farina integrale, senza burro né zuccheri)
     const ps = porzioneSuMisura(r, T);
     const p = punteggioPasto(ps.tot, T);
     if (!migliori[f] || p < migliori[f].p) migliori[f] = { r, p, tot: ps.tot, nome: ps.nome };
@@ -640,6 +645,7 @@ function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
   return ricette
     .filter(r => r.pasto === (pasto === "mattina" ? "spuntino" : pasto) && !viste.has(r.nome) && viste.add(r.nome))
     .filter((r, i, arr) => pasto === "mattina" ? !r.preworkout : pasto !== "spuntino" || !preSera(data) || !arr.some(x => x.preworkout) || r.preworkout)
+    .filter(r => !ricettaEsclusa(r))
     .map(r => {
       const ps = porzioneSuMisura(r, T);
       let p = punteggioPasto(ps.tot, T);
@@ -981,7 +987,7 @@ function piattoComposto(data, pasto, T, scarta = () => false, giro = 0) {
   const A = window.ALIMENTI || {};
   const pre = pasto === "spuntino" && preSera(data) || (pasto === "mattina" && conSport(data) && orarioAllen(data) === "mattina");
   const chiave = pasto === "principale" ? "principale" : pre ? "pre" : (pasto === "pranzo" || pasto === "cena") ? "principale" : pasto === "colazione" ? "colazione" : "spuntino";
-  const lista = PIATTI_COMPOSTI[chiave].filter(t => !scarta(t) && [t.P, t.C, t.F, t.V && t.V[0]].filter(Boolean).every(n => A[n]));
+  const lista = PIATTI_COMPOSTI[chiave].filter(t => !scarta(t) && [t.P, t.C, t.F, t.V && t.V[0]].filter(Boolean).every(n => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n))));
   if (!lista.length) return null;
   const costruisci = (t) => {
     const per = (n, g, i) => A[n][i] * g / 100;
@@ -1414,6 +1420,7 @@ function cosaAggiungereHTML() {
     if (poche && p === ultimo) mosse = piccoliCompletamenti(data, p, mReale).concat(mosse);   // con poche kcal: quantità piccole che colmano quello che manca, nell'ultimo pasto
     mosse = mosse.filter((x, i, a) => a.findIndex(y => y.key === x.key) === i);
     mosse = mosse.filter(x => !furbiScartati.has(x.key));   // suggerimenti tolti con lo swipe
+    mosse = mosse.filter(x => { const k = String(x.key || "").split("|"); return !((k[1] === "agg" && alimentoEscluso(k[2])) || (k[1] === "ric" && ricettaEsclusa(ricette.find(r => r.nome === k[2]) || {}))); });   // cibi che hai escluso nel Profilo
     if (!mosse.length) return "";
     const giro = cosaGiro[p] || 0;
     const verd = mosse.filter(x => x.verdura), altre = mosse.filter(x => !x.verdura);

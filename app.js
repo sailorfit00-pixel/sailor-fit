@@ -74,6 +74,63 @@ function basaleMifflin({ uomo, eta, cm, kg }) {
   if (!(eta >= 10 && eta <= 100 && cm >= 100 && cm <= 230 && kg > 0)) return 0;
   return Math.round((10 * kg + 6.25 * cm - 5 * eta + (uomo ? 5 : -161)) / 10) * 10;
 }
+// -------- Cibi esclusi (dieta, allergie, cose che non mangi): le ricette che li contengono non si propongono --------
+// Si riconoscono dal NOME dell'alimento: per le allergie l'app è prudente (es. i dolci da forno contano come «con uova»),
+// ma può sbagliare: chi ha un'allergia deve sempre controllare gli ingredienti.
+const CATEGORIE_CIBO = {
+  carneRossa: /manzo|vitello|bresaola|agnello|cavallo|cuore di|trippa|lingua di|rognone|carpaccio|spezzatino|stufato|brasato|bollito|ossobuco|ragù|cotoletta alla milanese|kebab|hamburger di manzo|panino hamburger|lasagne|saltimbocca/,
+  pollame: /pollo|tacchino|anatra|nuggets|coniglio/,
+  maiale: /maiale|prosciutto|salsiccia|wurstel|mortadella|pancetta|salam|salumi|guanciale|speck|bacon(?! di tacchino)|strutto|hot dog|carbonara|amatriciana|tagliere|club sandwich|capricciosa|diavola|tortellini|gyoza|ramen/,
+  altraCarne: /brodo di carne|supplì|paella|riso alla cantonese|pad thai|involtini primavera|gelatina in fogli|collagene/,
+  pesce: /salmone|tonno|merluzzo|sgombro|orata|branzino|sardine|alici|acciughe|trota|platessa|pesce|nasello|surimi|aringa|baccalà|stoccafisso|dentice|sogliola|sushi|nigiri|maki|sashimi|poke|omega 3|paella/,
+  crostacei: /gamber|polpo|calamar|cozze|seppie|vongole|totani|scampi|mazzancolle|aragosta|ostriche|paella/,
+  uova: /uov|albume|tuorlo|frittata|carbonara|maionese|lasagne|tortellini|pancake|muffin|brownie|tiramisù|crepes|waffle|french toast|cotoletta|pavesini|plumcake|torta|crostata|cookie|croissant|cornetto|donut|biscott|merendina|wafer|cheesecake|gnocchi|pasta all'uovo|tagliatelle|marshmallow/,
+  latticini: /latte(?! di cocco| di mandorla)|yogurt(?! di soia)|skyr|ricotta|fiocchi di latte|feta|parmigiano|formagg|mozzarella|\bgrana|stracchino|scamorza|burro(?! d'arachidi| di mandorle)|gelato|pecorino|mascarpone|gorgonzola|provolone|panna|caciotta|taleggio|quark|burrata|kefir|fontina|emmental|cheddar|sottiletta|brie|gouda|crescenza|asiago|besciamella|cappuccino (scremato|parzialmente|intero)|cioccolato (al latte|bianco)|nutella|tiramisù|cheesecake|pizza(?! marinara)|cacio|budino|caseina|whey|cioccolata calda|nachos|quesadilla|caprese|tzatziki|salsa yogurt|proteine in polvere|frullato proteico|porridge|purè|crocchette|croissant|cornetto/,
+  glutine: /pasta(?! di legumi)|pane|tortilla|crackers|couscous(?! di lenticchie)|farro|orzo|segale|piadina|fette biscottate|gnocchi|farina (00|integrale|di avena)|seitan|biscott|pizza|focaccia|birra|panino|kebab|cornetto|croissant|grissini|taralli|bulgur|muesli|granola|corn ?flakes|cereali|pancarrè|pangrattato|crostata|torta|pavesini|lotus|udon|ramen|noodles all'uovo|gyoza|involtini|tempura|cotoletta|bastoncini|lasagne|tortellini|ravioli|bruschetta|tramezzino|toast|pita|naan|wrap|bagel|muffin|waffle|crepes|supplì|crostini|panzanella|ribollita|brownie|pancake|cheesecake|plumcake|wafer|merendina|barretta|cookie|donut|semolino|salsa di soia|teriyaki|hot dog|club sandwich|nuggets|crocchette|avena|porridge|tagliatelle|besciamella|miso/,
+  fruttaSecca: /mandorl|noci|nocciol|pistacchi|anacardi|pinoli|arachidi|frutta secca|nutella|pesto|granola|muesli/,
+  soia: /soia|tofu|edamame|tempeh|miso|tamari|teriyaki|burger vegetale|hoisin/,
+  legumi: /ceci|fagiol|lenticchi|piselli|fave|cicerchie|lupini|hummus|falafel|pasta di legumi|edamame|zuppa di legumi|minestrone|baked beans|burger vegetale/,
+  funghi: /fungh|porcini|champignon/,
+  piccante: /piccante|peperoncino|sriracha|harissa|diavola|wasabi|curry|kimchi|garam masala/,
+  miele: /miele/,
+};
+// le scelte del questionario e del Profilo → categorie
+const ESCLUSIONI_DIETA = { tutto: [], vegetariana: ["carneRossa", "pollame", "maiale", "altraCarne", "pesce", "crostacei"], vegana: ["carneRossa", "pollame", "maiale", "altraCarne", "pesce", "crostacei", "uova", "latticini", "miele"] };
+const ALLERGIE = [["glutine", "Glutine", "🌾"], ["latticini", "Lattosio", "🥛"], ["uova", "Uova", "🥚"], ["fruttaSecca", "Frutta secca", "🥜"], ["pesce", "Pesce", "🐟"], ["crostacei", "Crostacei/molluschi", "🦐"], ["soia", "Soia", "🫛"]];
+const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/tacchino", "🍗"], ["maiale", "Maiale/salumi", "🥓"], ["pesce", "Pesce", "🐟"], ["uova", "Uova", "🥚"], ["latticini", "Latticini", "🧀"], ["legumi", "Legumi", "🫘"], ["funghi", "Funghi", "🍄"], ["piccante", "Piccante", "🌶️"]];
+function categorieEscluse(pf = leggiProfilo()) {
+  const e = pf.esclusioni || {};
+  return new Set([...(ESCLUSIONI_DIETA[e.dieta] || []), ...(e.allergie || []), ...(e.nonMangio || [])]);
+}
+let _escluseFirma = null, _escluseCache = new Map();
+// true se l'alimento (dal nome) è in una categoria che hai escluso
+function alimentoEscluso(nome) {
+  const cat = categorieEscluse(), firma = [...cat].sort().join(",");
+  if (!cat.size) return false;
+  if (firma !== _escluseFirma) { _escluseFirma = firma; _escluseCache = new Map(); }
+  if (_escluseCache.has(nome)) return _escluseCache.get(nome);
+  const n = String(nome).toLowerCase(), si = [...cat].some(c => CATEGORIE_CIBO[c] && CATEGORIE_CIBO[c].test(n));
+  _escluseCache.set(nome, si); return si;
+}
+// una ricetta è esclusa se uno dei suoi ingredienti lo è (il nome della ricetta non conta: «pancake» senza uova restano)
+const ricettaConEsclusi = (r) => ((r && (r._orig || r).ingredienti) || []).some(i => alimentoEscluso(i.nome));
+
+// -------- Personalizzazione: colore, nome e icona dell'app, saluto --------
+const ICONE_APP = ["🌙", "⛵", "🌸", "🔥", "⭐", "🌿", "🍓", "💪", "🦋", "🌊", "☀️", "🍀"];
+function applicaPersonalizzazione() {
+  const pf = leggiProfilo();
+  if (typeof window.applicaColore === "function") window.applicaColore(pf.colore || "lilla");
+  const nome = pf.nomeApp || "Sailor Fit", t = document.getElementById("titolo-app");
+  if (t) t.textContent = `${pf.iconaApp || "🌙"} ${nome}`;
+  document.title = nome;
+  const s = document.getElementById("saluto");
+  if (s) {
+    const h = new Date().getHours(), ciao = h < 5 ? "Buonanotte" : h < 13 ? "Buongiorno" : h < 18 ? "Buon pomeriggio" : "Buonasera";
+    s.textContent = pf.nome ? `${ciao}, ${pf.nome}` : ""; s.hidden = !pf.nome;
+  }
+}
+document.addEventListener("DOMContentLoaded", () => applicaPersonalizzazione());
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") applicaPersonalizzazione(); });   // il saluto segue l'ora
 // basale calcolato dall'app (bmrAuto): segue il peso; se lo scrivi tu a mano resta quello
 const basaleDelProfilo = (p) => basaleMifflin({ uomo: p.sesso === "uomo", eta: p.eta, cm: p.altezza, kg: p.peso });
 function salvaProfilo(p) {
@@ -131,7 +188,7 @@ function tipoInfo(chiave) {
   const sport = sportDelTipo(k).map(id => pf.sport.find(sp => sp.id === id)).filter(Boolean);
   const dur = durateDelTipo(k);
   const allen = sport.reduce((tot, sp) => tot + kcalSport(sp, dur[sp.id], pf), 0);
-  const base = pf.bmr * 1.2;
+  const base = pf.bmr * (pf.fattoreAttivita || 1.2);   // vita quotidiana: 1,2 lavoro seduto (sempre stato così), di più se lavori in piedi o fai un lavoro fisico
   // obiettivi scritti da te nel Profilo (facoltativi): le kcal sono quelle di un giorno di riposo,
   // lo sport aggiunge solo la quota «Allenamento reintegrato» (a 0% il target è uguale ogni giorno)
   const kcal = pf.kcalMan > 0
@@ -1441,6 +1498,7 @@ function listaRicetteHTML(filtro, pantry, testo) {
   let lista = ricette.filter(r => {
     if (filtro !== "tutte" && r.pasto !== filtro) return false;
     if (viste.has(r.nome)) return false; // i principali compaiono a pranzo e cena: una volta sola
+    if (ricettaConEsclusi(r)) return false; // contiene cibi che hai escluso nel Profilo
     viste.add(r.nome);
     return true;
   });
@@ -1940,46 +1998,8 @@ function apriMenu() {
     </div>
   `);
 }
-// ===== Benvenuto (solo la prima volta, per una persona nuova): pochi dati e l'app calcola il resto =====
-const OBIETTIVI_BENVENUTO = [["dimagrire", "Dimagrire", 15], ["mantenere", "Mantenere", 0], ["massa", "Aumentare massa", -10]];   // deficit %: negativo = surplus
-function apriBenvenuto() {
-  editCtx = null;
-  openModal(`
-    <h3 class="modal-title">👋 Ciao! Iniziamo</h3>
-    <p class="campo-nota">Pochi dati e l'app calcola calorie e macro per te. Potrai cambiare tutto quando vuoi nel Profilo.</p>
-    <div class="et-seg">
-      <input type="radio" name="bv-sesso" id="bv-donna" value="donna" checked><label for="bv-donna">Donna</label>
-      <input type="radio" name="bv-sesso" id="bv-uomo" value="uomo"><label for="bv-uomo">Uomo</label>
-    </div>
-    <div class="bmr-griglia">
-      <label class="et-campo"><span>Età (anni)</span><input class="qta-input" type="number" inputmode="numeric" min="10" max="100" data-bv="eta" placeholder="es. 30"></label>
-      <label class="et-campo"><span>Altezza (cm)</span><input class="qta-input" type="number" inputmode="numeric" min="100" max="230" data-bv="altezza" placeholder="es. 165"></label>
-      <label class="et-campo"><span>Peso (kg)</span><input class="qta-input" type="number" inputmode="decimal" min="25" max="300" step="0.1" data-bv="peso" placeholder="es. 60"></label>
-    </div>
-    <label class="wiz-l">Il tuo obiettivo</label>
-    <div class="et-seg">${OBIETTIVI_BENVENUTO.map(([k, l], i) => `<input type="radio" name="bv-obiettivo" id="bv-${k}" value="${k}"${i === 0 ? " checked" : ""}><label for="bv-${k}">${l}</label>`).join("")}</div>
-    <button class="btn block" data-benvenuto-inizia>Inizia</button>
-    <button class="btn-link" data-azione="ripristina">Hai già usato l'app? Ripristina un backup ›</button>
-  `);
-}
-function iniziaDaBenvenuto() {
-  const box = document.getElementById("modal-content");
-  const num = (k) => parseFloat(String((box.querySelector(`[data-bv="${k}"]`) || {}).value || "").replace(",", "."));
-  const uomo = !!box.querySelector('input[name="bv-sesso"][value="uomo"]:checked');
-  const eta = num("eta"), cm = num("altezza"), kg = num("peso");
-  const bmr = basaleMifflin({ uomo, eta, cm, kg });
-  if (!bmr || !(kg >= 25 && kg <= 300)) { avviso("Scrivi età, altezza e peso"); return; }
-  const ob = (box.querySelector('input[name="bv-obiettivo"]:checked') || {}).value || "dimagrire";
-  const pf = leggiProfilo();
-  Object.assign(pf, { sesso: uomo ? "uomo" : "donna", eta: Math.round(eta), altezza: Math.round(cm), peso: Math.round(kg * 10) / 10, bmr, bmrAuto: true,
-    deficit: (OBIETTIVI_BENVENUTO.find(o => o[0] === ob) || OBIETTIVI_BENVENUTO[0])[2], recupero: 80, protKg: 1.8, grassiKg: 0.9, allenOrario: "sera" });
-  salvaProfilo(pf);
-  localStorage.setItem("mp_benvenuto", "fatto");
-  apriProfilo();
-  avviso("Ora scegli i tuoi sport nella settimana tipo");
-}
+// Il questionario iniziale (una domanda alla volta) è in benvenuto.js
 document.addEventListener("click", (e) => {
-  if (e.target.closest && e.target.closest("[data-benvenuto-inizia]")) iniziaDaBenvenuto();
   const ad = e.target.closest && e.target.closest("[data-allen-def]");   // Profilo: quando ti alleni di solito
   if (ad) { const pf = leggiProfilo(); pf.allenOrario = ad.dataset.allenDef; salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi(); }
 });
@@ -2084,8 +2104,50 @@ function apriProfilo() {
     ${pf.allenOrario ? "" : `<p class="hint">Ora: di sera, il sabato di mattina. Puoi sempre cambiarlo giorno per giorno.</p>`}
     <h4>Obiettivi che ne risultano</h4>
     <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
+    <h4>Cosa non mangi</h4>
+    ${esclusioniHTML(pf)}
+    <h4>Personalizza</h4>
+    <label class="wiz-l">Il tuo nome</label>
+    <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Per salutarti in alto (facoltativo)" data-pers="nome" value="${esc(pf.nome || "")}">
+    <label class="wiz-l">Nome dell'app</label>
+    <div class="pers-icone">${ICONE_APP.map(i => `<button class="qz-ico ${(pf.iconaApp || "🌙") === i ? "on" : ""}" data-pers-icona="${i}">${i}</button>`).join("")}</div>
+    <input class="qta-input wiz-full" type="text" maxlength="24" placeholder="Sailor Fit" data-pers="nomeApp" value="${esc(pf.nomeApp || "")}">
+    <p class="campo-nota">Il nome sotto l'icona nella schermata Home lo decide il telefono quando aggiungi l'app.</p>
+    <label class="wiz-l">Colore</label>
+    <div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c]) => `<button class="qz-col ${(pf.colore || "lilla") === k ? "on" : ""}" data-pers-colore="${k}" style="--c:${c}"><i></i><span>${l}</span></button>`).join("")}</div>
+    <button class="btn-sec block" data-azione="rifai-questionario">📝 Rifai il questionario iniziale</button>
 `);
 }
+// Dieta, allergie e cose che non mangi (le stesse scelte del questionario): le ricette con quei cibi non si propongono
+function esclusioniHTML(pf) {
+  const e = pf.esclusioni || {}, chip = (gr, k, l, ic, on) => `<button class="chip ${on ? "attivo" : ""}" data-escl="${gr}|${k}">${ic} ${l}</button>`;
+  return `<div class="chips">${[["tutto", "Di tutto", "🍽️"], ["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, (e.dieta || "tutto") === k)).join("")}</div>
+    <p class="hint">Allergie o intolleranze</p><div class="chips">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}</div>
+    <p class="hint">Non mangio</p><div class="chips">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}</div>
+    <p class="campo-nota">Le ricette con questi cibi non ti vengono proposte. L'app riconosce gli alimenti dal nome e può sbagliare: per le allergie controlla sempre gli ingredienti.</p>`;
+}
+// Profilo: tocchi su cibi esclusi, icona e colore; testi del nome
+document.addEventListener("click", (e) => {
+  if (!e.target.closest || !e.target.closest("#modal-content")) return;
+  const es = e.target.closest("[data-escl]"), ic = e.target.closest("[data-pers-icona]"), co = e.target.closest("[data-pers-colore]");
+  if (!es && !ic && !co) return;
+  const pf = leggiProfilo();
+  if (es) {
+    const [gr, k] = es.dataset.escl.split("|"), x = pf.esclusioni = Object.assign({ dieta: "tutto", allergie: [], nonMangio: [] }, pf.esclusioni || {});
+    if (gr === "dieta") x.dieta = k;
+    else { const l = x[gr] = (x[gr] || []).slice(), p = l.indexOf(k); if (p > -1) l.splice(p, 1); else l.push(k); }
+  }
+  if (ic) pf.iconaApp = ic.dataset.persIcona;
+  if (co) pf.colore = co.dataset.persColore;
+  salvaProfilo(pf); applicaPersonalizzazione(); riapriProfilo();
+  if (typeof renderOggi === "function") renderOggi();
+});
+document.addEventListener("input", (e) => {
+  if (!e.target.matches || !e.target.matches("[data-pers]")) return;
+  const pf = leggiProfilo(), v = e.target.value.trim();
+  if (v) pf[e.target.dataset.pers] = v; else delete pf[e.target.dataset.pers];
+  salvaProfilo(pf); applicaPersonalizzazione();
+});
 // ridisegna il profilo restando allo stesso punto della pagina
 // (sc: la posizione da ritrovare, se il profilo era già stato chiuso, es. da una richiesta di conferma)
 function riapriProfilo(sc) {
@@ -2640,6 +2702,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "vai-ricette") apriListaRicette();
       else if (az.dataset.azione === "ricette-da-pasto") apriListaRicette(false, true);
       else if (az.dataset.azione === "profilo-salva") salvaProfiloForm();
+      else if (az.dataset.azione === "rifai-questionario") { closeModal(); setTimeout(() => apriQuestionario(true), 0); }
       else if (az.dataset.azione === "profilo-default") {
         document.querySelectorAll("[data-profilo]").forEach(inp => { inp.value = PROFILO_DEFAULT[inp.dataset.profilo] ?? ""; });
         aggiornaAnteprimaProfilo();

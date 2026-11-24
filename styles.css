@@ -776,11 +776,12 @@ input, select, textarea, .qta-input { font-size: 16px !important; }
 .lib-ignoto .btn-sec.block { margin: 6px 0 4px; }
 
 /* ===== Lilla: colore dell'app (identità). I pulsanti restano universali: verde salva, rosso elimina ===== */
-:root { --lilla: #b79cf5; --lilla-bg: rgba(183,156,245,.12); --neutro: #c3ccd3; }
+:root { --lilla: #b79cf5; --lilla-rgb: 183,156,245; --lilla-scuro: #6d5bd0; --lilla-bg: rgba(var(--lilla-rgb),.12); --neutro: #c3ccd3; }
 .topbar h1 { color: var(--lilla); }
+.topbar .saluto { margin: 0; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48%; }
 body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body[data-tab="andamento"] #apri-andamento, body[data-tab="altro"] #apri-menu { color: var(--lilla); }
 .an-arco { stroke: var(--lilla); }
-.vista-btn.on { color: var(--lilla); box-shadow: inset 0 0 0 1px rgba(183,156,245,.35), 0 1px 3px rgba(0,0,0,.3); }
+.vista-btn.on { color: var(--lilla); box-shadow: inset 0 0 0 1px rgba(var(--lilla-rgb),.35), 0 1px 3px rgba(0,0,0,.3); }
 .pasto-riga.prossimo { border-color: var(--lilla); background: var(--lilla-bg); }
 .pasto-riga.prossimo b, .pasto-riga.prossimo .pr-kcal { color: var(--lilla); }
 .btn-link, .pasto-piu, .tipo-btn .caret, .riga-profilo .freccia { color: var(--lilla); }
@@ -839,7 +840,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .pm-tot .pr-check { width: 18px; height: 18px; font-size: 11px; font-style: normal; }
 .pm-blocco { margin-bottom: 18px; }
 /* 2. aggiungi: riquadro con bordo lilla */
-.lib-box { border: 1px solid rgba(183,156,245,.45); background: var(--lilla-bg); border-radius: var(--r-l); padding: 12px 12px 14px; }
+.lib-box { border: 1px solid rgba(var(--lilla-rgb),.45); background: var(--lilla-bg); border-radius: var(--r-l); padding: 12px 12px 14px; }
 .lib-box .pm-agg { margin: 0 0 6px; color: var(--lilla); }
 .lib-box .lib-obiettivo { margin-top: 0; }
 .lib-box .lib-add { margin-top: 8px; }
@@ -852,7 +853,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 /* Pasto completato: come il prossimo pasto (lilla) ma con la linea continua */
 .pasto-riga.fatto { border: 1px solid var(--lilla); background: var(--lilla-bg); }
 /* Pasti da fare: tutti lilla tratteggiati (il prossimo ha in più il fondo lilla e "Cosa mangi?") */
-.pasto-riga.vuoto { border: 1px dashed rgba(183,156,245,.6); }
+.pasto-riga.vuoto { border: 1px dashed rgba(var(--lilla-rgb),.6); }
 .pasto-riga.vuoto b { color: var(--lilla); }
 .pasto-riga.vuoto, .pasto-riga.vuoto.prossimo { background: none; }
 .pasto-riga.vuoto.prossimo { border: 1px dashed var(--lilla); }   /* pasto non ancora registrato: solo il tratteggio viola, niente riempimento */
@@ -898,7 +899,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .lib-riga .lib-peso { margin: -10px 0 0; padding-right: 44px; }
 .autoc-titolo { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 6px 2px 0; }
 .autoc-lista { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.autoc-ricetta { display: flex; flex-direction: column; gap: 2px; border-color: rgba(183,156,245,.45); background: var(--lilla-bg); }
+.autoc-ricetta { display: flex; flex-direction: column; gap: 2px; border-color: rgba(var(--lilla-rgb),.45); background: var(--lilla-bg); }
 .autoc-ricetta small { color: var(--muted); font-size: 12px; font-weight: 400; }
 /* Swipe a sinistra per eliminare (come su iPhone) */
 .sw { position: relative; overflow: hidden; border-radius: var(--r-m); }
@@ -911,7 +912,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .pm-lista .sw { border-radius: 0; }
 .pm-lista .sw-fondo { border-radius: 0; }
 /* "Tutte le ricette" aperta da un pasto: ＋ su ogni ricetta */
-.agg-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--lilla-bg); border: 1px solid rgba(183,156,245,.45); border-radius: var(--r-m); padding: 10px 14px; margin-bottom: 10px; font-size: 14px; }
+.agg-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--lilla-bg); border: 1px solid rgba(var(--lilla-rgb),.45); border-radius: var(--r-m); padding: 10px 14px; margin-bottom: 10px; font-size: 14px; }
 .agg-banner b { color: var(--lilla); }
 .riga-ricetta[role="button"] { cursor: pointer; }
 .riga-ricetta.con-agg { position: relative; padding-right: 56px; }
@@ -933,7 +934,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .ps-testo { font-size: 15px; font-weight: 600; }
 .piatto-nome-riga input { text-align: left; }
 /* cambio unità di misura (pz ⇄ g) */
-.lib-riga .lib-unita { background: var(--lilla-bg); border: 1px solid rgba(183,156,245,.45); color: var(--lilla); border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.lib-riga .lib-unita { background: var(--lilla-bg); border: 1px solid rgba(var(--lilla-rgb),.45); color: var(--lilla); border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
 .lib-riga .lib-unita:active { background: var(--lilla); color: #1a1426; }
 .piatto-form.lib-add { margin: 6px 0 0; padding: 0; background: none; border: none; }
 /* menu pz / g come quello delle ricette */
@@ -946,12 +947,12 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .pm-blocco .pm-tot b { color: var(--lilla); }
 .pm-blocco .pm-lista { background: none; border: none; border-radius: 0; margin: 0; }
 .pm-blocco .pm-lista .pm-piatto { gap: 12px; padding: 11px 2px; }
-.pm-blocco .pm-lista .sw + .sw .pm-piatto { border-top: 1px solid rgba(183,156,245,.25); }
+.pm-blocco .pm-lista .sw + .sw .pm-piatto { border-top: 1px solid rgba(var(--lilla-rgb),.25); }
 .pm-ck { flex: 0 0 22px; font-style: normal; }
 .pm-blocco .pr-kcal { color: var(--lilla); font-weight: 600; }
 .pm-blocco .pm-freccia { color: var(--lilla); }
 /* "Aggiungi" = da fare: lilla tratteggiato, senza riempimento (come i pasti ancora da mangiare) */
-.lib-box { border: 1px dashed rgba(183,156,245,.7); background: none; }
+.lib-box { border: 1px dashed rgba(var(--lilla-rgb),.7); background: none; }
 .lib-riga .lib-unita-sel { width: 100px; padding: 0 22px 0 10px; font-size: 14px; }
 .lib-riga .lib-qta { width: 60px; }
 .lib-riga .lib-unita-sel { width: 112px; padding: 0 20px 0 9px; font-size: 13.5px; text-overflow: clip; }
@@ -984,7 +985,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .sw-corpo { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .sw-corpo input, .sw-corpo select, .sw-corpo textarea { -webkit-user-select: text; user-select: text; }
 /* sostituzione di un ingrediente */
-.sost-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--lilla-bg); border: 1px solid rgba(183,156,245,.45); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0 0; font-size: 13px; }
+.sost-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--lilla-bg); border: 1px solid rgba(var(--lilla-rgb),.45); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0 0; font-size: 13px; }
 .sost-banner b { color: var(--lilla); }
 .sost-banner button { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 4px 6px; }
 .lib-alt.sostituendo { border-color: var(--lilla); }
@@ -1088,13 +1089,13 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .var-lista[hidden] { display: none; }
 .var-opz, .sugg-riga { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 14px; border: 1px solid var(--bordo, rgba(255,255,255,.12)); background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .var-opz em, .sugg-riga em { font-style: normal; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
-.var-opz.attiva { border-color: var(--lilla, #b79cf5); background: rgba(183,156,245,.12); }
+.var-opz.attiva { border-color: var(--lilla, #b79cf5); background: rgba(var(--lilla-rgb),.12); }
 .sugg-leggera { margin: 12px 0; padding: 10px; border-radius: 14px; border: 1px dashed var(--lilla, #b79cf5); display: flex; flex-direction: column; gap: 6px; }
 .sugg-riga em { color: #6cc08b; font-weight: 600; }
 .wiz-alt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 8px; font-size: 12.5px; color: var(--muted); }
-.chip-alt { border: 1px solid var(--lilla, #b79cf5); background: rgba(183,156,245,.12); color: inherit; border-radius: 999px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.chip-alt { border: 1px solid var(--lilla, #b79cf5); background: rgba(var(--lilla-rgb),.12); color: inherit; border-radius: 999px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer; }
 .wiz-alt-in { max-width: 190px; padding: 5px 8px; }
-.var-furbo { display: flex; flex-direction: column; gap: 3px; text-align: left; width: 100%; margin-top: 4px; padding: 9px 11px; border-radius: 14px; border: 1px dashed var(--lilla, #b79cf5); background: rgba(183,156,245,.08); color: inherit; font: inherit; font-size: 13.5px; cursor: pointer; }
+.var-furbo { display: flex; flex-direction: column; gap: 3px; text-align: left; width: 100%; margin-top: 4px; padding: 9px 11px; border-radius: 14px; border: 1px dashed var(--lilla, #b79cf5); background: rgba(var(--lilla-rgb),.08); color: inherit; font: inherit; font-size: 13.5px; cursor: pointer; }
 .var-furbo span { color: var(--muted); }
 .var-furbo em { font-style: normal; font-size: 12.5px; font-weight: 600; color: #6cc08b; }
 
@@ -1112,7 +1113,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .lib-furbo { margin: 10px 0 4px; }
 .lib-furbo small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
 .chips-ord { margin-top: 6px; }
-.chip-ord.attivo { background: rgba(183,156,245,.18); border-color: var(--lilla, #b79cf5); }
+.chip-ord.attivo { background: rgba(var(--lilla-rgb),.18); border-color: var(--lilla, #b79cf5); }
 /* Consigli furbi: riepilogo + mosse */
 .furbi { margin: 14px 0 6px; }
 .furbi h4 { margin: 0 0 4px; display: flex; align-items: center; justify-content: space-between; }
@@ -1198,8 +1199,8 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .sw-azioni { position: absolute; top: 0; right: 0; bottom: 0; width: 0; overflow: hidden; display: none; flex-direction: row; justify-content: flex-end; border-radius: 0 var(--r-m) var(--r-m) 0; transition: width .22s ease; }
 .sw.sw-mov .sw-azioni, .sw.aperto .sw-azioni { display: flex; }
 .sw-azioni .sw-fondo { position: static; display: flex; flex: 0 0 84px; width: 84px; border-radius: 0; }
-.sw-cambia { background: #6d5bd0; color: #fff; font-size: 26px; line-height: 1; }
-.sw-cambia:active { background: #5a49b8; }
+.sw-cambia { background: var(--lilla-scuro); color: #fff; font-size: 26px; line-height: 1; }
+.sw-cambia:active { filter: brightness(.85); }
 
 
 /* zone da toccare più grandi (almeno ~44 px) */
@@ -1332,7 +1333,7 @@ body.no-scroll .toast { bottom: calc(168px + env(safe-area-inset-bottom)); }   /
 .pm-card .pm-testa .pr-testo b { white-space: normal; }
 .pm-card .pm-freccia { transition: transform .15s; }
 .pm-card.aperto .pm-freccia { transform: rotate(90deg); }
-.pm-dett { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(183,156,245,.25); }
+.pm-dett { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(var(--lilla-rgb),.25); }
 .pm-ingr { list-style: none; margin: 0 0 10px; padding: 0; }
 .pm-ingr li { padding: 5px 0; font-size: 15px; font-weight: 600; }
 .pm-passi { margin: 0 0 8px; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.45; }
@@ -1483,9 +1484,9 @@ summary { min-height: 40px; display: flex; align-items: center; }
 }
 
 /* schede "Già mangiato": contorno sottile viola; aperte, gli ingredienti non hanno la linea grigia sopra */
-.pm-sezione .pm-card { border: 1px solid rgba(183,156,245,.55); }
+.pm-sezione .pm-card { border: 1px solid rgba(var(--lilla-rgb),.55); }
 .pm-dett, .lib-voce .pm-dett { border-top: none; padding-top: 4px; margin-top: 6px; }
-.pm-lista .lib-voce + .lib-voce { border-top-color: rgba(183,156,245,.25); }
+.pm-lista .lib-voce + .lib-voce { border-top-color: rgba(var(--lilla-rgb),.25); }
 
 /* freccia: ⌄ chiusa, ⌃ aperta (come di solito) */
 .pm-card .pm-freccia { font-size: 20px; line-height: 1; }
@@ -1509,7 +1510,7 @@ summary { min-height: 40px; display: flex; align-items: center; }
 .pr-kcal small{font-size:11px;opacity:.8}
 
 /* freccia = pulsantino rotondo viola con l'angolo dentro (si capisce che la scheda si apre) */
-.pm-card .pm-freccia { position: relative; flex: 0 0 28px; width: 28px; height: 28px; margin: 0 0 0 8px; border: 1.5px solid var(--lilla); border-radius: 50%; background: rgba(183,156,245,.14); transform: none; }
+.pm-card .pm-freccia { position: relative; flex: 0 0 28px; width: 28px; height: 28px; margin: 0 0 0 8px; border: 1.5px solid var(--lilla); border-radius: 50%; background: rgba(var(--lilla-rgb),.14); transform: none; }
 .pm-card .pm-freccia::before { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--lilla); border-bottom: 2px solid var(--lilla); transform: translate(-50%, -75%) rotate(45deg); transition: transform .15s; }
 .pm-card.aperto .pm-freccia { transform: none; margin-bottom: 0; }
 .pm-card.aperto .pm-freccia::before { transform: translate(-50%, -25%) rotate(225deg); }
@@ -1598,7 +1599,7 @@ summary { min-height: 40px; display: flex; align-items: center; }
 .pm-unita-riga { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 2px 8px; }
 .pm-unita { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .pm-u { background: transparent; border: 1px solid var(--line2); color: var(--muted); border-radius: 999px; min-height: 32px; padding: 0 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
-.pm-u.on { border-color: rgba(183,156,245,.8); color: var(--lilla); background: rgba(183,156,245,.12); }
+.pm-u.on { border-color: rgba(var(--lilla-rgb),.8); color: var(--lilla); background: rgba(var(--lilla-rgb),.12); }
 .pm-equiv { color: var(--muted); font-size: 14px; white-space: nowrap; }
 
 /* riga chiusa di un ingrediente a pezzi: accanto a P/C/G quanto pesa (≈ 120 g) */
@@ -1607,7 +1608,7 @@ summary { min-height: 40px; display: flex; align-items: center; }
 /* «Già mangiato»: il cestino dello swipe copre tutto il riquadro; dentro, tutto centrato e ordinato */
 .pm-sezione .pm-card { border-radius: 14px; }
 .pm-sezione .sw { border-radius: 14px; }
-.pm-sezione .pm-dett, .pm-sezione .lib-voce .pm-dett, .pm-sezione .pm-ricetta .pm-dett { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid rgba(183,156,245,.22); }
+.pm-sezione .pm-dett, .pm-sezione .lib-voce .pm-dett, .pm-sezione .pm-ricetta .pm-dett { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid rgba(var(--lilla-rgb),.22); }
 .pm-sezione .pm-cont-grande { justify-content: center; }
 .pm-sezione .pm-unita-riga { justify-content: center; gap: 12px; padding: 0; flex-wrap: wrap; }
 .pm-sezione .pm-u { min-height: 30px; padding: 0 12px; font-size: 13px; }
@@ -1638,7 +1639,7 @@ summary { min-height: 40px; display: flex; align-items: center; }
 
 /* il ＋ al posto della freccia: aggiungi o cambia sport */
 .tipo-btn:has(.tipo-sport) .caret { display: none; }
-.tipo-chip.tipo-piu { border-style: dashed; border-color: rgba(183,156,245,.6); color: var(--lilla); font-size: 18px; font-weight: 400; line-height: 1; padding: 5px 14px; min-width: 44px; justify-content: center; }
+.tipo-chip.tipo-piu { border-style: dashed; border-color: rgba(var(--lilla-rgb),.6); color: var(--lilla); font-size: 18px; font-weight: 400; line-height: 1; padding: 5px 14px; min-width: 44px; justify-content: center; }
 
 /* nota grigia sotto il nome di un campo del Profilo */
 .campo-nota { margin: -2px 0 6px; font-size: 12.5px; line-height: 1.35; color: var(--muted); }
@@ -1676,7 +1677,7 @@ summary { min-height: 40px; display: flex; align-items: center; }
 .pm-sezione.bloccato .rr-macro i { background: rgba(142,160,173,.55); }
 .pm-sezione.bloccato .pm-tot span, .pm-sezione.bloccato .pm-tot b { color: var(--muted); }
 /* il lucchetto: un rettangolo tratteggiato viola, come i pulsanti «＋» */
-.pm-lucchetto { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 30px; padding: 0 12px; margin-left: 8px; border-radius: 14px; background: transparent; border: 1px dashed rgba(183,156,245,.7); font-size: 15px; line-height: 1; cursor: pointer; opacity: 1; position: relative; text-transform: none; }
+.pm-lucchetto { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 30px; padding: 0 12px; margin-left: 8px; border-radius: 14px; background: transparent; border: 1px dashed rgba(var(--lilla-rgb),.7); font-size: 15px; line-height: 1; cursor: pointer; opacity: 1; position: relative; text-transform: none; }
 .pm-lucchetto::after { content: ""; position: absolute; inset: -6px; }
 /* la pallina davanti ai nomi, grigia nel pasto bloccato */
 .pm-sezione.bloccato .pm-card .pm-ck, .pm-sezione.bloccato .pm-card .pr-check { background: rgba(142,160,173,.55) !important; color: rgba(142,160,173,.55) !important; }
@@ -1871,7 +1872,7 @@ button.ant-fit { display: block; width: 100%; text-align: left; font: inherit; c
 button.ant-fit .ant-fit-t { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 4px; }
 button.ant-fit .ant-mosse { display: block; padding: 0; margin: 0 0 4px; font-size: 14px; }
 .ant-fit-nota { display: block; font-size: 12px; color: var(--muted); }
-button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
+button.ant-fit.on { border-style: solid; background: rgba(var(--lilla-rgb),.20); }
 
 /* «Più fit» applicato: conferma verde, non si tocca più */
 /* già applicato: viola con bordo pieno (il tratteggiato nell'app vuol dire «tocca per applicare») */
@@ -1916,9 +1917,9 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 .pm-sezione .pm-card { background: transparent; border: none; border-radius: 0; box-shadow: none; margin: 0; padding: 12px 2px; }
 .pm-sezione .sw { border-radius: 0; }
 .pm-sezione .sw-fondo, .pm-sezione .sw-azioni { border-radius: 0; }
-.pm-sezione .pm-tot { padding-bottom: 8px; margin-bottom: 0; border-bottom: 1px solid rgba(183,156,245,.35); }
+.pm-sezione .pm-tot { padding-bottom: 8px; margin-bottom: 0; border-bottom: 1px solid rgba(var(--lilla-rgb),.35); }
 .pm-sezione > .pm-card, .pm-sezione > .sw { border-bottom: 1px solid var(--line2); }
-.pm-sezione .pm-card.aperto, .pm-sezione .pm-card.aperta { background: rgba(183,156,245,.06); }
+.pm-sezione .pm-card.aperto, .pm-sezione .pm-card.aperta { background: rgba(var(--lilla-rgb),.06); }
 .pm-sezione .pm-card .pm-testa .pm-freccia { border: none; background: none; border-radius: 0; width: 22px; height: 22px; }
 .pm-sezione .pm-card .pm-testa .pm-freccia::before { width: 7px; height: 7px; border-color: var(--muted); }
 .pm-sezione .pm-dett, .pm-sezione .lib-voce .pm-dett, .pm-sezione .pm-ricetta .pm-dett { border-top-color: var(--line2); }
@@ -1947,3 +1948,46 @@ button.ant-fit.on { border-style: solid; background: rgba(183,156,245,.20); }
 
 /* «Già mangiato» di un pasto passato: l'alimento singolo non si apre (niente manina) */
 .pm-card .pm-testa.sola-lettura.pm-fissa { cursor: default; }
+
+/* ===== Questionario iniziale (una domanda alla volta, come questionario.html) ===== */
+.modal-qz .modal-sheet { min-height: calc(100dvh - env(safe-area-inset-top) - var(--tabbar-h, 64px) - 40px); }
+.qz { display: flex; flex-direction: column; min-height: 100%; padding-top: 4px; }
+.qz-top { display: flex; align-items: center; gap: 12px; margin: 4px 36px 18px 0; }
+.qz-ind { flex: 0 0 42px; height: 42px; border-radius: 12px; background: var(--card2); border: 0; color: var(--text); font-size: 20px; cursor: pointer; }
+.qz-ind[hidden] { display: block; visibility: hidden; }
+.qz-bar { flex: 1; height: 8px; background: var(--card2); border-radius: 9px; overflow: hidden; }
+.qz-bar i { display: block; height: 100%; background: var(--lilla); transition: width .25s; }
+.qz-q { font-size: 24px; line-height: 1.25; margin: 0 0 18px; }
+.qz-q span { display: block; font-size: 38px; line-height: 1; margin-bottom: 10px; }
+.qz-sc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.qz-sc.qz-giorni { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.qz-b { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 16px; border-radius: 16px; background: var(--card2); border: 2px solid rgba(255,255,255,.08); font: inherit; font-size: 17px; font-weight: 500; line-height: 1.25; text-align: left; color: var(--text); cursor: pointer; width: 100%; }
+.qz-b .qz-e { font-size: 22px; flex: 0 0 auto; line-height: 1; }
+.qz-b.on { background: var(--lilla); border-color: var(--lilla); color: #1a1426; font-weight: 700; }
+.qz-b.on::after { content: "✓"; margin-left: auto; font-size: 18px; }
+.qz-u { display: flex; align-items: center; gap: 12px; }
+.qz-u b { font-size: 17px; font-weight: 500; color: var(--muted); }
+.qz-inp { width: 100%; font: inherit; font-size: 20px; font-weight: 500; padding: 15px 16px; border-radius: 16px; border: 2px solid rgba(255,255,255,.08); background: var(--card2); color: var(--text); }
+.qz-inp:focus { outline: none; border-color: var(--lilla); }
+.qz-pic { color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+.qz-err { color: var(--bad); }
+.qz-orari { display: grid; gap: 10px; }
+.qz-ora { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 16px; background: var(--card2); font-size: 17px; }
+.qz-ora input { font: inherit; font-size: 18px; background: transparent; border: 0; color: var(--text); text-align: right; }
+.qz-colori { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.qz-col { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border-radius: 14px; background: var(--card2); border: 2px solid transparent; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
+.qz-col i { width: 34px; height: 34px; border-radius: 50%; background: var(--c); }
+.qz-col.on { border-color: var(--c); }
+.qz-icone, .pers-icone { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.qz-ico { width: 46px; height: 46px; border-radius: 12px; background: var(--card2); border: 2px solid transparent; font-size: 22px; cursor: pointer; }
+.qz-ico.on { border-color: var(--lilla); background: var(--lilla-bg); }
+.qz-anteprima { font-size: 22px; font-weight: 800; color: var(--lilla); margin: 14px 0 0; }
+.qz-riep p { font-size: 17px; margin: 0 0 12px; }
+.qz-num { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 12px; }
+.qz-num b { font-size: 44px; color: var(--lilla); line-height: 1; }
+.qz-num span { color: var(--muted); }
+.qz-macro b { color: var(--text); }
+.qz-backup { margin-top: 18px; }
+.qz-foot { position: sticky; bottom: -24px; margin: auto -18px -24px; padding: 14px 18px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(0deg, var(--card) 75%, transparent); }
+.qz-foot .btn { font-size: 18px; padding: 15px; border-radius: 16px; background: var(--lilla); color: #1a1426; }
+.qz-foot .btn:disabled { background: var(--card2); color: var(--muted); }

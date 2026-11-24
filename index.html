@@ -13,10 +13,30 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Colore e nome scelti nel Profilo: si applicano subito, prima che la pagina si disegni (niente lampo di lilla)
+    // [chiave, nome, colore, r,g,b, colore scuro (pulsanti pieni)]
+    window.COLORI_APP = [
+      ["lilla", "Lilla", "#b79cf5", "183,156,245", "#6d5bd0"], ["rosa", "Rosa", "#f29cc4", "242,156,196", "#c24f86"],
+      ["pesca", "Pesca", "#f7b07c", "247,176,124", "#c46a2b"], ["corallo", "Corallo", "#f58f86", "245,143,134", "#c4473e"],
+      ["giallo", "Giallo", "#f2d067", "242,208,103", "#a88414"], ["menta", "Menta", "#7fdcb0", "127,220,176", "#2f9a6a"],
+      ["turchese", "Turchese", "#6fd3d8", "111,211,216", "#22959b"], ["azzurro", "Azzurro", "#8fbaf5", "143,186,245", "#3f72c4"]
+    ];
+    window.applicaColore = function (chiave) {
+      var c = window.COLORI_APP.filter(function (x) { return x[0] === chiave; })[0] || window.COLORI_APP[0], s = document.documentElement.style;
+      s.setProperty("--lilla", c[2]); s.setProperty("--lilla-rgb", c[3]); s.setProperty("--lilla-scuro", c[4]); s.setProperty("--lilla-bg", "rgba(" + c[3] + ",.12)");
+    };
+    try { var pfT = JSON.parse(localStorage.getItem("mp_profilo") || "{}"); if (pfT.colore) window.applicaColore(pfT.colore); } catch (e) {}
+  </script>
 </head>
 <body>
   <header class="topbar">
-    <h1>🌙 Sailor Fit</h1>
+    <h1 id="titolo-app">🌙 Sailor Fit</h1>
+    <script>
+      // nome e icona dell'app scelti nel Profilo
+      try { var pfN = JSON.parse(localStorage.getItem("mp_profilo") || "{}"); if (pfN.nomeApp || pfN.iconaApp) { var tN = (pfN.iconaApp || "🌙") + " " + (pfN.nomeApp || "Sailor Fit"); document.getElementById("titolo-app").textContent = tN; document.title = pfN.nomeApp || "Sailor Fit"; } } catch (e) {}
+    </script>
+    <p id="saluto" class="saluto" hidden></p>
   </header>
 
   <main>
@@ -51,6 +71,7 @@
   <script defer src="codice-barre.js"></script>
   <script defer src="foto-ricetta.js"></script>
   <script defer src="diario.js"></script>
+  <script defer src="benvenuto.js"></script>
   <script defer src="settimana.js"></script>
   <script defer src="andamento.js"></script>
 <script defer src="swipe.js"></script>

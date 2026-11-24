@@ -233,7 +233,7 @@ function suggerimentiMacro(diff, esclusi = []) {
   ["proteine", "carboidrati", "grassi"].forEach((k, idx) => {
     if (diff[k] < soglia[k]) return;
     const kk = idx + 1;
-    const opz = JOLLY[k].filter(n => window.ALIMENTI[n] && !esclusi.includes(n)).slice(0, 3).map(n => {
+    const opz = JOLLY[k].filter(n => window.ALIMENTI[n] && !esclusi.includes(n) && !(typeof alimentoEscluso === "function" && alimentoEscluso(n))).slice(0, 3).map(n => {
       const a = window.ALIMENTI[n];
       let g = diff[k] / (a[kk] / 100);
       // non sforare troppo le calorie che restano (tolleranza 100 kcal)
@@ -808,6 +808,7 @@ function consiglioFurboHTML(c, m, fitMosse = []) {
   const righeFit = fitMosse.map(a => {
     const attr = a.tipo === "cambia" ? `data-sost-scegli="${a.r.k}" data-nome="${esc(a.a)}" data-fit="${esc(`cambia|${a.r.nome}|${a.a}`)}"` : `data-lib-setq="${a.r.k}|${a.nuova}" data-fit="${esc(`porta|${a.r.nome}|${a.nuova}|${Math.round(a.r.qta)}`)}"`;
     const testa = a.tipo === "cambia" ? `Cambia <b>${esc(a.r.nome.toLowerCase())}</b> (${Math.round(a.r.qta)} g) con <b>${esc(a.a.toLowerCase())}</b>` : `Porta <b>${esc(a.r.nome.toLowerCase())}</b> da ${Math.round(a.r.qta)} a <b>${a.nuova} g</b>`;
+    if (a.tipo === "cambia" && typeof alimentoEscluso === "function" && alimentoEscluso(a.a)) return null;   // cibi che hai escluso nel Profilo
     return furbiScartati.has(testa) ? null : { a: { tipo: "fit" }, r: { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}><span class="tag-fit">più fit</span>${testa}</button>` } };
   }).filter(Boolean);
   if (!e && !righeFit.length) return "";
@@ -830,6 +831,7 @@ function consiglioFurboHTML(c, m, fitMosse = []) {
       attr = `data-lib-add="${esc(a.n)}" data-lib-g="${a.g}" data-lib-fisso="1"`;
     }
     if (furbiScartati.has(testa)) return null;
+    if (typeof alimentoEscluso === "function" && ((a.tipo === "cambia" && alimentoEscluso(a.a)) || (a.tipo !== "pezzi" && a.tipo !== "porta" && a.n && alimentoEscluso(a.n)))) return null;   // cibi che hai escluso nel Profilo
     if (giaFit && ((a.tipo === "cambia" && giaFit.has(`cambia|${a.r.nome}|${a.a}`)) || (a.tipo === "porta" && giaFit.has(`porta|${a.r.nome}|${a.nuova}`)))) return null;   // già proposto in «Più fit»
     return { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}>${testa}</button>` };   // solo la mossa: il box si tocca per applicarla
   };
