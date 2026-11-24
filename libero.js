@@ -304,16 +304,23 @@ const PIATTI_PRONTI = new Set(["Hamburger di manzo", "Pizza margherita", "Pizza 
   "Caponata", "Bruschetta al pomodoro", "Tramezzino", "Toast prosciutto e formaggio", "Burger vegetale", "Falafel", "Porridge (avena col latte)", "Brownie", "Muffin", "Pancake", "Cheesecake",
   "Nachos con formaggio", "Quesadilla", "Paella", "Pad thai", "Hot dog", "Club sandwich", "Nuggets di pollo", "Waffle", "Crepes dolci", "Supplì", "Crostini", "Caprese", "Ossobuco", "Saltimbocca alla romana", "Brasato", "Stufato di manzo", "Ribollita", "Panzanella", "Smoothie di frutta", "Frullato proteico", "Poke bowl"]);
 // sotto il nome di un alimento che hai escluso (allergie, dieta, cibi che non mangi): «⚠️ contiene lattosio»
+// sotto il nome di un alimento che è già nel pasto da solo: «già nel pasto · 150 g»
+const giaNelPastoHTML = (c, n) => { const g = c && (c.items || []).find(x => x.grp == null && x.nome === n); return g ? `<small class="autoc-gia">già nel pasto · ${esc(etichettaDose(n, +g.qta || 0))}</small>` : ""; };
 const avvisoEsclusoHTML = (n) => { const m = typeof motivoEscluso === "function" ? motivoEscluso(n) : ""; return m ? `<small class="autoc-escluso">⚠️ ${esc(m)}</small>` : ""; };
+// Campo di ricerca toccato e ancora vuoto: sotto compaiono i mangiati di recente (come nelle app di diario alimentare); scrivendo lasciano il posto ai suggerimenti
+function recentiNelCampo() {
+  const c = liberoCtx, inp = document.getElementById("lib-input");
+  if (!c || !inp || document.activeElement !== inp || typeof recentiHTML !== "function") return "";
+  return recentiHTML(c, c.items.length > 0);   // «↻ Ripeti» solo a pasto vuoto
+}
 function mostraAutocompleta(testo) {
   const box = document.getElementById("lib-autoc");
   if (!box) return;
   const ultima = String(testo || "").split(/[,;+]/).pop();
   const q = ultima.replace(AUTOC_LEAD, "").trim();
-  if (!q) { box.innerHTML = ""; return; }
-  const gia = new Set((liberoCtx.items || []).map(x => x.nome));
+  if (!q) { box.innerHTML = recentiNelCampo(); return; }
   const nq = norm(q);
-  const trovati = cercaAlimenti(q).filter(n => !gia.has(n));
+  const trovati = cercaAlimenti(q);   // anche quelli già nel pasto: si vedono con «già nel pasto» e, toccandoli, si chiede se sommare
   // prima quelli che iniziano per quello che hai scritto
   // prima quelli adatti a te (gli esclusi in fondo, con l'avviso), poi quelli che iniziano per quello che hai scritto
   const escl = (n) => typeof alimentoEscluso === "function" && alimentoEscluso(n);
@@ -321,7 +328,7 @@ function mostraAutocompleta(testo) {
   const ricetteHTML = String(testo || "").includes(",") ? "" : ricetteTestoHTML(q, "data-autoc-ricetta");
   const conQta = !(ultima.match(AUTOC_LEAD) || [""])[0].trim();   // hai già scritto una quantità ("200 pol…")? allora niente dose suggerita
   const dose = (n) => { if (!conQta) return ""; const g = porzioneSolita(n), a = window.ALIMENTI[n]; return g > 0 && a ? `<em class="autoc-dose">${etichettaDose(n, g)} · ${Math.round(a[0] * g / 100)} kcal</em>` : ""; };
-  const voce = (n) => `<button class="autoc-voce" data-autoc="${esc(n)}"><span class="autoc-nome">${esc(n)}${avvisoEsclusoHTML(n)}</span>${dose(n)}</button>`;
+  const voce = (n) => `<button class="autoc-voce" data-autoc="${esc(n)}"><span class="autoc-nome">${esc(n)}${avvisoEsclusoHTML(n)}${giaNelPastoHTML(liberoCtx, n)}</span>${dose(n)}</button>`;
   const ingr = trovati.filter(n => !PIATTI_PRONTI.has(n)).slice(0, 6).map(voce).join("");       // alimenti singoli
   const piatti = trovati.filter(n => PIATTI_PRONTI.has(n)).slice(0, 4).map(voce).join("");      // già composti
   // sopra tutti gli alimenti (anche quelli già pronti: pizza, frittata, tiramisù…, che si segnano come un alimento), sotto le ricette
@@ -369,7 +376,7 @@ function mostraSostituzioni(inp) {
 function sostituisciIngrediente(k, nome, grammi) {
   const c = liberoCtx, vecchio = c && c.items[k];
   if (!vecchio || !window.ALIMENTI[nome]) return;
-  if (c.items.some((x, i) => i !== k && x.nome === nome)) { avviso("C'è già " + nome.toLowerCase() + " nel pasto."); return rirenderLibero(); }
+  if (c.items.some((x, i) => i !== k && x.nome === nome && x.grp == vecchio.grp)) { avviso("C'è già " + nome.toLowerCase() + " nel pasto."); return rirenderLibero(); }
   c.items[k] = { nome, cercato: nome, qta: grammi > 0 ? grammi : vecchio.qta, lock: true, grp: vecchio.grp }; // stessa quantità di prima (o quella del consiglio, a parità di calorie)
   rirenderLibero();
 }
@@ -530,7 +537,7 @@ const troppiGrassiPre = (nome, qta) => grassiAlimento(nome, qta) >= PRE_GRASSI_M
 function alternativeSostituzione(c, nome, qta, k) {
   const A = window.ALIMENTI || {}, a0 = A[nome]; if (!a0) return [];
   const { pre, post } = contestoAllenamento(c);
-  const dentro = new Set(c.items.map(x => x.nome));
+  const dentro = new Set(c.items.filter(x => x.grp == (c.items[k] || {}).grp).map(x => x.nome));   // conta solo lo stesso piatto (la ricetta o le righe singole)
   const pool = POOL_SOSTITUZIONE.find(p => p.includes(nome)) || [];
   const fam = famigliaProt(nome) ? (FAMIGLIE_PROT.find(([f]) => f === famigliaProt(nome)) || [])[1] || [] : [];
   let cand = [...(typeof SCAMBI_LEGGERI !== "undefined" ? SCAMBI_LEGGERI[nome] || [] : []), ...(SCAMBI_FURBI[nome] || []), ...(FIT_SCAMBI[nome] || []), ...pool, ...fam];
@@ -874,7 +881,29 @@ function campoAggiungiHTML(c) {
       <button class="btn-sec lib-scan" data-lib="scan" aria-label="Leggi il codice a barre">📷</button>
       <button class="btn lib-piu" data-lib="aggiungi" aria-label="Aggiungi ingrediente">＋</button>
     </div>
-    <div id="lib-autoc" class="lib-autoc"></div>`;
+    <div id="lib-autoc" class="lib-autoc"></div>${doppioneHTML(c)}`;
+}
+// Alimento già nel pasto da solo: prima di sommare si chiede (dentro il pannello, così il pasto aperto resta com'è)
+function doppioneHTML(c) {
+  const d = c && c.doppione, gia = d && c.items.find(x => x.grp == null && x.nome === d.nome);
+  if (!gia) return "";
+  return `<div class="lib-doppio" role="alert"><p>C'è già <b>${esc(d.nome.toLowerCase())}</b> (${esc(etichettaDose(d.nome, +gia.qta || 0))}) nel pasto. Sommo a quello presente? → <b>${esc(etichettaDose(d.nome, (+gia.qta || 0) + d.qta))}</b></p>
+    <div class="lib-doppio-tasti"><button class="btn-sec" data-lib-doppio="no">Annulla</button><button class="btn" data-lib-doppio="si">Sì, somma</button></div></div>`;
+}
+// Un alimento singolo nel pasto, da qualunque parte arrivi (ricerca, ＋, mangiati di recente, consigli):
+// già presente da solo → si chiede se sommare; presente solo in una ricetta → riga a parte, e lo si dice
+function aggiungiAlimento(c, nome, qta, lock, extra) {
+  const gia = c.items.find(x => x.grp == null && x.nome === nome);
+  if (gia) {
+    if (!qta) qta = (window.PESO_PZ || {})[nome] || porzioneSolita(nome) || 0;
+    if (!qta) { avviso(`${nome} c'è già: cambia la quantità nella sua riga`); return false; }
+    c.doppione = { nome, qta: Math.round(qta * 10) / 10 };
+    return false;
+  }
+  c.items.push(Object.assign({ nome, cercato: nome, qta, lock }, extra || {}));
+  c.ultimoAgg = nome;   // l'ultimo aggiunto mostra subito i pulsanti rapidi della quantità
+  if (c.items.some(x => x.grp != null && x.nome === nome)) avviso(`${nome} c'è anche nella ricetta: aggiunto a parte`);
+  return true;
 }
 // Un pasto già passato (l'ora è trascorsa) e registrato è «bloccato»: non si toglie ciò che hai mangiato. Il lucchetto 🔒 lo sblocca (con conferma);
 // 🔓 lo richiude, e quando chiudi il pasto si richiude da solo. Anche bloccato le schede si aprono, in sola lettura, per vedere cosa e quanto hai mangiato.
@@ -1265,7 +1294,6 @@ function liberoHTML() {
         <div class="r-macro">${c.bozza || schede.length > 1 ? macroHaObiettivoHTML(mPasto, T, true) : ""}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
       </div>
       ${pastoPassatoC(c) ? "" : furboBlocco}
-      ${bloccato || pastoPassatoC(c) || typeof recentiHTML !== "function" ? "" : recentiHTML(c, true)}
       ${bloccato ? "" : altreIdeeHTML(c)}
     ` : c.idee()}
     ${c.bozza ? "" : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
@@ -1351,20 +1379,8 @@ function aggiungiDaTesto(testo) {
     if (r.unita !== "q.b.") { qta = Math.round(grammiIng(r)); lock = qta > 0; }
     else if ((window.PORZIONE_INTERA || /$^/).test(r.nome) && (window.PESO_PZ || {})[r.nome]) { qta = window.PESO_PZ[r.nome]; lock = true; }
     if (!qta && r.unita === "q.b.") { qta = porzioneSolita(r.nome); lock = qta > 0; }   // niente quantità scritta: la dose solita, poi la cambi coi pulsanti rapidi
-    const gia = c.items.find(x => x.grp == null && x.nome === r.nome);
-    if (gia) {   // c'è già nel pasto: le quantità si sommano (come nel diario) e te lo diciamo, invece di ignorarlo in silenzio
-      if (!qta) qta = (window.PESO_PZ || {})[r.nome] || 0;   // senza quantità: un pezzo in più, se si conta a pezzi
-      if (!qta) { avviso(`${r.nome} c'è già: cambia la quantità nella sua riga`); continue; }
-      const prima = +gia.qta || 0;
-      gia.qta = Math.round((prima + qta) * 10) / 10; gia.lock = true; c.ultimoAgg = gia.nome;
-      const u = unitaDi(gia), gu = grammiPerUnita(gia.nome, u), ug = UNITA_LIQUIDI.test(gia.nome) ? "ml" : "g";
-      const f = (q) => gu ? fmtQta(q / gu) : Math.round(q);
-      avviso(`${gia.nome}: ${f(prima)} → ${f(gia.qta)} ${gu ? (u === "cucchiaio" ? "cucc." : u === "cucchiaino" ? "c.ino" : u) : ug}`);
-      continue;
-    }
     const unita = ["g", "ml"].includes(r.unita) ? "g" : ["pz", "cucchiaio", "cucchiaino"].includes(r.unita) ? r.unita : undefined; // l'unità che hai scritto
-    c.items.push({ nome: r.nome, cercato: r.cercato, qta, lock, unita });
-    c.ultimoAgg = r.nome;   // l'ultimo aggiunto mostra subito i pulsanti rapidi della quantità
+    aggiungiAlimento(c, r.nome, qta, lock, { cercato: r.cercato, unita });   // già nel pasto da solo: chiede se sommare
   }
   ricalcolaLibero();
 }
@@ -1617,7 +1633,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const sq = e.target.closest("[data-lib-setq]");
     if (sq) { const [k, g] = sq.dataset.libSetq.split("|").map(Number); if (c.items[k]) { c.items[k].qta = g; c.items[k].lock = true; ricalcolaLibero(); rirenderLibero(); } return; }   // consiglio furbo: porta la quantità a quella proposta
     const add = e.target.closest("[data-lib-add]");
-    if (add) { c.items.push({ nome: add.dataset.libAdd, qta: +add.dataset.libG, lock: add.dataset.libFisso === "1" }); ricalcolaLibero(); rirenderLibero(); return; }   // il consiglio furbo mette proprio la quantità proposta
+    if (add) { const dalCampo = !!add.closest("#lib-autoc"); aggiungiAlimento(c, add.dataset.libAdd, +add.dataset.libG, add.dataset.libFisso === "1"); ricalcolaLibero(); rirenderLibero(); if (dalCampo) rifocusInput(); return; }
+    const dp = e.target.closest("[data-lib-doppio]");
+    if (dp) {   // risposta al «c'è già»: somma alla riga presente, oppure niente
+      const d = c.doppione, gia = d && c.items.find(x => x.grp == null && x.nome === d.nome);
+      c.doppione = null;
+      if (dp.dataset.libDoppio === "si" && gia) {
+        const prima = +gia.qta || 0;
+        gia.qta = Math.round((prima + d.qta) * 10) / 10; gia.lock = true; c.ultimoAgg = gia.nome;
+        avviso(`${gia.nome}: ${etichettaDose(gia.nome, prima)} → ${etichettaDose(gia.nome, gia.qta)}`);
+        ricalcolaLibero();
+      }
+      rirenderLibero(); return;
+    }   // il consiglio furbo mette proprio la quantità proposta
   });
   mc.addEventListener("change", (e) => {
     if (!liberoCtx) return;
@@ -1646,6 +1674,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const it = liberoCtx && liberoCtx.items[+t.dataset.libNome];
       if (it && t.isConnected && document.activeElement !== t) { nomeComeTesto(t, it); const b = document.getElementById("lib-sost"); if (b) b.remove(); }
     }, 350);
+  });
+  mc.addEventListener("focusin", (e) => {
+    if (!liberoCtx || e.target.id !== "lib-input" || e.target.value.trim()) return;
+    mostraAutocompleta("");
+    // la lista appare sotto il dito mentre il pannello si allunga: per un attimo non prende tocchi (niente aggiunte per sbaglio)
+    const box = document.getElementById("lib-autoc");
+    if (box) { box.style.pointerEvents = "none"; setTimeout(() => { box.style.pointerEvents = ""; }, 450); }
+  });
+  // toccando un recente o un suggerimento il campo resta attivo (la tastiera non si chiude e l'elenco non sparisce sotto il dito)
+  mc.addEventListener("mousedown", (e) => { if (e.target.closest && e.target.closest("#lib-autoc") && document.activeElement && document.activeElement.id === "lib-input") e.preventDefault(); });
+  mc.addEventListener("focusout", (e) => {   // uscendo dal campo vuoto i recenti si richiudono
+    if (e.target.id !== "lib-input") return;
+    setTimeout(() => { const inp = document.getElementById("lib-input"), box = document.getElementById("lib-autoc"); if (box && inp && document.activeElement !== inp && !inp.value.trim()) box.innerHTML = ""; }, 250);
   });
   mc.addEventListener("input", (e) => {
     if (!liberoCtx) return;

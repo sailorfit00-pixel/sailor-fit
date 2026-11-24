@@ -24,9 +24,17 @@
     ];
     window.applicaColore = function (chiave) {
       var c = window.COLORI_APP.filter(function (x) { return x[0] === chiave; })[0] || window.COLORI_APP[0], s = document.documentElement.style;
-      s.setProperty("--lilla", c[2]); s.setProperty("--lilla-rgb", c[3]); s.setProperty("--lilla-scuro", c[4]); s.setProperty("--lilla-bg", "rgba(" + c[3] + ",.12)");
+      // tema chiaro: il colore scelto si usa nella versione scura (il lilla chiaro su bianco non si leggerebbe)
+      var chiaro = document.documentElement.getAttribute("data-tema") === "chiaro";
+      s.setProperty("--lilla", chiaro ? c[4] : c[2]); s.setProperty("--lilla-rgb", c[3]); s.setProperty("--lilla-scuro", c[4]); s.setProperty("--lilla-bg", "rgba(" + c[3] + (chiaro ? ",.18)" : ",.12)"));
     };
-    try { var pfT = JSON.parse(localStorage.getItem("mp_profilo") || "{}"); if (pfT.colore) window.applicaColore(pfT.colore); } catch (e) {}
+    // Tema scuro (di base) o chiaro, scelto nel Profilo
+    window.applicaTema = function (tema) {
+      var chiaro = tema === "chiaro", m = document.querySelector('meta[name="theme-color"]');
+      if (chiaro) document.documentElement.setAttribute("data-tema", "chiaro"); else document.documentElement.removeAttribute("data-tema");
+      if (m) m.setAttribute("content", chiaro ? "#f3f5f7" : "#0f1417");
+    };
+    try { var pfT = JSON.parse(localStorage.getItem("mp_profilo") || "{}"); window.applicaTema(pfT.tema); window.applicaColore(pfT.colore || "lilla"); } catch (e) {}
   </script>
 </head>
 <body>

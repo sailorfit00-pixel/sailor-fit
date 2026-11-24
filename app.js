@@ -125,8 +125,11 @@ const NASCOSTI_IN = [[/^pomodor/, /pizza(?! bianca)|ketchup|bruschetta|caprese|a
   [/^cipoll/, /soffritto|ragù|caponata|minestrone|ribollita|stufato|spezzatino|brasato|chili|kebab/], [/^aglio$/, /pesto|bruschetta|tzatziki|hummus|aioli/],
   [/^peperon[ei]$/, /caponata|paella|chili/], [/^melanzan/, /caponata|parmigiana|moussaka/], [/^patat/, /purè|crocchette|gnocchi|hash brown/],
   [/^cioccolat|^cacao/, /cioccolat|nutella|brownie|cacao|tiramisù/], [/^caffe/, /tiramisù|cappuccino|espresso|caffelatte|macchiato/]];
+// nomi che contengono la parola ma non sono quel cibo: l'erba cipollina non è cipolla, il burro di cacao non è burro…
+const FALSI_AMICI = [[/^cipoll/, /erba cipollina/], [/^burro$/, /burro (d'arachidi|di mandorle|di cacao)/], [/^latte$/, /latte (di cocco|di mandorla)/]];
 const parolaTrova = (w, nome) => {   // la parola scritta a mano trova questo alimento? (nome, allergene noto o piatto che lo nasconde)
   const n = normCibo(nome), l = String(nome).toLowerCase(), r = radiceCibo(w), cat = categoriaDiParola(w), nw = normCibo(w), nasc = NASCOSTI_IN.find(([re]) => re.test(nw));
+  if (FALSI_AMICI.some(([re, no]) => re.test(normCibo(w)) && no.test(n))) return false;
   return (r.length >= 3 && n.includes(r)) || !!(cat && CATEGORIE_CIBO[cat] && CATEGORIE_CIBO[cat].test(l)) || !!(nasc && nasc[1].test(l));
 };
 const ciboScrittoAMano = (nome, pf = leggiProfilo()) => paroleScritte(pf).some(w => parolaTrova(w, nome));
@@ -152,7 +155,7 @@ function motivoEscluso(nome) {
   const nonMangio = (e.nonMangio || []).flatMap(c => c === "pesce" ? ["pesce", "crostacei"] : [c]).find(tocca);
   if (nonMangio) return `contiene ${NOMI_CATEGORIA[nonMangio] || nonMangio}`;
   const w = paroleScritte(pf).find(w => parolaTrova(w, nome));
-  if (w) return `contiene ${normCibo(w)}`;
+  if (w) return radiceCibo(w).length >= 3 && normCibo(nome).startsWith(radiceCibo(w)) ? "l'hai escluso tu" : `contiene ${normCibo(w)}`;   // «Kiwi»: non «contiene kiwi»
   return e.dieta === "vegana" ? "non è vegano" : e.dieta === "vegetariana" ? "non è vegetariano" : "escluso";
 }
 // una ricetta è esclusa se uno dei suoi ingredienti lo è (il nome della ricetta non conta: «pancake» senza uova restano)
@@ -176,13 +179,16 @@ if (window.visualViewport) {
   vv.addEventListener("resize", aggiornaTastiera);
   vv.addEventListener("scroll", aggiornaTastiera);
   document.addEventListener("focusin", () => setTimeout(aggiornaTastiera, 300));
-  document.addEventListener("focusout", () => setTimeout(aggiornaTastiera, 300));
+  document.addEventListener("focusout", () => { setTimeout(aggiornaTastiera, 300); setTimeout(aggiornaTastiera, 700); });
+  // ricontrollo dopo ogni tocco: su iPhone la tastiera a volte si chiude senza avvisare (e il pannello restava alto, con una striscia vuota sotto)
+  document.addEventListener("touchend", () => setTimeout(aggiornaTastiera, 400), { passive: true });
 }
 
 // -------- Personalizzazione: colore, nome e icona dell'app, saluto --------
 const ICONE_APP = ["🌙", "⛵", "🌸", "🔥", "⭐", "🌿", "🍓", "💪", "🦋", "🌊", "☀️", "🍀"];
 function applicaPersonalizzazione() {
   const pf = leggiProfilo();
+  if (typeof window.applicaTema === "function") window.applicaTema(pf.tema);   // prima il tema: il colore dipende da quello
   if (typeof window.applicaColore === "function") window.applicaColore(pf.colore || "lilla");
   const nome = pf.nomeApp || "Sailor Fit", t = document.getElementById("titolo-app");
   if (t) t.textContent = `${pf.iconaApp || "🌙"} ${nome}`;
@@ -2222,6 +2228,8 @@ function apriProfilo() {
     <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Per salutarti in alto" data-pers="nome" value="${esc(pf.nome || "")}">
     <label class="wiz-l">Colore</label>
     <div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c]) => `<button class="qz-col ${(pf.colore || "lilla") === k ? "on" : ""}" data-pers-colore="${k}" style="--c:${c}"><i></i><span>${l}</span></button>`).join("")}</div>
+    <label class="wiz-l">Tema</label>
+    <div class="chips">${[["scuro", "🌙 Scuro"], ["chiaro", "☀️ Chiaro"]].map(([k, l]) => `<button class="chip ${(pf.tema || "scuro") === k ? "attivo" : ""}" data-pers-tema="${k}">${l}</button>`).join("")}</div>
     <button class="btn-sec block" data-azione="rifai-questionario">📝 Rifai il questionario iniziale</button>
     <div class="barra-salva due" id="pf-barra" ${profiloModificato() ? "" : "hidden"}><button class="btn-sec" data-pf-annulla>Annulla</button><button class="btn" data-pf-salva>✓ Salva</button></div>
 `);
@@ -2242,9 +2250,9 @@ function esclusioniHTML(pf) {
 // Profilo: tocchi su cibi esclusi, icona e colore; testi del nome
 document.addEventListener("click", (e) => {
   if (!e.target.closest || !e.target.closest("#modal-content")) return;
-  const es = e.target.closest("[data-escl]"), ic = e.target.closest("[data-pers-icona]"), co = e.target.closest("[data-pers-colore]");
+  const es = e.target.closest("[data-escl]"), ic = e.target.closest("[data-pers-icona]"), co = e.target.closest("[data-pers-colore]"), te = e.target.closest("[data-pers-tema]");
   const ea = e.target.closest("[data-escl-aggiungi]"), et = e.target.closest("[data-escl-togli]");
-  if (!es && !ic && !co && !ea && !et) return;
+  if (!es && !ic && !co && !te && !ea && !et) return;
   const pf = leggiProfilo();
   if (ea || et) {   // allergie e cibi scritti a mano
     const x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {});
@@ -2264,6 +2272,7 @@ document.addEventListener("click", (e) => {
   }
   if (ic) pf.iconaApp = ic.dataset.persIcona;
   if (co) pf.colore = co.dataset.persColore;
+  if (te) { if (te.dataset.persTema === "chiaro") pf.tema = "chiaro"; else delete pf.tema; }   // di base scuro
   { const x = pf.esclusioni;   // niente escluso: il profilo torna esattamente com'era (anche per la barra «Salva»)
     if (x) { ["allergie", "nonMangio", "altri", "allergieAltre"].forEach(k => { if (Array.isArray(x[k]) && !x[k].length) delete x[k]; }); if (!Object.keys(x).length) delete pf.esclusioni; } }
   salvaProfilo(pf); applicaPersonalizzazione(); riapriProfilo();

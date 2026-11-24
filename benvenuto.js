@@ -98,9 +98,11 @@ function qzValido(q) {
   return true;
 }
 // proteine e grassi di partenza in base a quanto ti alleni: senza sport non servono le quantità da palestra
+// camminata e yoga/pilates sono attività leggere: non servono le proteine di chi fa pesi o CrossFit
+const QZ_SPORT_LEGGERI = ["camminata", "yoga"];
 function qzMacroKg(R) {
-  const giorni = senzaSport(R) ? 0 : (R.giorni || []).length;
-  return { protKg: giorni === 0 ? 1.3 : giorni <= 2 ? 1.6 : 1.8, grassiKg: 0.8 };
+  const giorni = senzaSport(R) ? 0 : (R.giorni || []).length, leggeri = !senzaSport(R) && R.sport.every(s => QZ_SPORT_LEGGERI.includes(s));
+  return { protKg: giorni === 0 ? 1.3 : leggeri ? 1.4 : giorni <= 2 ? 1.6 : 1.8, grassiKg: 0.8 };
 }
 // stima dei primi obiettivi con le risposte (stessa formula di tipoInfo, per un giorno di riposo)
 function qzStima() {
