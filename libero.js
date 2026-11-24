@@ -305,7 +305,7 @@ const PIATTI_PRONTI = new Set(["Hamburger di manzo", "Pizza margherita", "Pizza 
   "Nachos con formaggio", "Quesadilla", "Paella", "Pad thai", "Hot dog", "Club sandwich", "Nuggets di pollo", "Waffle", "Crepes dolci", "Supplì", "Crostini", "Caprese", "Ossobuco", "Saltimbocca alla romana", "Brasato", "Stufato di manzo", "Ribollita", "Panzanella", "Smoothie di frutta", "Frullato proteico", "Poke bowl"]);
 // sotto il nome di un alimento che hai escluso (allergie, dieta, cibi che non mangi): «⚠️ contiene lattosio»
 // sotto il nome di un alimento che è già nel pasto da solo: «già nel pasto · 150 g»
-const giaNelPastoHTML = (c, n) => { const g = c && (c.items || []).find(x => x.grp == null && x.nome === n); return g ? `<small class="autoc-gia">già nel pasto · ${esc(etichettaDose(n, +g.qta || 0))}</small>` : ""; };
+const giaNelPastoHTML = (c, n) => { const g = c && (c.items || []).find(x => x.grp == null && x.nome === n); return g ? `<small class="autoc-gia">✓ già nel pasto · ${esc(doseLeggibile(n, +g.qta || 0))}</small>` : ""; };
 const avvisoEsclusoHTML = (n) => { const m = typeof motivoEscluso === "function" ? motivoEscluso(n) : ""; return m ? `<small class="autoc-escluso">⚠️ ${esc(m)}</small>` : ""; };
 // Campo di ricerca toccato e ancora vuoto: sotto compaiono i mangiati di recente (come nelle app di diario alimentare); scrivendo lasciano il posto ai suggerimenti
 function recentiNelCampo() {
@@ -318,7 +318,8 @@ function mostraAutocompleta(testo) {
   if (!box) return;
   const ultima = String(testo || "").split(/[,;+]/).pop();
   const q = ultima.replace(AUTOC_LEAD, "").trim();
-  if (!q) { box.innerHTML = recentiNelCampo(); return; }
+  if (!q) { box.innerHTML = liberoCtx.doppione ? doppioneHTML(liberoCtx) : recentiNelCampo(); return; }   // la domanda «c'è già» resta finché non rispondi
+  liberoCtx.doppione = null;   // scrivi altro: la domanda decade
   const nq = norm(q);
   const trovati = cercaAlimenti(q);   // anche quelli già nel pasto: si vedono con «già nel pasto» e, toccandoli, si chiede se sommare
   // prima quelli che iniziano per quello che hai scritto
@@ -485,7 +486,7 @@ const POOL_SOSTITUZIONE = [
   ["Latte intero", "Latte parzialmente scremato", "Latte scremato", "Bevanda di soia", "Bevanda di avena", "Bevanda di mandorla"],
 ];
 const VERDURE_CONSIGLI = ["Zucchine", "Spinaci", "Broccoli", "Insalata", "Pomodoro", "Carote", "Finocchi", "Cetriolo", "Rucola", "Asparagi", "Fagiolini"];
-const GRAMMI_MAX_FONTI = { "Proteine in polvere": 30, "Proteine vegetali in polvere (pisello)": 30, "Albume": 200, "Yogurt greco 0%": 250, "Yogurt greco intero": 200, "Fiocchi di latte": 200, "Quark magro": 250, "Ricotta": 150, "Petto di pollo": 220, "Fesa di tacchino": 200, "Merluzzo": 250, "Nasello": 250, "Branzino": 200, "Orata": 200, "Tofu": 200, "Ceci cotti": 200, "Lenticchie cotte": 200, "Uova": 220, "Salmone fresco": 180 };
+const GRAMMI_MAX_FONTI = { "Proteine in polvere": 30, "Proteine vegetali in polvere (pisello)": 30, "Albume": 200, "Yogurt greco 0%": 250, "Yogurt greco intero": 200, "Fiocchi di latte": 200, "Quark magro": 250, "Ricotta": 150, "Petto di pollo": 220, "Fesa di tacchino": 200, "Merluzzo": 250, "Nasello": 250, "Branzino": 200, "Orata": 200, "Tofu": 200, "Ceci cotti": 200, "Lenticchie cotte": 200, "Uova": 220, "Salmone fresco": 180, "Bresaola": 90, "Skyr": 250, "Yogurt di soia": 250 };
 const FONTI_PROTEINE = {
   leggero: ["Yogurt greco 0%", "Fiocchi di latte", "Quark magro"],      // colazione e spuntini: latticini magri
   pasto: ["Petto di pollo", "Fesa di tacchino", "Merluzzo", "Nasello", "Albume", "Tofu", "Fiocchi di latte", "Ceci cotti", "Lenticchie cotte"],   // niente tonno in scatola: per il mercurio si mangia con moderazione
@@ -881,13 +882,35 @@ function campoAggiungiHTML(c) {
       <button class="btn-sec lib-scan" data-lib="scan" aria-label="Leggi il codice a barre">📷</button>
       <button class="btn lib-piu" data-lib="aggiungi" aria-label="Aggiungi ingrediente">＋</button>
     </div>
-    <div id="lib-autoc" class="lib-autoc"></div>${doppioneHTML(c)}`;
+    <div id="lib-autoc" class="lib-autoc">${doppioneHTML(c)}</div>`;
+}
+// «2 pz», «½ pz» solo se i pezzi tornano (interi o mezzi); altrimenti in grammi: niente «4,4 pz» di fette biscottate
+function doseLeggibile(nome, g) {
+  const u = unitaDi({ nome }), gu = grammiPerUnita(nome, u), n = gu ? g / gu : 0;
+  const passo = gu >= 30 ? 2 : 1;   // mezzo pezzo solo per pezzi grandi (½ banana sì, ½ mandorla no)
+  if (gu && n >= 0.5 && Math.abs(n * passo - Math.round(n * passo)) < 0.08) return `${fmtQta(Math.round(n * passo) / passo)} ${sigleUnita(u)}`;
+  return `${Math.round(g)} ${UNITA_LIQUIDI.test(nome) ? "ml" : "g"}`;
+}
+// Il riquadro «c'è già» al posto della riga che hai toccato (nella lista sotto la barra): l'avviso compare dove hai il dito
+function chiediDoppioneQui(c, el, nome, qta) {
+  c.doppione = { nome, qta: Math.round(qta * 10) / 10 };
+  const box = document.getElementById("lib-autoc");
+  if (box) box.innerHTML = doppioneHTML(c);   // la lista lascia il posto alla domanda, subito sotto la barra
+  const d = document.querySelector("#lib-autoc .lib-doppio"); if (d && d.scrollIntoView) d.scrollIntoView({ block: "nearest" });
+}
+// la quantità che entrerebbe scrivendo quella riga (la stessa regola di aggiungiDaTesto)
+function qtaDaRiga(r) {
+  let qta = 0, lock = false;
+  if (r.unita !== "q.b.") { qta = Math.round(grammiIng(r)); lock = qta > 0; }
+  else if ((window.PORZIONE_INTERA || /$^/).test(r.nome) && (window.PESO_PZ || {})[r.nome]) { qta = window.PESO_PZ[r.nome]; lock = true; }
+  if (!qta && r.unita === "q.b.") { qta = porzioneSolita(r.nome); lock = qta > 0; }   // niente quantità scritta: la dose solita
+  return { qta, lock };
 }
 // Alimento già nel pasto da solo: prima di sommare si chiede (dentro il pannello, così il pasto aperto resta com'è)
 function doppioneHTML(c) {
   const d = c && c.doppione, gia = d && c.items.find(x => x.grp == null && x.nome === d.nome);
   if (!gia) return "";
-  return `<div class="lib-doppio" role="alert"><p>C'è già <b>${esc(d.nome.toLowerCase())}</b> (${esc(etichettaDose(d.nome, +gia.qta || 0))}) nel pasto. Sommo a quello presente? → <b>${esc(etichettaDose(d.nome, (+gia.qta || 0) + d.qta))}</b></p>
+  return `<div class="lib-doppio" role="alert"><p>⚠️ C'è già <b>${esc(d.nome.toLowerCase())}</b> (${esc(doseLeggibile(d.nome, +gia.qta || 0))}) nel pasto. Sommo a quello presente? → <b>${esc(doseLeggibile(d.nome, (+gia.qta || 0) + d.qta))}</b></p>
     <div class="lib-doppio-tasti"><button class="btn-sec" data-lib-doppio="no">Annulla</button><button class="btn" data-lib-doppio="si">Sì, somma</button></div></div>`;
 }
 // Un alimento singolo nel pasto, da qualunque parte arrivi (ricerca, ＋, mangiati di recente, consigli):
@@ -1375,10 +1398,7 @@ function aggiungiDaTesto(testo) {
     const r = leggiRigaIngrediente(p);
     if (!r) continue;
     if (!r.nome) { c.ignoto = r.cercato || p; continue; }
-    let qta = 0, lock = false;
-    if (r.unita !== "q.b.") { qta = Math.round(grammiIng(r)); lock = qta > 0; }
-    else if ((window.PORZIONE_INTERA || /$^/).test(r.nome) && (window.PESO_PZ || {})[r.nome]) { qta = window.PESO_PZ[r.nome]; lock = true; }
-    if (!qta && r.unita === "q.b.") { qta = porzioneSolita(r.nome); lock = qta > 0; }   // niente quantità scritta: la dose solita, poi la cambi coi pulsanti rapidi
+    const { qta, lock } = qtaDaRiga(r);   // niente quantità scritta: la dose solita, poi la cambi coi pulsanti rapidi
     const unita = ["g", "ml"].includes(r.unita) ? "g" : ["pz", "cucchiaio", "cucchiaino"].includes(r.unita) ? r.unita : undefined; // l'unità che hai scritto
     aggiungiAlimento(c, r.nome, qta, lock, { cercato: r.cercato, unita });   // già nel pasto da solo: chiede se sommare
   }
@@ -1633,6 +1653,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const sq = e.target.closest("[data-lib-setq]");
     if (sq) { const [k, g] = sq.dataset.libSetq.split("|").map(Number); if (c.items[k]) { c.items[k].qta = g; c.items[k].lock = true; ricalcolaLibero(); rirenderLibero(); } return; }   // consiglio furbo: porta la quantità a quella proposta
     const add = e.target.closest("[data-lib-add]");
+    if (add && add.closest("#lib-autoc") && c.items.some(x => x.grp == null && x.nome === add.dataset.libAdd)) { chiediDoppioneQui(c, add, add.dataset.libAdd, +add.dataset.libG); return; }   // recente già nel pasto: la domanda subito
     if (add) { const dalCampo = !!add.closest("#lib-autoc"); aggiungiAlimento(c, add.dataset.libAdd, +add.dataset.libG, add.dataset.libFisso === "1"); ricalcolaLibero(); rirenderLibero(); if (dalCampo) rifocusInput(); return; }
     const dp = e.target.closest("[data-lib-doppio]");
     if (dp) {   // risposta al «c'è già»: somma alla riga presente, oppure niente
@@ -1641,7 +1662,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (dp.dataset.libDoppio === "si" && gia) {
         const prima = +gia.qta || 0;
         gia.qta = Math.round((prima + d.qta) * 10) / 10; gia.lock = true; c.ultimoAgg = gia.nome;
-        avviso(`${gia.nome}: ${etichettaDose(gia.nome, prima)} → ${etichettaDose(gia.nome, gia.qta)}`);
+        avviso(`${gia.nome}: ${doseLeggibile(gia.nome, prima)} → ${doseLeggibile(gia.nome, gia.qta)}`);
         ricalcolaLibero();
       }
       rirenderLibero(); return;
@@ -1686,7 +1707,7 @@ document.addEventListener("DOMContentLoaded", () => {
   mc.addEventListener("mousedown", (e) => { if (e.target.closest && e.target.closest("#lib-autoc") && document.activeElement && document.activeElement.id === "lib-input") e.preventDefault(); });
   mc.addEventListener("focusout", (e) => {   // uscendo dal campo vuoto i recenti si richiudono
     if (e.target.id !== "lib-input") return;
-    setTimeout(() => { const inp = document.getElementById("lib-input"), box = document.getElementById("lib-autoc"); if (box && inp && document.activeElement !== inp && !inp.value.trim()) box.innerHTML = ""; }, 250);
+    setTimeout(() => { const inp = document.getElementById("lib-input"), box = document.getElementById("lib-autoc"); if (box && inp && document.activeElement !== inp && !inp.value.trim() && !(liberoCtx && liberoCtx.doppione)) box.innerHTML = ""; }, 250);
   });
   mc.addEventListener("input", (e) => {
     if (!liberoCtx) return;
@@ -1721,6 +1742,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const parti = String(inp ? inp.value : "").split(/[,;+]/);
       const ultima = parti.pop();
       const lead = (ultima.match(AUTOC_LEAD) || [""])[0];
+      const nome = av.dataset.autoc, r = leggiRigaIngrediente(lead + nome);
+      if (!parti.length && r && r.nome === nome && liberoCtx.items.some(x => x.grp == null && x.nome === nome)) {   // già nel pasto: la domanda subito, al posto della lista
+        const q = qtaDaRiga(r).qta || (window.PESO_PZ || {})[nome] || porzioneSolita(nome);
+        if (q) { if (inp) inp.value = ""; chiediDoppioneQui(liberoCtx, av, nome, q); return; }
+      }
       aggiungiDaTesto([...parti, lead + av.dataset.autoc].join(", ")); rirenderLibero(); rifocusInput();
     }
   });

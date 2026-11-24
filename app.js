@@ -2210,7 +2210,9 @@ function apriProfilo() {
     <label class="wiz-l">Di solito ti alleni alle</label>
     <div class="pf-ora"><input class="qta-input" type="time" step="900" data-allen-ora value="${typeof pf.allenOra === "number" ? fmtOra(pf.allenOra).padStart(5, "0") : ""}">
       ${typeof pf.allenOra === "number" || pf.allenOrario ? `<button class="btn-link" data-allen-ora-togli>✕ Nessun orario</button>` : ""}</div>
-    <p class="hint">${typeof pf.allenOra === "number" ? (() => { const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_TEMPO;
+    <p class="hint">${typeof pf.allenOra === "number" && leggiTipi().some(t => sportDelTipo(t).length) && leggiTipi().every(t => sportDelTipo(t).every(id => id === "camminata"))
+        ? `Camminata alle ${fmtOra(pf.allenOra)}: è un'attività leggera, i pasti restano quelli di sempre (niente pre-workout). Le calorie della camminata si aggiungono alla giornata.`
+      : typeof pf.allenOra === "number" ? (() => { const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_TEMPO;
         const dopo = scelti.find(p => o[p] >= pf.allenOra), sp = spuntinoPreDa(scelti, o, pf.allenOra), prima = sp ? (sp === "mattina" ? "lo spuntino" : "la merenda") : null;
         const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena" };
         return `Allenamento alle ${fmtOra(pf.allenOra)}: ${prima ? `prima ${prima} (pre-workout), ` : ""}${dopo ? `il pasto dopo è ${art[dopo]}.` : "dopo non ci sono altri pasti."}`; })()

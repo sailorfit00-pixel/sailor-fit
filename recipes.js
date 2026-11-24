@@ -85,6 +85,10 @@ const COLAZIONE = [
     ingredienti:[{nome:"Banana",qta:100,unita:"g"},{nome:"Albume",qta:150,unita:"g"},{nome:"Yogurt greco 0%",qta:100,unita:"g"},{nome:"Farina integrale",qta:50,unita:"g"},{nome:"Proteine in polvere",qta:20,unita:"g"},{nome:"Cacao amaro",qta:10,unita:"g"},{nome:"Lievito per dolci",qta:1,unita:"cucchiaino"}],
     passaggi:["Schiaccia la banana ben matura con una forchetta (è l'unica dolcezza: niente zucchero) e mescolala allo yogurt.","Aggiungi farina integrale, proteine, cacao e lievito.","Incorpora gli albumi montati a neve, delicatamente.","Riposo 5 minuti, poi cuoci a fuoco medio-basso (il cacao brucia facilmente), 1–2 minuti per lato con coperchio."] },
   // ---- Le ricette di Serena ----
+  { nome:"Pancake alla ricotta", pasto:"colazione", base:"ricotta", tempo:15, porzioni:8, pezzo:"pancake",
+    kcal:0, proteine:0, carboidrati:0, grassi:0,
+    ingredienti:[{nome:"Ricotta",qta:250,unita:"g"},{nome:"Uova",qta:1,unita:"pz"},{nome:"Fecola di patate",qta:50,unita:"g"},{nome:"Lievito per dolci",qta:4,unita:"g"},{nome:"Gocce di cioccolato",qta:1,unita:"q.b."}],
+    passaggi:["Unisci tutti gli ingredienti in una ciotola e mescola fino a un impasto omogeneo.","Versa un cucchiaio di impasto alla volta in una padella calda e leggermente unta.","Cuoci da entrambi i lati.","Lascia raffreddare e gusta."] },
   { nome:"Cinnamon rolls proteici", pasto:"colazione", base:"yogurt", tempo:30, porzioni:8, pezzo:"girella",
     kcal:0, proteine:0, carboidrati:0, grassi:0,
     ingredienti:[{nome:"Farina 00",qta:75,unita:"g"},{nome:"Farina integrale",qta:75,unita:"g"},{nome:"Yogurt greco 0%",qta:185,unita:"g"},{nome:"Proteine in polvere",qta:30,unita:"g"},{nome:"Lievito per dolci",qta:1,unita:"cucchiaino"},{nome:"Sale",qta:0.5,unita:"cucchiaino"},{nome:"Eritritolo",qta:100,unita:"g"},{nome:"Cannella",qta:1,unita:"q.b."},{nome:"Olio di semi",qta:2,unita:"g"},{nome:"Yogurt greco 0%",qta:60,unita:"g"},{nome:"Formaggio spalmabile light",qta:15,unita:"g"},{nome:"Sciroppo senza zucchero",qta:1,unita:"cucchiaino"},{nome:"Proteine in polvere",qta:30,unita:"g"}],

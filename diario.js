@@ -1079,7 +1079,17 @@ const PIATTI_COMPOSTI = {
     // vegani con una fonte di proteine (anche senza glutine)
     { P: "Yogurt di soia", C: "Banana", F: "Semi di chia", V: ["Frutti rossi", 100] },
     { P: "Yogurt di soia", C: "Gallette di riso", F: "Semi di zucca" },
-    { P: "Tofu", C: "Gallette di riso", F: "Avocado", V: ["Pomodoro", 100] },
+    { P: "Yogurt di soia", C: "Fiocchi d'avena", F: "Noci", V: ["Frutti rossi", 100] },
+    { P: "Proteine vegetali in polvere (pisello)", C: "Fiocchi d'avena", F: "Semi di chia", V: ["Bevanda di soia", 200] },   // porridge proteico vegano
+    // senza latticini ma non vegani: salate all'italiana e con gli albumi (prima restava solo il tofu)
+    { P: "Bresaola", C: "Pane integrale", F: "Avocado", V: ["Pomodoro", 100] },
+    { P: "Fesa di tacchino", C: "Pane integrale", F: "Olio EVO", V: ["Pomodoro", 100] },
+    { P: "Albume", C: "Fiocchi d'avena", F: "Mandorle", V: ["Banana", 100] },   // pancake di albumi e avena
+    { P: "Albume", C: "Pane integrale", F: "Avocado", V: ["Spinaci", 80] },      // omelette di albumi con pane
+    // senza glutine: anche fette di mais e pane salato con bresaola
+    { P: "Bresaola", C: "Gallette di mais", F: "Avocado", V: ["Pomodoro", 100] },
+    { P: "Yogurt greco 0%", C: "Gallette di mais", F: "Noci", V: ["Banana", 100] },
+    { P: "Skyr", C: "Gallette di riso", F: "Semi di chia", V: ["Mela", 150] },
   ],
   spuntino: [
     { P: "Yogurt greco 0%", C: "Banana", F: "Mandorle" },
@@ -1125,7 +1135,8 @@ const PIATTI_COMPOSTI = {
   ],
 };
 // quantità massime sensate dei carboidrati nei piatti composti (niente «9 gallette» o mezzo chilo di pane)
-const GRAMMI_MAX_CARBO = { "Gallette di riso": 36, "Gallette di mais": 36, "Gallette di quinoa": 36, "Gallette di grano saraceno": 36, "Pane integrale": 120, "Pane bianco": 120, "Pane di segale": 120,
+const GRAMMI_MAX_CARBO = { "Gallette di riso": 45, "Gallette di mais": 45, "Gallette di quinoa": 45, "Gallette di grano saraceno": 45,   // 5 gallette: senza pane né avena (celiaci) la colazione deve poter crescere
+  "Pane integrale": 120, "Pane bianco": 120, "Pane di segale": 120,
   "Banana": 200, "Mela": 250, "Datteri": 60, "Fiocchi d'avena": 90, "Riso integrale cotto": 300, "Riso basmati cotto": 300, "Quinoa cotta": 300, "Couscous cotto": 300, "Patate lesse": 450 };
 function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = () => 0) {   // usi(base): quante volte quel piatto è già nella settimana
   const A = window.ALIMENTI || {};
@@ -1168,7 +1179,10 @@ function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = ()
     if (!c) continue;
     // proteine che il piatto lascia mancare rispetto al suo obiettivo: a parità, meglio quello che le porta (es. yogurt di soia invece di sola frutta)
     const u = usi(c.base);   // già usato in settimana: dalla terza volta solo se non c'è proprio altro
-    c.voto = c.sopra + (u >= 2 ? 5 + u : 1.2 * u) + (T.proteine > 0 ? Math.max(0, T.proteine - c.tot.proteine) / T.proteine * 1.2 : 0);
+    // la colazione si può ripetere più spesso di un pranzo (molti mangiano sempre la stessa), ma un piatto troppo piccolo è sbagliato comunque
+    const rip = chiave === "principale" ? (u >= 2 ? 5 + u : 1.2 * u) : (u >= 3 ? 3 + u : 0.6 * u);
+    const piccolo = T.kcal > 0 ? Math.max(0, T.kcal * 0.85 - c.tot.kcal) / T.kcal * 4 : 0;   // sotto l'85% della quota: «chia e bevanda di riso» non è una colazione
+    c.voto = c.sopra + rip + piccolo + (T.proteine > 0 ? Math.max(0, T.proteine - c.tot.proteine) / T.proteine * 1.2 : 0);
     if (c.voto <= 0.3) return c;
     if (!migliore || c.voto < migliore.voto) migliore = c;
   }
@@ -1257,7 +1271,11 @@ function ingrandisciGiorno(data, slot, largo) {   // largo: «Compila» può alz
     const m = mancaData(data);
     if (m.carboidrati <= 3 && m.grassi <= 2 && m.kcal <= 40) break;
     const g = giornoDiario(data); let best = null;
+    // prima crescono i pasti rimasti sotto la loro quota (es. il pre-workout o la colazione piccola), poi gli altri
+    const Tk = targetData(data).kcal, kcalDi = (sl) => g.pasti.filter(x => x.pasto === sl).reduce((s, x) => s + (+x.kcal || 0), 0);
+    const pesoPasto = (sl) => { const q = quotaPasto(data, sl) * Tk; if (!(q > 0)) return 1; const r = kcalDi(sl) / q; return r < 0.9 ? 1.6 : r > 1.1 ? 0.6 : 1; };
     g.pasti.forEach((p, pi) => { if (!(slot.has(p.pasto) && p.auto) || pastoPassato(data, p.pasto)) return;
+      const wp = pesoPasto(p.pasto);
       (p.ingredienti || []).forEach((ing, ii) => {
         const a = A[ing.nome], k = pi + "|" + ii; if (!a || ing.unita === "q.b." || !(ing.qta > 0) || bloccati.has(k)) return;
         const base = orig.get(k) || ing.qta, passo = a[3] >= 30 ? 2 : ing.unita === "pz" ? 0.5 : 5;
@@ -1266,7 +1284,7 @@ function ingrandisciGiorno(data, slot, largo) {   // largo: «Compila» può alz
         const grDopo = (ing.qta + passo) * (ing.unita === "pz" ? (PZ[ing.nome] || 0) : 1); if (GRAMMI_MAX_CARBO[ing.nome] && grDopo > GRAMMI_MAX_CARBO[ing.nome] * fCarbo) return;   // pane e gallette restano porzioni sensate
         if (ing.unita === "g" && fonteEsagerata({ nome: ing.nome, qta: ing.qta + passo })) return;
         const gr = ing.unita === "pz" ? passo * (PZ[ing.nome] || 0) : passo, dC = a[2] * gr / 100, dG = a[3] * gr / 100, dK = a[0] * gr / 100;
-        const v = (m.carboidrati > 3 ? dC : 0) + (m.grassi > 2 ? dG * 2 : 0) + (m.kcal > 40 ? dK * 0.05 : 0);
+        const v = ((m.carboidrati > 3 ? dC : 0) + (m.grassi > 2 ? dG * 2 : 0) + (m.kcal > 40 ? dK * 0.05 : 0)) * wp;
         if (v > 0 && (!best || v > best.v)) best = { pi, ii, k, base, passo, v };
       });
     });
