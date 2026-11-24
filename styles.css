@@ -278,6 +278,7 @@ select.qta-input { text-align: left; }
 .lista-pesi { list-style: none; padding: 0; margin: 0; }
 .lista-pesi li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--k-232f38); font-size: 14px; }
 .lista-pesi li span { flex: 1; color: var(--muted); }
+.lista-pesi .sw { border-radius: 0; }   /* la riga sta nel contenitore dello swipe: senza angoli tondi la linea divisoria parte dal bordo, allineata al testo */
 
 /* ---- Pasto libero ---- */
 ul.pasti li.libero .pasto-nome { color: var(--accent); }
@@ -1280,7 +1281,7 @@ body.no-scroll .toast { bottom: calc(168px + env(safe-area-inset-bottom)); }   /
 .agg-totale b { color: var(--text); }
 /* tasti di conferma: fissi in fondo al pannello (stessa barra scura di «Salva pasto») */
 #modal-content .wiz-nav:not(.bmr-calc .wiz-nav) { position: sticky; bottom: -32px; z-index: 5; margin: 16px -18px -32px; padding: 12px 18px calc(16px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line2); }
-#modal-content [data-lib="scan-aggiungi"], #modal-content [data-azione="peso-salva"] { position: sticky; bottom: 0; z-index: 4; box-shadow: 0 -18px 18px -2px var(--card), 0 14px 0 14px var(--card); }
+#modal-content [data-lib="scan-aggiungi"] { position: sticky; bottom: 0; z-index: 4; box-shadow: 0 -18px 18px -2px var(--card), 0 14px 0 14px var(--card); }
 .wiz-fondo { box-shadow: 0 -14px 14px -4px var(--card), 0 60px 0 0 var(--card); }
 .lib-footer .lib-bilancia { flex: 0 0 auto; margin: 0; white-space: nowrap; }
 
@@ -2073,3 +2074,29 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 /* con poco dentro, la barra «Salva» sta comunque in fondo al pannello (non a metà) */
 .modal-sheet.foglio-pieno #modal-content { min-height: calc(100% - 22px); display: flex; flex-direction: column; }
 .modal-sheet.foglio-pieno #modal-content > .lib-corpo { flex: 1 0 auto; }
+
+/* ✕ sempre visibile: grip e ✕ stanno in una testata che resta in alto mentre scorri.
+   Ferma in cima è trasparente (la ✕ resta accanto al titolo come prima); scorrendo diventa una fascia del colore del pannello,
+   così il contenuto le passa sotto e la ✕ non copre più l'angolo delle schede */
+.modal-testa { position: sticky; top: -10px; z-index: 8; height: 64px; margin: -10px -18px -36px; padding: 10px 18px 0; pointer-events: none; transition: background-color .15s, box-shadow .15s; }
+.modal-testa.scorre { background: var(--card); box-shadow: 0 1px 0 var(--line2); }
+.modal-testa .modal-grip { margin-top: 4px; }
+.modal-testa .modal-close { pointer-events: auto; position: absolute; top: 28px; right: 18px; margin: 0; box-shadow: none; z-index: 1; }
+
+/* Oggi, riquadro dei macro: il nome («Proteine») non si taglia mai. Se lo spazio è poco (telefoni stretti, numeri grandi)
+   sparisce il «+40» e resta il numero in arancione: dice lo stesso che sei sopra l'obiettivo */
+.mc { container-type: inline-size; }
+.mc-top > span:first-child { flex-shrink: 0; }
+.mc-top b.mc-sopra { color: #f0a04b; }
+@container (max-width: 175px) { .mc-top em.mc-piu { display: none; } }
+
+/* nome dell'app sempre su una riga: con un nome lungo il carattere si rimpicciolisce, e al limite finisce con «…» */
+.topbar h1 { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar h1.lungo { font-size: 19px; }
+.topbar h1.lunghissimo { font-size: 16.5px; letter-spacing: -.2px; }
+.topbar .saluto { flex-shrink: 1; min-width: 0; }
+/* precedenza al nome dell'app: è il saluto ad accorciarsi («Buon pomeriggio, R…») */
+.topbar h1 { flex: 0 1 auto; }
+.topbar .saluto { flex: 1 1000 auto; margin-left: auto; text-align: right; max-width: none; }
+/* nome molto lungo su un telefono stretto: il saluto lascia il posto al nome (che così si legge tutto) */
+@media (max-width: 420px) { .topbar h1.lunghissimo ~ .saluto { display: none; } }

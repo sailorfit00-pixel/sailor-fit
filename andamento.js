@@ -309,7 +309,7 @@ function giornoHTML(g) {
   return `
     <div class="and-stat">
       <div><span>Mangiate</span><b>${Math.round(t.kcal)}</b><small>obiettivo ${T.kcal} kcal</small></div>
-      <div><span>Differenza</span><b>${g.registrato ? `${t.kcal - T.kcal > 0 ? "+" : ""}${Math.round(t.kcal - T.kcal)}` : "—"}</b><small>kcal</small></div>
+      <div><span>Differenza</span><b>${g.registrato ? (() => { const df = Math.round(t.kcal - T.kcal); return `${df > 0 ? "+" : df < 0 ? "−" : ""}${Math.abs(df)}`; })() : "—"}</b><small>kcal</small></div>
       <div><span>Peso</span><b>${peso ? fmtKg(peso.kg) : "—"}</b><small>kg</small></div>
     </div>
     <section class="and-sez"><h4>Macro</h4>
@@ -361,7 +361,7 @@ function andamentoHTML() {
       ${kcalManuali() ? (() => { const sc = kcalM !== null && targM ? kcalM - targM : null;   // obiettivo scritto da te: quanto sei lontana dall'obiettivo, non una stima di grasso
         return `<div><span>Rispetto all'obiettivo</span><b>${sc === null ? "—" : `${sc > 0 ? "+" : sc < 0 ? "−" : ""}${Math.abs(sc)}`}</b><small>kcal al giorno</small></div>`; })()
       : `<div><span>${leggiProfilo().deficit <= 0 ? (Math.abs(deficitTot) < 770 ? "Variazione stimata" : deficitTot > 0 ? "Calo stimato" : "Aumento stimato") : deficitTot >= 0 ? "Grasso perso" : "Grasso in più"}</span><b>${compl.length ? fmtKg(Math.abs(deficitTot) / 7700) : "—"}</b><small>kg (stima dal diario)</small></div>`}
-      <div><span>Peso</span><b>${ultimoPeso ? fmtKg(ultimoPeso.kg) : "—"}</b><small>${varPeso !== null ? `${varPeso > 0 ? "+" : ""}${fmtKg(varPeso)} kg nel periodo` : "kg"}</small></div>
+      <div><span>Peso</span><b>${ultimoPeso ? fmtKg(ultimoPeso.kg) : "—"}</b><small>${varPeso !== null ? `${varPeso > 0 ? "+" : varPeso < 0 ? "−" : ""}${fmtKg(Math.abs(varPeso))} kg nel periodo` : "kg"}</small></div>
     </div>
 
     ${(() => { const cons = analisi(giorni, pesiP).slice(0, 5);   // i consigli del periodo: i 5 più importanti
@@ -387,7 +387,7 @@ function andamentoHTML() {
     <section class="and-sez"><h4>Peso</h4>
     <div class="peso-form">
       <input id="peso-data" class="qta-input" type="date" value="${oggiISO()}" max="${oggiISO()}">
-      <input id="peso-kg" class="qta-input" type="number" inputmode="decimal" step="0.1" min="30" max="200" placeholder="kg" value="${ultimoPeso ? ultimoPeso.kg : ""}">
+      <input id="peso-kg" class="qta-input" type="text" inputmode="decimal" autocomplete="off" placeholder="kg" value="${ultimoPeso ? String(ultimoPeso.kg).replace(".", ",") : ""}">
       <button class="btn" data-azione="peso-salva">✓ Salva</button>
     </div>
     ${pesiP.length >= 2 ? graficoPesoSVG(pesiP) : `<p class="hint">${pesiP.length ? "Una sola pesata in questo periodo." : "Nessuna pesata in questo periodo."}</p>`}

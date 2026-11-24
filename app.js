@@ -185,6 +185,12 @@ if (window.visualViewport) {
   document.addEventListener("touchend", () => setTimeout(aggiornaTastiera, 400), { passive: true });
 }
 
+// -------- ✕ dei pannelli sempre visibile: scorrendo, in alto compare una fascia del colore del pannello (il contenuto le passa sotto) --------
+document.addEventListener("scroll", (e) => {
+  const sh = e.target; if (!sh.classList || !sh.classList.contains("modal-sheet")) return;
+  const t = sh.querySelector(".modal-testa"); if (t) t.classList.toggle("scorre", sh.scrollTop > 6);
+}, true);
+
 // -------- Personalizzazione: colore, nome e icona dell'app, saluto --------
 const ICONE_APP = ["🌙", "⛵", "🌸", "🔥", "⭐", "🌿", "🍓", "💪", "🦋", "🌊", "☀️", "🍀"];
 function applicaPersonalizzazione() {
@@ -192,7 +198,7 @@ function applicaPersonalizzazione() {
   if (typeof window.applicaTema === "function") window.applicaTema(pf.tema);   // prima il tema: il colore dipende da quello
   if (typeof window.applicaColore === "function") window.applicaColore(pf.colore || "lilla");
   const nome = pf.nomeApp || "Sailor Fit", t = document.getElementById("titolo-app");
-  if (t) t.textContent = `${pf.iconaApp || "🌙"} ${nome}`;
+  if (t) { t.textContent = `${pf.iconaApp || "🌙"} ${nome}`; t.classList.toggle("lungo", nome.length > 13); t.classList.toggle("lunghissimo", nome.length > 19); }   // nome lungo: carattere più piccolo, sempre su una riga
   document.title = nome;
   const s = document.getElementById("saluto");
   if (s) {
@@ -501,7 +507,8 @@ function formePezzi(nome) {
 }
 // "uovo" se è uno solo, "2 uova", "½ mela", "1½ mele"
 function nomeConNumero(nome, quanti, maiuscola) {
-  const c = Math.max(0.5, Math.round(quanti * 2) / 2), [s, p] = formePezzi(nome);
+  const piccolo = ((window.PESO_PZ || {})[nome] || 0) > 0 && (window.PESO_PZ || {})[nome] < 30;   // mandorle, gallette, fragole: si contano interi (niente «12½ mandorle»)
+  const c = piccolo ? Math.max(1, Math.round(quanti)) : Math.max(0.5, Math.round(quanti * 2) / 2), [s, p] = formePezzi(nome);
   const cap = (t) => maiuscola ? t.charAt(0).toUpperCase() + t.slice(1) : t;
   if (c === 1) return cap(s);
   return `${fmtQta(c)} ${c < 1 ? s : p}`;
@@ -1075,6 +1082,8 @@ function avviso(msg, etichetta, azione, tutto) {
   if (typeof mostraToast === "function") mostraToast(msg, etichetta, azione, tutto); else window.alert(msg);
 }
 function sommaMacro(lista) {
+  // un pasto salvato solo con gli ingredienti (senza kcal già calcolate): i valori si calcolano ora, invece di dare «NaN»
+  lista.forEach(r => { if (r && typeof r.kcal !== "number" && Array.isArray(r.ingredienti) && typeof aggiornaMacro === "function") aggiornaMacro(r); });
   return lista.reduce((acc, r) => ({
     kcal: acc.kcal + r.kcal,
     proteine: acc.proteine + r.proteine,
@@ -1485,7 +1494,12 @@ function quantitaPastoHTML(r) {
   try {
     const c = contestoAgg && !contestoAgg.auto ? contestoAgg : { data: dataDiario, pasto: null };
     const pasto = c.pasto || pastoPerRicetta(r, c.data), ps = porzioneSuMisura(r, targetResiduoPasto(c.data, pasto));
-    _aggQta = { nome: r.nome, items: ps.items.map(x => { const u = typeof unitaDi === "function" ? unitaDi({ nome: x.nome }) : "g"; return { nome: x.nome, qta: typeof qtaPezziInteri === "function" ? qtaPezziInteri(x.nome, u, Math.round(x.qta)) : Math.round(x.qta), cercato: x.cercato, u }; }) };
+    _aggQta = { nome: r.nome, items: ps.items.map(x => { let u = typeof unitaDi === "function" ? unitaDi({ nome: x.nome }) : "g";
+      const qta = typeof qtaPezziInteri === "function" ? qtaPezziInteri(x.nome, u, Math.round(x.qta)) : Math.round(x.qta);
+      // a pezzi solo se i pezzi tornano (interi, o mezzi per quelli grandi): niente «5,3 fragole» o «0,1 uova», si scrive in grammi
+      const gu = u === "pz" && typeof grammiPerUnita === "function" ? grammiPerUnita(x.nome, u) : 0;
+      if (gu) { const n = qta / gu, m = gu >= 60 ? 2 : 1; if (n < 0.5 || Math.abs(n * m - Math.round(n * m)) > 0.08) u = typeof UNITA_LIQUIDI !== "undefined" && UNITA_LIQUIDI.test(x.nome) ? "ml" : "g"; }
+      return { nome: x.nome, qta, cercato: x.cercato, u }; }) };
   } catch (e) { _aggQta = null; return ""; }
   if (!_aggQta.items.length) return "";
   return `<h4>Le tue quantità</h4><div class="lib-righe agg-righe" id="agg-lista">${aggListaHTML()}</div><p class="agg-totale" id="agg-totale">${totaleAggHTML()}</p>`;
@@ -2445,7 +2459,7 @@ function consiglioPeso(trend, giorniDati) {
 function graficoPesoSVG(pesi) {
   if (pesi.length < 2) return `<p class="hint">Il grafico compare dalla seconda pesata.</p>`;
   const mm = mediaMobile(pesi);
-  const W = 340, H = 170, PL = 34, PR = 8, PT = 10, PB = 22;
+  const W = 340, H = 176, PL = 34, PR = 8, PT = 10, PB = 30;   // più spazio sotto: le date non toccano l'ultima etichetta dei kg
   const d0 = pesi[0].data, span = Math.max(1, giorniTra(d0, pesi[pesi.length - 1].data));
   const kgs = pesi.map(p => p.kg);
   let lo = Math.floor(Math.min(...kgs) - 0.5), hi = Math.ceil(Math.max(...kgs) + 0.5);

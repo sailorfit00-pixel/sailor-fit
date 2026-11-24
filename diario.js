@@ -1100,6 +1100,12 @@ const PIATTI_COMPOSTI = {
     { C: "Mela", F: "Semi di zucca" },
     { P: "Yogurt di soia", C: "Mela" },
     { P: "Edamame", C: "Gallette di riso" },
+    // vegani e senza glutine: più scelta (prima giravano solo banana ed edamame)
+    { P: "Yogurt di soia", C: "Gallette di mais", F: "Burro di mandorle" },
+    { P: "Yogurt di soia", C: "Pera", F: "Noci" },
+    { P: "Proteine vegetali in polvere (pisello)", C: "Banana", V: ["Bevanda di soia", 200] },   // frullato proteico vegano
+    { P: "Edamame", C: "Mela", F: "Mandorle" },
+    { P: "Yogurt di soia", C: "Datteri", F: "Mandorle", V: ["Frutti rossi", 80] },
   ],
   pre: [   // prima dell'allenamento: niente grassi né fibre
     { P: "Yogurt greco 0%", C: "Banana" },
@@ -1108,6 +1114,10 @@ const PIATTI_COMPOSTI = {
     { C: "Banana" },
     { C: "Gallette di riso", V: ["Marmellata", 20] },
     { C: "Datteri" },
+    // con proteine anche per chi è vegano (e senza glutine)
+    { P: "Proteine vegetali in polvere (pisello)", C: "Banana", V: ["Bevanda di riso", 200] },
+    { P: "Yogurt di soia", C: "Gallette di riso", V: ["Marmellata", 15] },
+    { P: "Yogurt di soia", C: "Banana" },
   ],
   principale: [
     { P: "Petto di pollo", C: "Riso integrale cotto", F: "Olio EVO", V: ["Zucchine", 200] },
@@ -1163,7 +1173,7 @@ function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = ()
     const tot = () => righe().reduce((a, [n, g]) => ({ kcal: a.kcal + per(n, g, 0), proteine: a.proteine + per(n, g, 1), carboidrati: a.carboidrati + per(n, g, 2), grassi: a.grassi + per(n, g, 3) }), { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 });
     for (let k = 0; k < 20 && tot().kcal > T.kcal + 30 && gc >= 10; k++) gc -= 5;   // l'arrotondamento non deve far sforare
     for (let k = 0; k < 20 && tot().grassi > T.grassi + 0.5 && gf >= 5; k++) gf -= 5;
-    if (t.P && gp < 40) return null;   // senza una porzione sensata di proteine non è un piatto
+    if (t.P && gp < (/in polvere/.test(t.P) ? 15 : 40)) return null;   // senza una porzione sensata di proteine non è un piatto (le polveri: bastano 15 g)
     if (!t.P && gc <= 0 && gf <= 0) return null;
     const tt = tot(), sopra = Math.max(0, tt.grassi - T.grassi) * 3 + Math.max(0, tt.carboidrati - T.carboidrati) * 1.5 + Math.max(0, tt.kcal - T.kcal - 30) * 0.15;
     const x = { nome: "", composto: t.P || t.C, pasto: pasto === "principale" ? "pranzo" : pasto, passaggi: [], ingredienti: righe().map(([n, g]) => ({ nome: n, qta: g, unita: "g", lock: true, cercato: n })) };
@@ -1294,12 +1304,30 @@ function ingrandisciGiorno(data, slot, largo) {   // largo: «Compila» può alz
     if (!ok()) { scriviGiorno(data, copia); bloccati.add(best.k); }   // sforava: quell'alimento non si ritocca più
   }
 }
+// Frutta e alimenti a pezzi grandi (banana, mela, pera, yogurt in vasetto…) nei pasti compilati: a pezzi interi o mezzi,
+// non «1,6 banane». Si arrotonda al mezzo pezzo più vicino; se il giorno poi sfora grassi o carboidrati, quella riga torna com'era
+function arrotondaPezzi(data, slot) {
+  const PZ = window.PESO_PZ || {};
+  const g = giornoDiario(data);
+  g.pasti.forEach((p, pi) => { if (!(slot.has(p.pasto) && p.auto) || pastoPassato(data, p.pasto)) return;
+    (p.ingredienti || []).forEach((ing, ii) => {
+      const pz = PZ[ing.nome]; if (!pz || pz < 60 || ing.unita !== "g" || !(ing.qta > 0)) return;
+      const nuovo = Math.max(0.5, Math.round(ing.qta / pz * 2) / 2) * pz;
+      if (Math.abs(nuovo - ing.qta) < 1) return;
+      const gg = giornoDiario(data), prima = JSON.stringify(gg);
+      gg.pasti[pi].ingredienti[ii].qta = Math.round(nuovo); aggiornaMacro(gg.pasti[pi]); rinominaLibero(gg.pasti[pi]); scriviGiorno(data, gg);
+      const m = mancaData(data), T = targetData(data);
+      // all'insù non deve sforare; all'ingiù non deve lasciare la giornata più di 3% sotto l'obiettivo
+      if (m.grassi < -1 || m.carboidrati < -3 || m.kcal < -KCAL_EXTRA || m.kcal > T.kcal * 0.03) scriviGiorno(data, JSON.parse(prima));
+    });
+  });
+}
 // Proteine molto sopra l'obiettivo e carboidrati che mancano (es. chi mette massa): la fonte magra di proteine cala un po'
 // (mai sotto il 60% e mai sotto 60 g), così c'è posto per riso, pane, patate
 function riduciProteineInEccesso(data, slot) {
   const A = window.ALIMENTI || {}, T = targetData(data), orig = new Map();
   for (let giro = 0; giro < 40; giro++) {
-    const m = mancaData(data); if (-m.proteine <= T.proteine * 0.15 || m.carboidrati <= 15) return;
+    const m = mancaData(data); if (-m.proteine <= T.proteine * 0.15 || (m.carboidrati <= 15 && m.grassi <= 6)) return;   // proteine molto sopra e mancano carboidrati o grassi: si fa posto
     const g = giornoDiario(data); let fatto = false;
     for (const [pi, p] of g.pasti.entries()) { if (!(slot.has(p.pasto) && p.auto) || pastoPassato(data, p.pasto)) continue;
       for (const [ii, i] of (p.ingredienti || []).entries()) { const a = A[i.nome], k = pi + "|" + ii;
@@ -1412,6 +1440,10 @@ function pianificaSettimana(dataRif, soloData, opz = {}) {   // soloData: compil
         const o = x.r._orig || x.r, c = rilevaBaseCarbo(o), pr = rilevaBaseProt(o), ing = o.ingredienti.filter(g => g.unita !== "q.b.");
         const uso = usate[x.r.nome] || [];
         let punti = x.p + uso.length * 0.8 + (uso.some(k => Math.abs(k - i) <= 2) ? 1.8 : 0) + (c && basiC.has(c) ? 0.8 : 0) + (pr && basiP.has(pr) ? 0.6 : 0);
+        // lontano dalla quota di questo pasto (es. un pranzo da 630 kcal invece di 460, una cena da 300 invece di 450): meno probabile
+        { const q = quotaPasto(d, s) * targetData(d).kcal; if (q > 0) punti += Math.max(0, Math.abs(x.tot.kcal - q) / q - 0.12) * 8; }
+        // molto più proteico di quanto serve a questo pasto (chi ha un obiettivo basso di proteine o calorie alte): meno probabile
+        if (Tp.proteine > 0) punti += Math.max(0, x.tot.proteine / Tp.proteine - 1.3) * 2;
         punti -= 0.5 * (ing.length ? ing.filter(g => incasa.has(g.nome.toLowerCase())).length / ing.length : 0);
         // fibre e sale della porzione rispetto alla quota del pasto (25 g di fibre e 5 g di sale al giorno): pesano meno dei macro
         { const ex = extraDa(o.ingredienti), kO = calcolaMacro(o).kcal, f = kO > 0 ? x.tot.kcal / kO : 1, q = QUOTA_PASTO[s] || 0.2;
@@ -1433,7 +1465,7 @@ function pianificaSettimana(dataRif, soloData, opz = {}) {   // soloData: compil
   });
   Object.entries(aggiunti).forEach(([d, set]) => {
     rifinisciGiorno(d, set); completaProteine(d, set); rifinisciGiorno(d, set);
-    riduciProteineInEccesso(d, set); ingrandisciGiorno(d, set, true); aggiungiCondimento(d, set); aggiungiContorno(d, set);   // ancora sotto l'obiettivo (es. pochi grassi o pochi carboidrati): dosi un po' più grandi e un filo d'olio
+    riduciProteineInEccesso(d, set); ingrandisciGiorno(d, set, true); aggiungiCondimento(d, set); aggiungiContorno(d, set); arrotondaPezzi(d, set);   // ancora sotto l'obiettivo (es. pochi grassi o pochi carboidrati): dosi un po' più grandi e un filo d'olio
     const m = mancaData(d);
     if (!opz.stretto && (m.grassi < 0 || m.carboidrati < 0)) {   // il ritocco non è bastato: quei pasti si rifanno con la scelta più rigorosa
       const g = giornoDiario(d); g.pasti = g.pasti.filter(p => !(set.has(p.pasto) && p.auto)); scriviGiorno(d, g);
@@ -1763,7 +1795,7 @@ function macroCompattoHTML(nome, k, val, tot, pct) {
   const sopra = Math.round(val) > tot;                    // contorno bianco e "+N" appena superi l'obiettivo, anche di poco
   const piu = sopra ? Math.round(val) - tot : 0;
   return `<div class="mc">
-    <div class="mc-top"><span><i class="dot-${k}"></i>${nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b>${Math.round(val)}</b>/${tot} g</span></div>
+    <div class="mc-top"><span><i class="dot-${k}"></i>${nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b${piu ? ' class="mc-sopra"' : ""}>${Math.round(val)}</b>/${tot} g</span></div>
     <div class="mc-bar"><span class="mb-${k}${sopra ? " sopra" : ""}" style="width:${w}%"></span></div>
   </div>`;
 }
