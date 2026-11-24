@@ -1259,6 +1259,7 @@ function liberoHTML() {
         <div class="r-macro">${c.bozza || schede.length > 1 ? macroHaObiettivoHTML(mPasto, T, true) : ""}${post && avvisoPost(c, m) ? `<span class="avv-post" aria-label="Dopo l'allenamento servono proteine e carboidrati">⚠ ${avvisoPost(c, m)}</span>` : ""}</div>
       </div>
       ${pastoPassatoC(c) ? "" : furboBlocco}
+      ${bloccato || pastoPassatoC(c) || typeof recentiHTML !== "function" ? "" : recentiHTML(c, true)}
       ${bloccato ? "" : altreIdeeHTML(c)}
     ` : c.idee()}
     ${c.bozza ? "" : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}

@@ -2121,9 +2121,9 @@ function apriProfilo() {
 // Dieta, allergie e cose che non mangi (le stesse scelte del questionario): le ricette con quei cibi non si propongono
 function esclusioniHTML(pf) {
   const e = pf.esclusioni || {}, chip = (gr, k, l, ic, on) => `<button class="chip ${on ? "attivo" : ""}" data-escl="${gr}|${k}">${ic} ${l}</button>`;
-  return `<div class="chips">${[["tutto", "Di tutto", "🍽️"], ["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, (e.dieta || "tutto") === k)).join("")}</div>
-    <p class="hint">Allergie o intolleranze</p><div class="chips">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}</div>
-    <p class="hint">Non mangio</p><div class="chips">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}</div>
+  return `<div class="chips chips-capo">${[["tutto", "Di tutto", "🍽️"], ["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, (e.dieta || "tutto") === k)).join("")}</div>
+    <p class="hint">Allergie o intolleranze</p><div class="chips chips-capo">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}</div>
+    <p class="hint">Non mangio</p><div class="chips chips-capo">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}</div>
     <p class="campo-nota">Le ricette con questi cibi non ti vengono proposte. L'app riconosce gli alimenti dal nome e può sbagliare: per le allergie controlla sempre gli ingredienti.</p>`;
 }
 // Profilo: tocchi su cibi esclusi, icona e colore; testi del nome

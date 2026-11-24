@@ -1991,3 +1991,16 @@ button.ant-fit.on { border-style: solid; background: rgba(var(--lilla-rgb),.20);
 .qz-foot { position: sticky; bottom: -24px; margin: auto -18px -24px; padding: 14px 18px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(0deg, var(--card) 75%, transparent); }
 .qz-foot .btn { font-size: 18px; padding: 15px; border-radius: 16px; background: var(--lilla); color: #1a1426; }
 .qz-foot .btn:disabled { background: var(--card2); color: var(--muted); }
+
+/* «Mangiati di recente» nel pasto: un tocco e l'alimento entra con la porzione dell'ultima volta */
+.rec-testa { margin-top: 14px; }
+.rec-lista { display: flex; flex-direction: column; gap: 8px; }
+.rec-riga { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 14px; background: var(--card2); border: 1px solid rgba(var(--lilla-rgb), .25); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.rec-nome { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-weight: 600; font-size: 15px; }
+.rec-nome small { font-weight: 400; font-size: 12.5px; color: var(--muted); }
+.rec-piu { flex: 0 0 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--lilla); box-shadow: inset 0 0 0 1px var(--lilla); font-size: 17px; }
+.rec-ripeti { border-style: dashed; }
+.rec-ripeti .rec-nome { color: var(--lilla); }
+/* righe di scelte nel Profilo: vanno a capo invece di scorrere di lato (scorrendo il Profilo non si spostano) */
+.chips.chips-capo { flex-wrap: wrap; overflow: visible; }
+.rec-testa { white-space: pre; }

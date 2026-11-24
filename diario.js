@@ -395,7 +395,7 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
     obiettivo: () => { const T = liberoCtx.target(), z = { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 };
       return `<p class="pm-tot lib-obiettivo"><span>Obiettivo</span><span class="pm-kcal"><b>0 kcal</b><em> / ${Math.round(T.kcal)} kcal</em></span></p><div class="r-macro lib-ob-macro">${macroHaObiettivoHTML(z, T, true)}</div>`; },
     // quando il pasto è vuoto: pasti recenti e idee dal ricettario
-    idee: () => { const ric = ideeBloccoHTML(liberoCtx, "💡 Idee", null); return consiglioFurboHTML(liberoCtx, { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 }) + (ric || alimentiIdeaHTML(liberoCtx)); },   // nessuna ricetta che ci stia: almeno gli alimenti singoli giusti
+    idee: () => { const ric = ideeBloccoHTML(liberoCtx, "💡 Idee", null); return recentiHTML(liberoCtx) + consiglioFurboHTML(liberoCtx, { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 }) + (ric || alimentiIdeaHTML(liberoCtx)); },   // nessuna ricetta che ci stia: almeno gli alimenti singoli giusti
     tutteRicette: true,
     titolo: () => `${ICONA_PASTO[ctx.pasto]} ${NomePasto(ctx.pasto, data)}`,
   };
@@ -560,6 +560,34 @@ function pastiRecenti(data, pasto, n = 3) {
   });
   // prima quelli che mangi più spesso, a parità i più recenti
   return Object.values(per).sort((a, b) => (b.volte - a.volte) || (a.data < b.data ? 1 : -1)).slice(0, n).map(({ data, idx, p }) => ({ data, idx, p }));
+}
+// Gli alimenti che mangi di solito in questo pasto (ultimi 30 giorni), con l'ultima porzione in grammi:
+// prima i più frequenti, a parità i più recenti. Senza quelli già nel pasto e quelli che hai escluso nel Profilo
+function alimentiRecentiPasto(data, pasto, n = 5, gia = []) {
+  const d = leggiDiarioSolaLettura(), presenti = new Set(gia), per = {};
+  Object.keys(d).filter(x => x < data && x >= addGiorniISO(data, -30)).sort().reverse().forEach(x => {
+    (d[x].pasti || []).forEach(p => {
+      if (p.pasto !== pasto) return;
+      (p.ingredienti || []).forEach(i => {
+        if (!i.nome || i.unita === "q.b." || presenti.has(i.nome) || (typeof alimentoEscluso === "function" && alimentoEscluso(i.nome))) return;
+        const g = Math.round(grammiIng(i)); if (!(g > 0) || !(window.ALIMENTI || {})[i.nome] && !(typeof alimentiTuoi === "function" && alimentiTuoi()[i.nome])) return;
+        if (per[i.nome]) per[i.nome].volte++; else per[i.nome] = { nome: i.nome, g, data: x, volte: 1 };   // la prima volta che lo incontro è la più recente: quella porzione
+      });
+    });
+  });
+  return Object.values(per).sort((a, b) => (b.volte - a.volte) || (a.data < b.data ? 1 : -1)).slice(0, n);
+}
+// «Mangiati di recente» nel pasto aperto: un tocco e l'alimento entra con la porzione dell'ultima volta; a pasto vuoto anche «Ripeti»
+function recentiHTML(c, compatto) {
+  if (!c || !c.data || !c.pasto) return "";
+  const cibi = alimentiRecentiPasto(c.data, c.pasto, compatto ? 3 : 5, (c.items || []).map(x => x.nome));
+  const rip = !compatto && c.vivo ? pastiRecenti(c.data, c.pasto, 1)[0] : null;
+  if (!cibi.length && !rip) return "";
+  return `<h4 class="rec-testa">🕒 Mangiati di recente</h4><div class="rec-lista">
+    ${cibi.map(x => { const k = Math.round(macroAlimento(x.nome, x.g).kcal);
+      return `<button class="rec-riga" data-lib-add="${esc(x.nome)}" data-lib-g="${x.g}" data-lib-fisso="1"><span class="rec-nome">${esc(x.nome)}<small>${x.g} g · ${k} kcal</small></span><span class="rec-piu" aria-label="Aggiungi">＋</span></button>`; }).join("")}
+    ${rip ? `<button class="rec-riga rec-ripeti" data-oggi-recente="${rip.data}|${rip.idx}"><span class="rec-nome">↻ Ripeti ${(n => `${{ spuntino: "lo", pranzo: "il", "pre-workout": "il" }[n] || "la"} ${esc(n)}`)(nomePasto(c.pasto, rip.data))} di ${fmtQuando(rip.data, c.data)}<small>${esc(typeof nomeVisibile === "function" ? nomeVisibile(rip.p) : rip.p.nome)} · ${Math.round(rip.p.kcal || 0)} kcal</small></span></button>` : ""}
+  </div>`;
 }
 function addGiorniISO(iso, n) { const d = new Date(iso + "T12:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
 function fmtQuando(iso, rispetto) {
