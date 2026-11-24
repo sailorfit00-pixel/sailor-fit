@@ -78,7 +78,7 @@ function extraHTML(ex, pasti, intestazione) {
   };
   const fonti = fontiDi(pasti, 1).slice(0, 3);
   return `<h4>${intestazione}</h4>
-    ${riga("Zuccheri aggiunti", ex.aggiunti, L.aggiunti, "zuc", `${fmtG(ex.zuccheri)} g di zuccheri totali, compresi quelli naturali di frutta e latte · ideale sotto ${L.aggiuntiIdeale} g`)}
+    ${riga("Zuccheri aggiunti", ex.aggiunti, L.aggiunti, "zuc", `Ideale sotto ${L.aggiuntiIdeale} g di zuccheri aggiunti · in tutto ${fmtG(ex.zuccheri)} g di zuccheri, compresi quelli naturali di frutta e latte`)}
     ${fonti.length ? `<p class="ex-fonti">Da dove arrivano: ${fonti.map(([n, g]) => `<b>${esc(n)}</b> ${fmtG(g)} g`).join(" · ")}</p>` : ""}
     ${riga("Fibre", ex.fibre, L.fibre, "min")}
     ${riga("Sale", ex.sale, L.sale, "max")}`;

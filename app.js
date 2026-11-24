@@ -3,6 +3,15 @@
 // =============================================================
 
 const PASTI = ["colazione", "pranzo", "cena", "spuntino"];
+// Persona nuova (nessun profilo né diario salvati): si guarda prima che qualsiasi lettura del profilo lo crei.
+// Parte con una settimana senza sport (non quella di default) e vede la schermata di benvenuto finché non la completa.
+try {
+  if (!localStorage.getItem("mp_profilo") && !localStorage.getItem("mp_diario")) {
+    localStorage.setItem("mp_benvenuto", "da fare");
+    localStorage.setItem("mp_tipi", JSON.stringify(Array(7).fill("riposo")));
+    localStorage.setItem("mp_tipi_nov26", "1");
+  }
+} catch (e) {}
 const GIORNI = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"];
 
 // -------- Profilo e obiettivi --------
@@ -60,7 +69,17 @@ function leggiProfilo() {
   SPORT_DEFAULT.forEach(d => { if (!pf.sport.some(sp => sp.id === d.id) && !tolti.has(d.id) && ["corsa", "funzionale", "pesi", "camminata", "bici", "ballo", "corpolibero"].includes(d.id)) pf.sport.push(Object.assign({}, d)); });
   return pf;
 }
-function salvaProfilo(p) { localStorage.setItem("mp_profilo", JSON.stringify(p)); calcolaTarget(); }
+// Basale (Mifflin-St Jeor): donna 10·kg + 6,25·cm − 5·età − 161 · uomo: stessa formula + 5. 0 se mancano dati validi
+function basaleMifflin({ uomo, eta, cm, kg }) {
+  if (!(eta >= 10 && eta <= 100 && cm >= 100 && cm <= 230 && kg > 0)) return 0;
+  return Math.round((10 * kg + 6.25 * cm - 5 * eta + (uomo ? 5 : -161)) / 10) * 10;
+}
+// basale calcolato dall'app (bmrAuto): segue il peso; se lo scrivi tu a mano resta quello
+const basaleDelProfilo = (p) => basaleMifflin({ uomo: p.sesso === "uomo", eta: p.eta, cm: p.altezza, kg: p.peso });
+function salvaProfilo(p) {
+  if (p.bmrAuto) { const b = basaleDelProfilo(p); if (b) p.bmr = b; }
+  localStorage.setItem("mp_profilo", JSON.stringify(p)); calcolaTarget();
+}
 // gli sport tra cui scegliere: quelli «tolti» restano salvati (nascosto: true) perché i giorni passati li usano ancora
 const leggiSport = () => leggiProfilo().sport.filter(sp => !sp.nascosto);
 
@@ -1921,6 +1940,47 @@ function apriMenu() {
     </div>
   `);
 }
+// ===== Benvenuto (solo la prima volta, per una persona nuova): pochi dati e l'app calcola il resto =====
+const OBIETTIVI_BENVENUTO = [["dimagrire", "Dimagrire", 15], ["mantenere", "Mantenere", 0], ["massa", "Aumentare massa", -10]];   // deficit %: negativo = surplus
+function apriBenvenuto() {
+  editCtx = null;
+  openModal(`
+    <h3 class="modal-title">👋 Ciao! Iniziamo</h3>
+    <p class="campo-nota">Pochi dati e l'app calcola calorie e macro per te. Potrai cambiare tutto quando vuoi nel Profilo.</p>
+    <div class="et-seg">
+      <input type="radio" name="bv-sesso" id="bv-donna" value="donna" checked><label for="bv-donna">Donna</label>
+      <input type="radio" name="bv-sesso" id="bv-uomo" value="uomo"><label for="bv-uomo">Uomo</label>
+    </div>
+    <div class="bmr-griglia">
+      <label class="et-campo"><span>Età (anni)</span><input class="qta-input" type="number" inputmode="numeric" min="10" max="100" data-bv="eta" placeholder="es. 30"></label>
+      <label class="et-campo"><span>Altezza (cm)</span><input class="qta-input" type="number" inputmode="numeric" min="100" max="230" data-bv="altezza" placeholder="es. 165"></label>
+      <label class="et-campo"><span>Peso (kg)</span><input class="qta-input" type="number" inputmode="decimal" min="25" max="300" step="0.1" data-bv="peso" placeholder="es. 60"></label>
+    </div>
+    <label class="wiz-l">Il tuo obiettivo</label>
+    <div class="et-seg">${OBIETTIVI_BENVENUTO.map(([k, l], i) => `<input type="radio" name="bv-obiettivo" id="bv-${k}" value="${k}"${i === 0 ? " checked" : ""}><label for="bv-${k}">${l}</label>`).join("")}</div>
+    <button class="btn block" data-benvenuto-inizia>Inizia</button>
+    <button class="btn-link" data-azione="ripristina">Hai già usato l'app? Ripristina un backup ›</button>
+  `);
+}
+function iniziaDaBenvenuto() {
+  const box = document.getElementById("modal-content");
+  const num = (k) => parseFloat(String((box.querySelector(`[data-bv="${k}"]`) || {}).value || "").replace(",", "."));
+  const uomo = !!box.querySelector('input[name="bv-sesso"][value="uomo"]:checked');
+  const eta = num("eta"), cm = num("altezza"), kg = num("peso");
+  const bmr = basaleMifflin({ uomo, eta, cm, kg });
+  if (!bmr || !(kg >= 25 && kg <= 300)) { avviso("Scrivi età, altezza e peso"); return; }
+  const ob = (box.querySelector('input[name="bv-obiettivo"]:checked') || {}).value || "dimagrire";
+  const pf = leggiProfilo();
+  Object.assign(pf, { sesso: uomo ? "uomo" : "donna", eta: Math.round(eta), altezza: Math.round(cm), peso: Math.round(kg * 10) / 10, bmr, bmrAuto: true,
+    deficit: (OBIETTIVI_BENVENUTO.find(o => o[0] === ob) || OBIETTIVI_BENVENUTO[0])[2], recupero: 80, protKg: 1.8, grassiKg: 0.9 });
+  salvaProfilo(pf);
+  localStorage.setItem("mp_benvenuto", "fatto");
+  apriProfilo();
+  avviso("Ora scegli i tuoi sport nella settimana tipo");
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest && e.target.closest("[data-benvenuto-inizia]")) iniziaDaBenvenuto();
+});
 function apriBackup() {
   editCtx = null;
   openModal(`
@@ -1935,7 +1995,7 @@ function apriBackup() {
 const ICONE_SPORT = ["🏃‍♀️", "🚴‍♀️", "🏊‍♀️", "🧘‍♀️", "🎾", "🏸", "🏐", "⛷️", "🏄‍♀️", "🥾", "🤸‍♀️", "🥊", "💃", "⛵", "🧗‍♀️", "🏋️", "🐴", "🪁"];
 const CAMPI_PROFILO = [
   ["peso", "Peso (kg)", 0.1], ["bmr", "Basale (kcal)", 10],
-  ["deficit", "Deficit (%)", 1],
+  ["deficit", "Deficit (%)", 1, "Negativo per mangiare un po' di più del fabbisogno (aumento di massa), es. −10"],
   ["recupero", "Allenamento reintegrato (%)", 5, "% delle calorie dell'allenamento che puoi mangiare (100% = tutte)"],
   ["protKg", "Proteine (g/kg)", 0.1], ["grassiKg", "Grassi (g/kg)", 0.1],
 ];
@@ -1961,8 +2021,11 @@ function anteprimaProfiloHTML() {
   const quanti = (k) => tipi.filter(t => t === k).length;
   const pf = leggiProfilo(), rip = TIPI_GIORNATA.riposo.target;
   const manuali = obiettiviManuali(pf) ? `<p class="hint">✍️ Obiettivi impostati da te attivi${pf.kcalMan > 0 ? "" : " (kcal automatiche)"}.</p>` : "";
-  const stretto = rip.proteine * 4 + rip.grassi * 9 > rip.kcal - 200 ? `<p class="hint">⚠️ Proteine e grassi occupano quasi tutte le kcal: restano pochi carboidrati.</p>` : "";
-  return `${manuali}${stretto}<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno${kcalManuali(pf) ? "" : ` · <b>${kgTxt}</b>`}</p>
+  const kcalPG = rip.proteine * 4 + rip.grassi * 9;
+  const stretto = kcalPG > rip.kcal ? `<p class="hint">⚠️ Proteine e grassi da soli fanno ${kcalPG} kcal, più dell'obiettivo di ${rip.kcal}: abbassali o alza le calorie.</p>`
+    : kcalPG > rip.kcal - 200 ? `<p class="hint">⚠️ Proteine e grassi occupano quasi tutte le kcal: restano pochi carboidrati.</p>` : "";
+  const sottoBasale = pf.kcalMan > 0 && pf.kcalMan < pf.bmr ? `<p class="hint">ℹ️ Le calorie scritte (${pf.kcalMan}) sono sotto il basale: l'app usa ${Math.round(pf.bmr)} kcal.</p>` : "";
+  return `${manuali}${sottoBasale}${stretto}<p class="pf-riassunto">Con questi dati: in media <b>${media} kcal</b> al giorno${kcalManuali(pf) ? "" : ` · <b>${kgTxt}</b>`}</p>
     <table class="pf-tabella"><thead><tr><th>Giornata</th><th>kcal</th><th>P</th><th>C</th><th>G</th></tr></thead><tbody>
     ${chiavi.map(k => { const tg = TIPI_GIORNATA[k], t = tg.target, n = quanti(k);
       return `<tr><td><span class="pf-ico">${tg.icone}</span> ${esc(tg.label)}${n ? ` <em>×${n}</em>` : ""}</td><td><b>${t.kcal}</b></td><td>${t.proteine}</td><td>${t.carboidrati}</td><td>${t.grassi}</td></tr>`; }).join("")}
@@ -1976,7 +2039,7 @@ function apriProfilo() {
     <h3 class="modal-title">👤 Profilo</h3>
     <div id="form-profilo">
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
-        <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" data-profilo="${k}" value="${pf[k]}">${k === "bmr" ? `
+        <input class="qta-input wiz-full" type="number" ${k === "deficit" ? 'min="-20"' : 'inputmode="decimal" min="0"'} step="${st}" data-profilo="${k}" value="${pf[k]}">${k === "bmr" ? `
         <button class="btn-link bmr-link" data-bmr-apri>Non lo sai? Calcolalo ›</button><div id="bmr-calc" hidden></div>` : ""}`).join("")}
       <h4>Obiettivi impostati da te <em>(facoltativo)</em></h4>
       <p class="campo-nota">Lascia vuoto per il calcolo automatico. Le calorie sono quelle di un giorno di riposo: se le scrivi, il Deficit non si usa e lo sport aggiunge solo la quota «Allenamento reintegrato» (0% = stesso obiettivo ogni giorno). I carboidrati sono quello che resta.</p>
@@ -2014,6 +2077,7 @@ function leggiFormProfilo() {
   document.querySelectorAll("[data-profilo]").forEach(inp => {
     const v = parseFloat(String(inp.value).replace(",", "."));
     const k = inp.dataset.profilo, puoZero = k === "deficit" || k === "recupero";   // deficit e reintegro possono essere 0 (mantenimento, niente kcal dall'allenamento); mai negativi
+    if (k === "deficit") { if (!isNaN(v) && v >= -20 && v <= 50) pf[k] = v; return; }   // negativo = surplus (aumento di massa), entro −20%
     if (CHIAVI_MANUALI.includes(k)) { if (v > 0) pf[k] = v; else if (String(inp.value).trim() === "" || v === 0) delete pf[k]; return; }   // vuoto o 0 = torna automatico
     if (!isNaN(v) && (v > 0 || (puoZero && v === 0))) pf[k] = v;
   });
@@ -2023,6 +2087,8 @@ function leggiFormProfilo() {
 let _profiloTimer = null;
 function aggiornaAnteprimaProfilo() {
   salvaProfilo(leggiFormProfilo());
+  { const pf = leggiProfilo(), inp = document.querySelector('[data-profilo="bmr"]');   // basale calcolato dall'app: il campo segue il peso
+    if (pf.bmrAuto && inp && document.activeElement !== inp && +inp.value !== pf.bmr) inp.value = pf.bmr; }
   document.getElementById("anteprima-profilo").innerHTML = anteprimaProfiloHTML();
   if (typeof renderOggi === "function") renderOggi();
 
@@ -2045,8 +2111,7 @@ function basaleCalcolato() {
   const uomo = !!box.querySelector('input[value="uomo"]:checked');
   const num = (k) => parseFloat(String((box.querySelector(`[data-bmr="${k}"]`) || {}).value || "").replace(",", "."));
   const eta = num("eta"), cm = num("altezza"), kg = pesoDelForm();
-  if (!(eta >= 10 && eta <= 100 && cm >= 100 && cm <= 230 && kg > 0)) return { uomo, eta, cm, kg, kcal: 0 };
-  return { uomo, eta, cm, kg, kcal: Math.round((10 * kg + 6.25 * cm - 5 * eta + (uomo ? 5 : -161)) / 10) * 10 };
+  return { uomo, eta, cm, kg, kcal: basaleMifflin({ uomo, eta, cm, kg }) };
 }
 function bmrCalcHTML() {
   const pf = leggiProfilo(), uomo = pf.sesso === "uomo";
@@ -2097,6 +2162,7 @@ document.addEventListener("click", (e) => {
     ricordaDatiBasale(r);
     const inp = document.querySelector('[data-profilo="bmr"]');
     if (inp) { inp.value = r.kcal; inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new Event("change", { bubbles: true })); }   // come se l'avessi scritto: si salva e l'anteprima si aggiorna
+    { const pf = leggiProfilo(); pf.bmrAuto = true; salvaProfilo(pf); }   // calcolato dall'app: da ora segue il peso
     chiudiCalcoloBasale();
     avviso(`Basale: ${r.kcal} kcal`);
   }
@@ -2448,6 +2514,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("apri-andamento").addEventListener("click", () => segnaTab("andamento"));
   segnaTab("oggi");
+  // persona nuova: la schermata di benvenuto, dopo che Oggi è stato disegnato
+  if (localStorage.getItem("mp_benvenuto") === "da fare") setTimeout(apriBenvenuto, 0);
 
   document.getElementById("file-csv").addEventListener("change", (e) => {
     const file = e.target.files[0];
@@ -2656,7 +2724,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Profilo: anteprima obiettivi mentre si digita
   document.getElementById("modal-content").addEventListener("input", (e) => {
-    if (e.target.closest("[data-profilo]")) aggiornaAnteprimaProfilo();
+    if (!e.target.closest("[data-profilo]")) return;
+    // basale scritto da te: non segue più il peso (il calcolo «Usa questo valore» scrive il campo da codice, non conta)
+    if (e.isTrusted && e.target.matches('[data-profilo="bmr"]')) { const pf = leggiProfilo(); if (pf.bmrAuto) { pf.bmrAuto = false; salvaProfilo(pf); } }
+    aggiornaAnteprimaProfilo();
   });
   // Profilo: ogni valore si salva appena lo cambi (anche se chiudi senza premere Salva)
   document.getElementById("modal-content").addEventListener("change", (e) => {

@@ -13,7 +13,7 @@ const QUOTA_PASTO = { colazione: 0.22, mattina: 0.08, pranzo: 0.30, spuntino: 0.
 const ICONA_PASTO = { colazione: "☕", mattina: "🍎", pranzo: "🍽️", spuntino: "🍌", cena: "🌙" };
 const NOME_PASTO = { colazione: "colazione", mattina: "spuntino", pranzo: "pranzo", spuntino: "pre-workout", cena: "cena" };
 // Il pomeriggio è "pre-workout" nei giorni di sport e "merenda" nei giorni di riposo (se si passa la data)
-const nomePasto = (p, data) => p === "spuntino" && data && !preSera(data) ? "spuntino" : (NOME_PASTO[p] || p);
+const nomePasto = (p, data) => p === "spuntino" && data && !preSera(data) ? "merenda" : (NOME_PASTO[p] || p);   // «merenda»: non si confonde con lo spuntino della mattina
 const NomePasto = (p, data) => { const n = nomePasto(p, data); return n.charAt(0).toUpperCase() + n.slice(1); };
 // giorno con sport: lo spuntino del pomeriggio è il pre-workout
 const conSport = (data) => sportDelTipo(giornoDiario(data).tipo).some(id => id !== "camminata");   // una semplice camminata non cambia i pasti (niente pre-workout)
@@ -1140,6 +1140,9 @@ function pianificaSettimana(dataRif, soloData, opz = {}) {   // soloData: compil
         const uso = usate[x.r.nome] || [];
         let punti = x.p + uso.length * 0.8 + (uso.some(k => Math.abs(k - i) <= 2) ? 1.8 : 0) + (c && basiC.has(c) ? 0.8 : 0) + (pr && basiP.has(pr) ? 0.6 : 0);
         punti -= 0.5 * (ing.length ? ing.filter(g => incasa.has(g.nome.toLowerCase())).length / ing.length : 0);
+        // fibre e sale della porzione rispetto alla quota del pasto (25 g di fibre e 5 g di sale al giorno): pesano meno dei macro
+        { const ex = extraDa(o.ingredienti), kO = calcolaMacro(o).kcal, f = kO > 0 ? x.tot.kcal / kO : 1, q = QUOTA_PASTO[s] || 0.2;
+          punti += Math.max(0, ex.sale * f - LIMITI_EXTRA.sale * q) * 0.8 + Math.max(0, 1 - ex.fibre * f / (LIMITI_EXTRA.fibre * q)) * 0.4; }
         if (conosco) punti += Math.min(1.5, 0.5 * ing.filter(g => !abit.set.has(g.nome) && !abit.set.has(g.nome.toLowerCase())).length);   // alimenti che di solito non mangi: meno probabili
         return { x, punti: punti + (hashStr(d + s + x.r.nome + (opz.seme || "")) % 100) / 400 };
       }).sort((a, b) => a.punti - b.punti)[0];
