@@ -864,7 +864,7 @@ function ricettaATeglia(c) {
 // Il campo per scrivere un ingrediente (con 📷 e ＋)
 function campoAggiungiHTML(c) {
   return `<div class="lib-add">
-      <input id="lib-input" class="qta-input wiz-full" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="${c.items.length ? "Aggiungi altro: mirtilli, yogurt…" : "Scrivi cosa mangi: pollo, zucca…"}">
+      <input id="lib-input" class="qta-input wiz-full" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="${c.items.length ? "Aggiungi altro…" : "Cerca un alimento"}">
       <button class="btn-sec lib-scan" data-lib="scan" aria-label="Leggi il codice a barre">📷</button>
       <button class="btn lib-piu" data-lib="aggiungi" aria-label="Aggiungi ingrediente">＋</button>
     </div>

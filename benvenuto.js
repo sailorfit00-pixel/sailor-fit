@@ -33,7 +33,7 @@ const QZ = [
   { k: "lavoro", t: "u", e: "💼", q: "Com'è la tua giornata?", o: QZ_LAVORO, nota: "Senza contare lo sport: serve a stimare quanto consumi ogni giorno." },
   { k: "sport", t: "m", e: "🏃‍♀️", q: "Che sport fai?", o: QZ_SPORT, excl: QZ_NESSUNO, req: 1 },
   { k: "giorni", t: "m", e: "📅", q: "In quali giorni ti alleni di solito?", o: QZ_GIORNI.map(([l, , v]) => [l, "", v]), salta: senzaSport, nota: "Poi potrai scegliere lo sport giorno per giorno nel Profilo." },
-  { k: "oraAllen", t: "u", e: "🕒", q: "A che ora ti alleni di solito?", o: QZ_ORA_ALLEN, salta: senzaSport },
+  { k: "oraAllen", t: "ora", e: "🕒", q: "A che ora ti alleni di solito?", salta: senzaSport, nota: "Scrivi l'ora o tocca una fascia. Serve a capire quale pasto viene prima e quale dopo l'allenamento." },
   { k: "pasti", t: "m", e: "🍽️", q: "Quali pasti fai ogni giorno?", o: QZ_PASTI, req: 1 },
   { k: "orari", t: "orari", e: "⏰", q: "A che ora mangi, più o meno?", nota: "Servono a sapere qual è il prossimo pasto e quando un pasto è passato." },
   { k: "dieta", t: "u", e: "🥗", q: "Segui un'alimentazione particolare?", o: QZ_DIETA, opz: 1, nota: "Se no, vai avanti. Tocca di nuovo per togliere la scelta." },
@@ -65,7 +65,7 @@ function qzRisposteAttuali() {
     nome: pf.nome || "", sesso: pf.sesso || "", eta: pf.eta || "", altezza: pf.altezza || "", peso: pf.peso || "", obiettivo: ob, lavoro: lav,
     sport: sport.length ? sport.map(daSport).filter(Boolean) : [QZ_NESSUNO],
     giorni: tipi.map((t, i) => sportDelTipo(t).length ? i : -1).filter(i => i >= 0),
-    oraAllen: typeof pf.allenOra === "number" ? (pf.allenOra < 11 ? "mattina" : pf.allenOra < 14 ? "pranzo" : pf.allenOra < 18 ? "pomeriggio" : "sera") : pf.allenOrario === "mattina" ? "mattina" : pf.allenOrario === "sera" ? "sera" : "",
+    oraAllen: typeof pf.allenOra === "number" ? pf.allenOra : pf.allenOrario === "mattina" ? 7.5 : pf.allenOrario === "sera" ? 19 : "",   // l'ora esatta: rifacendo il questionario non cambia
     pasti: Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_TEMPO.slice(),
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, o[p]])),
     dieta: e.dieta || "", nonMangioAltri: (e.altri || []).join(", "), allergieAltri: (e.allergieAltre || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
@@ -92,9 +92,15 @@ function qzValido(q) {
   if (q.t === "t") return String(v || "").trim() !== "";
   if (q.t === "u") return !!v;
   if (q.t === "m") return !q.req || (v || []).length > 0;
+  if (q.t === "ora") return typeof v === "number";
   if (q.t === "orari") { const s = ORDINE_TEMPO.filter(p => (qz.R.pasti || []).includes(p)).map(p => qz.R.orari[p]); return s.every(h => typeof h === "number") && s.every((h, i) => !i || h > s[i - 1]); }
   if (q.t === "nomeApp") return String(qz.R.nomeApp || "").trim() !== "";
   return true;
+}
+// proteine e grassi di partenza in base a quanto ti alleni: senza sport non servono le quantità da palestra
+function qzMacroKg(R) {
+  const giorni = senzaSport(R) ? 0 : (R.giorni || []).length;
+  return { protKg: giorni === 0 ? 1.3 : giorni <= 2 ? 1.6 : 1.8, grassiKg: 0.8 };
 }
 // stima dei primi obiettivi con le risposte (stessa formula di tipoInfo, per un giorno di riposo)
 function qzStima() {
@@ -102,7 +108,7 @@ function qzStima() {
   const bmr = basaleMifflin({ uomo: R.sesso === "uomo", eta: +R.eta, cm: +R.altezza, kg });
   const fatt = (QZ_LAVORO.find(x => x[2] === R.lavoro) || QZ_LAVORO[0])[3], def = (QZ_OBIETTIVI.find(x => x[2] === R.obiettivo) || QZ_OBIETTIVI[0])[3];
   const pf = qz.rifai ? leggiProfilo() : {};
-  const protKg = qz.rifai ? pf.protKg : 1.8, grassiKg = qz.rifai ? pf.grassiKg : 0.9;
+  const mk = qzMacroKg(R), protKg = qz.rifai ? pf.protKg : mk.protKg, grassiKg = qz.rifai ? pf.grassiKg : mk.grassiKg;
   const kcal = pf.kcalMan > 0 ? Math.max(bmr, pf.kcalMan) : Math.max(bmr, Math.round(bmr * fatt * (1 - def / 100) / 50) * 50);
   const proteine = pf.protMan > 0 ? Math.round(pf.protMan) : Math.round(kg * protKg / 5) * 5, grassi = pf.grassiMan > 0 ? Math.round(pf.grassiMan) : Math.round(kg * grassiKg);
   return { bmr, kcal, proteine, grassi, carboidrati: Math.max(50, Math.round((kcal - proteine * 4 - grassi * 9) / 20) * 5) };
@@ -124,6 +130,9 @@ function qzRender() {
     h += `<div class="qz-sc ${q.k === "giorni" ? "qz-giorni" : ""}">${q.o.map((o, i) => `<button class="qz-b ${sel.includes(o[2]) ? "on" : ""}" data-qz-o="${i}">${o[1] ? `<span class="qz-e">${o[1]}</span>` : ""}<span>${esc(o[0])}</span></button>`).join("")}</div>`;
     if (q.altro) h += `<input class="qz-inp qz-altro" id="qz-altro" type="text" placeholder="${esc(q.altroPh || "Altro")}" value="${esc(R[q.altro] || "")}">`;
     if (q.t === "m") h += `<p class="qz-pic">Puoi sceglierne più di uno</p>`;
+  } else if (q.t === "ora") {
+    h += `<div class="qz-ora"><span>🕒 Ore</span><input type="time" step="900" data-qz-oraallen value="${typeof v === "number" ? fmtOra(v).padStart(5, "0") : ""}"></div>
+      <div class="qz-sc qz-giorni" style="margin-top:10px">${QZ_ORA_ALLEN.map(([l, e, , h0]) => `<button class="qz-b ${v === h0 ? "on" : ""}" data-qz-fascia="${h0}"><span class="qz-e">${e}</span><span>${l} · ${fmtOra(h0)}</span></button>`).join("")}</div>`;
   } else if (q.t === "orari") {
     const scelti = QZ_PASTI.filter(p => (R.pasti || []).includes(p[2]));
     h += `<div class="qz-orari">${scelti.map(([l, e, k]) => `<label class="qz-ora"><span>${e} ${l}</span><input type="time" step="900" data-qz-ora="${k}" value="${fmtOra(R.orari[k]).padStart(5, "0")}"></label>`).join("")}</div>`;
@@ -173,6 +182,11 @@ document.addEventListener("input", (e) => {
   }
   if (e.target.id === "qz-nome-app") { qz.R.nomeApp = e.target.value; const a = document.querySelector(".qz-anteprima"); if (a) a.textContent = `${qz.R.iconaApp} ${qz.R.nomeApp || "Sailor Fit"}`; qzSalva(); qzAggiornaBtn(); }
 });
+document.addEventListener("change", (e) => {   // orario di allenamento scritto a mano
+  if (!qz || !e.target.matches || !e.target.matches("[data-qz-oraallen]")) return;
+  const h = oraDa(e.target.value); if (h === null) delete qz.R.oraAllen; else qz.R.oraAllen = h;
+  qzSalva(); qzRender();
+});
 document.addEventListener("change", (e) => {
   if (!qz || !e.target.matches || !e.target.matches("[data-qz-ora]")) return;
   const h = oraDa(e.target.value); if (h !== null) qz.R.orari[e.target.dataset.qzOra] = h;
@@ -198,6 +212,8 @@ document.addEventListener("click", (e) => {
     }
     qzSalva(); qzRender(); return;
   }
+  const fa = e.target.closest("[data-qz-fascia]");   // fascia oraria: compila l'ora con un tocco
+  if (fa) { qz.R.oraAllen = +fa.dataset.qzFascia; qzSalva(); qzRender(); return; }
   const col = e.target.closest("[data-qz-colore]");
   if (col) { qz.R.colore = col.dataset.qzColore; if (window.applicaColore) window.applicaColore(qz.R.colore); qzSalva(); qzRender(); return; }   // il colore si vede subito
   const ic = e.target.closest("[data-qz-icona]");
@@ -227,9 +243,9 @@ function qzFine() {
   });
   if (R.dieta) pf.esclusioni.dieta = R.dieta;
   ["altri", "allergieAltre", "allergie", "nonMangio"].forEach(k => { if (!pf.esclusioni[k].length) delete pf.esclusioni[k]; });
-  if (!senzaSport(R) && R.oraAllen) { pf.allenOra = (QZ_ORA_ALLEN.find(x => x[2] === R.oraAllen) || [])[3]; delete pf.allenOrario; }
+  if (!senzaSport(R) && typeof R.oraAllen === "number") { pf.allenOra = R.oraAllen; delete pf.allenOrario; }
   if (!pf.nome) delete pf.nome;
-  if (nuovo) Object.assign(pf, { protKg: 1.8, grassiKg: 0.9, recupero: 80 });   // chi rifà il questionario tiene i suoi macro
+  if (nuovo) Object.assign(pf, qzMacroKg(R), { recupero: 80 });   // chi rifà il questionario tiene i suoi macro
   // sport: quelli scelti si vedono (anche se erano stati tolti), quelli nuovi si aggiungono; per una persona nuova gli altri si nascondono
   const scelti = senzaSport(R) ? [] : R.sport.filter(x => x !== QZ_NESSUNO);
   const ids = scelti.map(s => {

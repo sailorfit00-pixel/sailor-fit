@@ -2184,7 +2184,7 @@ function apriProfilo() {
         const dopo = scelti.find(p => o[p] >= pf.allenOra), prima = pf.allenOra < 14 ? (scelti.includes("mattina") && o.mattina <= pf.allenOra ? "lo spuntino" : null) : (scelti.includes("spuntino") ? "la merenda" : null);
         const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena" };
         return `Allenamento alle ${fmtOra(pf.allenOra)}: ${prima ? `prima ${prima} (pre-workout), ` : ""}${dopo ? `il pasto dopo è ${art[dopo]}.` : "dopo non ci sono altri pasti."}`; })()
-      : pf.allenOrario ? `Ora: sempre di ${pf.allenOrario === "mattina" ? "mattina" : "pomeriggio/sera"}.` : "Senza orario: di sera, il sabato di mattina."} Giorno per giorno puoi sempre cambiarlo in Oggi.</p>
+      : pf.allenOrario ? `Ora: sempre di ${pf.allenOrario === "mattina" ? "mattina" : "pomeriggio/sera"}.` : leggiTipi().every(t => !sportDelTipo(t).length) ? "Nella tua settimana tipo non ci sono allenamenti." : "Senza orario l'app considera l'allenamento di sera (il sabato di mattina)."}${leggiTipi().every(t => !sportDelTipo(t).length) ? "" : " Giorno per giorno puoi sempre cambiarlo in Oggi."}</p>
     <h4>Obiettivi che ne risultano</h4>
     <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
     <h4>Alimentazione e allergie</h4>

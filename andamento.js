@@ -116,6 +116,22 @@ function graficoKcalSVG(giorni) {
 }
 
 // -------- Analisi: cosa va bene, cosa migliorare --------
+// Idee di alimenti nei consigli: solo quelli che mangi (niente yogurt a chi è vegana, niente pane a chi è celiaca…)
+// lista: [[come si dice, nome dell'alimento nell'app]]; restituisce «a, b o c» con i primi n non esclusi
+function ideeCibi(lista, n = 3) {
+  const ok = lista.filter(([, nome]) => !(typeof alimentoEscluso === "function" && alimentoEscluso(nome))).slice(0, n).map(([l]) => l);
+  return ok.length > 1 ? `${ok.slice(0, -1).join(", ")} o ${ok[ok.length - 1]}` : ok[0] || "";
+}
+const IDEE_PROTEINE = {
+  colazione: [["yogurt greco", "Yogurt greco 0%"], ["kefir", "Kefir bianco"], ["uova", "Uova"], ["albumi", "Albume"], ["yogurt di soia", "Yogurt di soia"], ["tofu", "Tofu"]],
+  mattina: [["yogurt greco", "Yogurt greco 0%"], ["qualche fetta di bresaola", "Bresaola"], ["yogurt di soia", "Yogurt di soia"], ["edamame", "Edamame"], ["hummus", "Hummus"]],
+  pranzo: [["carne bianca", "Petto di pollo"], ["pesce", "Merluzzo"], ["uova", "Uova"], ["legumi", "Lenticchie cotte"], ["tofu", "Tofu"], ["tempeh", "Tempeh"]],
+  spuntino: [["yogurt greco", "Yogurt greco 0%"], ["fiocchi di latte", "Fiocchi di latte"], ["yogurt di soia", "Yogurt di soia"], ["edamame", "Edamame"], ["hummus", "Hummus"]],
+  cena: [["pesce", "Merluzzo"], ["carne bianca", "Petto di pollo"], ["uova", "Uova"], ["tofu", "Tofu"], ["legumi", "Lenticchie cotte"], ["tempeh", "Tempeh"]],
+};
+const IDEE_GRASSI = [["un filo d'olio", "Olio EVO"], ["avocado", "Avocado"], ["frutta secca", "Mandorle"], ["semi", "Semi di zucca"]];
+const IDEE_CARBO = [["pane", "Pane integrale"], ["riso", "Riso basmati cotto"], ["frutta", "Banana"], ["patate", "Patate lesse"]];
+const IDEE_FIBRE = [["verdura", "Zucchine"], ["legumi", "Lenticchie cotte"], ["frutta", "Mela"], ["cereali integrali", "Pane integrale"], ["riso integrale", "Riso integrale cotto"]];
 function analisi(giorni, pesiPeriodo) {
   const out = []; // { liv: "ok"|"warn"|"info", testo, peso }
   const passati = giorni.filter(g => !g.futuro);
@@ -147,8 +163,8 @@ function analisi(giorni, pesiPeriodo) {
       const val = compl.map(g => sommaMacro(g.pasti.filter(x => x.pasto === p)).proteine);
       return { p, gap: media(compl.map(g => g.T.proteine * quotaPasto(g.data, p))) - media(val), val: media(val) };
     }).sort((a, b) => b.gap - a.gap)[0];
-    const idee = { colazione: "yogurt greco, kefir, uova o albumi", mattina: "uno yogurt greco o qualche fetta di bresaola", pranzo: "una porzione piena di carne, pesce o legumi", spuntino: "yogurt greco, fiocchi di latte o un frullato proteico", cena: "pesce, carne bianca, uova o tofu" };
-    out.push({ liv: "warn", peso: 9, testo: `Proteine sotto l'obiettivo in <b>${protBasse.length} giorni su ${compl.length}</b>. Il pasto più povero è <b>${nomePasto(perSlot.p)}</b> (media ${Math.round(perSlot.val)} g): prova ad aggiungere ${idee[perSlot.p]}.` });
+    const idea = ideeCibi(IDEE_PROTEINE[perSlot.p] || IDEE_PROTEINE.pranzo);
+    out.push({ liv: "warn", peso: 9, testo: `Proteine sotto l'obiettivo in <b>${protBasse.length} giorni su ${compl.length}</b>. Il pasto più povero è <b>${nomePasto(perSlot.p)}</b> (media ${Math.round(perSlot.val)} g)${idea ? `: prova ad aggiungere ${idea}` : ""}.` });
   } else out.push({ liv: "ok", peso: 5, testo: `Proteine centrate in <b>${compl.length - protBasse.length} giorni su ${compl.length}</b>: ottimo per proteggere i muscoli.` });
 
   // 4. pasto che sfora di più la sua quota
@@ -169,14 +185,14 @@ function analisi(giorni, pesiPeriodo) {
   // 6. grassi alti (condimenti)
   const grM = media(compl.map(g => g.t.grassi)), grT = media(compl.map(g => g.T.grassi));
   if (grM > grT * 1.2) out.push({ liv: "warn", peso: 6, testo: `Grassi in media a <b>${Math.round(grM)} g</b> (obiettivo ${Math.round(grT)} g). Spesso sono i condimenti: pesa l'olio (1 cucchiaio = 10 g = 90 kcal) e attenzione a formaggi e frutta secca.` });
-  else if (grM < grT * 0.7) out.push({ liv: "info", peso: 4, testo: `Grassi un po' bassi (media ${Math.round(grM)} g). Non scendere sotto ~50 g: aggiungi un filo d'olio, avocado o frutta secca.` });
+  else if (grM < grT * 0.7) out.push({ liv: "info", peso: 4, testo: `Grassi un po' bassi (media ${Math.round(grM)} g). Non scendere sotto ~50 g${ideeCibi(IDEE_GRASSI) ? `: aggiungi ${ideeCibi(IDEE_GRASSI)}` : ""}.` });
 
   // 7. carboidrati: allenamento vs riposo
   const riposo = compl.filter(g => g.tipo === "riposo"), allen = compl.filter(g => g.tipo !== "riposo");
   if (riposo.length && media(riposo.map(g => g.t.carboidrati / g.T.carboidrati)) > 1.25)
     out.push({ liv: "info", peso: 5, testo: `Nei giorni di riposo i carboidrati sono alti (+${Math.round((media(riposo.map(g => g.t.carboidrati / g.T.carboidrati)) - 1) * 100)}%). Spostali sui giorni di allenamento, dove servono davvero.` });
   if (allen.length && media(allen.map(g => g.t.carboidrati / g.T.carboidrati)) < 0.7)
-    out.push({ liv: "info", peso: 5, testo: `Nei giorni di allenamento i carboidrati sono bassi: se ti senti senza energia quando ti alleni, aggiungi pane, riso o frutta prima dell'allenamento.` });
+    out.push({ liv: "info", peso: 5, testo: `Nei giorni di allenamento i carboidrati sono bassi: se ti senti senza energia quando ti alleni, aggiungi ${ideeCibi(IDEE_CARBO) || "carboidrati"} prima dell'allenamento.` });
 
   // zuccheri aggiunti, fibre e sale (medie)
   const zM = media(compl.map(g => g.ex.aggiunti)), fM = media(compl.map(g => g.ex.fibre)), sM = media(compl.map(g => g.ex.sale));
@@ -185,7 +201,7 @@ function analisi(giorni, pesiPeriodo) {
   if (zM > LIMITI_EXTRA.aggiunti) out.push({ liv: "warn", peso: 9, testo: `Zuccheri aggiunti in media <b>${fmtG(zM)} g al giorno</b> (il ${quotaZ}% delle calorie; massimo ${LIMITI_EXTRA.aggiunti} g).${fz ? ` Il primo responsabile è <b>${esc(fz[0])}</b>.` : ""} Sono calorie che saziano poco: ridurle è il modo più facile per stare nel budget.` });
   else if (zM > LIMITI_EXTRA.aggiuntiIdeale) out.push({ liv: "info", peso: 4, testo: `Zuccheri aggiunti in media ${fmtG(zM)} g al giorno: entro il limite, ma sopra l'ideale di ${LIMITI_EXTRA.aggiuntiIdeale} g.${fz ? ` Arrivano soprattutto da ${esc(fz[0])}.` : ""}` });
   else out.push({ liv: "ok", peso: 3, testo: `Zuccheri aggiunti bassi (${fmtG(zM)} g al giorno di media): non sono loro il problema. 👍` });
-  if (fM < 20) out.push({ liv: "info", peso: 5, testo: `Fibre in media ${fmtG(fM)} g al giorno (consigliate almeno 25): aggiungi verdura, legumi o cereali integrali, ti aiutano a sentire meno fame.` });
+  if (fM < 20) out.push({ liv: "info", peso: 5, testo: `Fibre in media ${fmtG(fM)} g al giorno (consigliate almeno 25): aggiungi ${ideeCibi(IDEE_FIBRE)}, ti aiutano a sentire meno fame.` });
   if (sM > LIMITI_EXTRA.sale) out.push({ liv: "warn", peso: 5, testo: `Sale in media ${fmtG(sM)} g al giorno (massimo ${LIMITI_EXTRA.sale} g): attenzione a salumi, formaggi stagionati e piatti pronti.` });
 
   // 8. peso: atteso vs reale
@@ -273,7 +289,7 @@ function analisiGiorno(g) {
     const ex = g.ex, L = LIMITI_EXTRA, fz = fontiDi(g.pasti, 1)[0], fs = fontiDi(g.pasti, 3)[0];
     if (ex.aggiunti > L.aggiunti) out.push({ liv: "warn", testo: `Zuccheri aggiunti <b>${fmtG(ex.aggiunti)} g</b> (massimo ${L.aggiunti}).${fz ? ` Il primo responsabile: <b>${esc(fz[0])}</b> (${fmtG(fz[1])} g).` : ""}` });
     else if (ex.aggiunti > L.aggiuntiIdeale) out.push({ liv: "info", testo: `Zuccheri aggiunti ${fmtG(ex.aggiunti)} g: sotto il massimo, sopra l'ideale di ${L.aggiuntiIdeale} g.` });
-    if (g.completo && ex.fibre < 18) out.push({ liv: "info", testo: `Fibre basse (${fmtG(ex.fibre)} g su 25): verdura, legumi, frutta e cereali integrali aiutano anche la sazietà.` });
+    if (g.completo && ex.fibre < 18) out.push({ liv: "info", testo: `Fibre basse (${fmtG(ex.fibre)} g su 25): ${ideeCibi(IDEE_FIBRE, 4)} aiutano anche la sazietà.` });
     if (ex.sale > L.sale) out.push({ liv: "warn", testo: `Sale ${fmtG(ex.sale)} g (massimo ${L.sale}).${fs ? ` Arriva soprattutto da <b>${esc(fs[0])}</b>.` : ""}` });
   }
   if (g.tipo === "riposo" && t.carboidrati > T.carboidrati * 1.25) out.push({ liv: "info", testo: "Giorno di riposo con molti carboidrati: tienili per i giorni di allenamento." });

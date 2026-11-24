@@ -56,7 +56,7 @@ const preWorkout = (data, pasto) => (pasto === "spuntino" && preSera(data)) || (
 const pastoPost = (data) => {
   if (!conSport(data)) return null;
   const pf = typeof leggiProfilo === "function" ? leggiProfilo() : {};
-  if (typeof pf.allenOra === "number" && !giornoDiario(data).orario) { const o = orariPasti(), dopo = momentiGiorno(data).find(p => o[p] >= pf.allenOra); if (dopo) return dopo; }
+  if (typeof pf.allenOra === "number" && !giornoDiario(data).orario) { const o = orariPasti(); return momentiGiorno(data).find(p => o[p] >= pf.allenOra) || null; }   // allenamento dopo l'ultimo pasto: nessun pasto «dopo»
   return orarioAllen(data) === "sera" ? "cena" : "pranzo";
 };
 // i pasti di un giorno: nei giorni di riposo il pre-workout non c'è
@@ -1036,6 +1036,10 @@ const PIATTI_COMPOSTI = {
     { P: "Uova", C: "Gallette di riso", F: "Avocado", V: ["Pomodoro", 100] },
     { C: "Gallette di riso", F: "Avocado", V: ["Banana", 100] },
     { C: "Banana", F: "Semi di chia", V: ["Bevanda di riso", 200] },
+    // vegani con una fonte di proteine (anche senza glutine)
+    { P: "Yogurt di soia", C: "Banana", F: "Semi di chia", V: ["Frutti rossi", 100] },
+    { P: "Yogurt di soia", C: "Gallette di riso", F: "Semi di zucca" },
+    { P: "Tofu", C: "Gallette di riso", F: "Avocado", V: ["Pomodoro", 100] },
   ],
   spuntino: [
     { P: "Yogurt greco 0%", C: "Banana", F: "Mandorle" },
@@ -1044,6 +1048,8 @@ const PIATTI_COMPOSTI = {
     { C: "Banana", F: "Semi di zucca" },
     { C: "Pane integrale", F: "Hummus" },
     { C: "Mela", F: "Semi di zucca" },
+    { P: "Yogurt di soia", C: "Mela" },
+    { P: "Edamame", C: "Gallette di riso" },
   ],
   pre: [   // prima dell'allenamento: niente grassi né fibre
     { P: "Yogurt greco 0%", C: "Banana" },
@@ -1109,7 +1115,8 @@ function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = ()
   for (let k = 0; k < lista.length; k++) {
     const c = costruisci(lista[(n0 + k) % lista.length]);
     if (!c) continue;
-    c.voto = c.sopra + 0.8 * usi(c.base);
+    // proteine che il piatto lascia mancare rispetto al suo obiettivo: a parità, meglio quello che le porta (es. yogurt di soia invece di sola frutta)
+    c.voto = c.sopra + 0.8 * usi(c.base) + (T.proteine > 0 ? Math.max(0, T.proteine - c.tot.proteine) / T.proteine * 1.2 : 0);
     if (c.voto <= 0.3) return c;
     if (!migliore || c.voto < migliore.voto) migliore = c;
   }
@@ -1152,6 +1159,8 @@ function rifinisciGiorno(data, slot) {
 }
 const KCAL_EXTRA = 0;   // niente sforamenti: ogni kcal sopra viene segnalata (prima si tollerava +50 per arrivare alle proteine)
 // Le proteine hanno la precedenza: se mancano, si alza una fonte magra già presente o se ne aggiunge una (skyr negli spuntini, albume ai pasti), senza far sforare grassi e carboidrati
+// il primo alimento della lista che esiste e che non hai escluso (es. yogurt greco → yogurt di soia per chi è vegana)
+const primoNonEscluso = (lista) => lista.find(n => (window.ALIMENTI || {})[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n)));
 function completaProteine(data, slot) {
   const A = window.ALIMENTI || {}, MAX = typeof GRAMMI_MAX_FONTI !== "undefined" ? GRAMMI_MAX_FONTI : {};
   const ok = () => { const m = mancaData(data); return m.grassi >= 0 && m.carboidrati >= 0 && m.kcal >= -KCAL_EXTRA; };
@@ -1168,9 +1177,9 @@ function completaProteine(data, slot) {
       prova(g => { for (const p of g.pasti) { if (!(slot.has(p.pasto) && p.auto)) continue; for (const i of p.ingredienti || []) { const a = A[i.nome];
         if (a && a[1] >= 15 && a[3] <= 4 && i.unita === "g" && i.qta + 10 <= (MAX[i.nome] || 250)) { i.qta += 10; return true; } } } return false; })
       // 2) yogurt greco in uno spuntino o a colazione
-      || prova(g => { if (typeof alimentoEscluso === "function" && alimentoEscluso("Yogurt greco 0%")) return false; const p = g.pasti.find(x => slot.has(x.pasto) && x.auto && ["spuntino", "mattina", "colazione"].includes(x.pasto) && !(x.ingredienti || []).some(i => i.nome === "Yogurt greco 0%")); if (!p) return false; p.ingredienti.push({ nome: "Yogurt greco 0%", qta: 50, unita: "g", lock: true, cercato: "Yogurt greco 0%" }); return true; })
+      || prova(g => { const n = primoNonEscluso(["Yogurt greco 0%", "Skyr", "Yogurt di soia", "Edamame"]); if (!n) return false; const p = g.pasti.find(x => slot.has(x.pasto) && x.auto && ["spuntino", "mattina", "colazione"].includes(x.pasto) && !(x.ingredienti || []).some(i => i.nome === n)); if (!p) return false; p.ingredienti.push({ nome: n, qta: 50, unita: "g", lock: true, cercato: n }); return true; })
       // 3) albume a pranzo o a cena
-      || prova(g => { if (typeof alimentoEscluso === "function" && alimentoEscluso("Albume")) return false; const p = g.pasti.find(x => slot.has(x.pasto) && x.auto && ["cena", "pranzo"].includes(x.pasto) && !(x.ingredienti || []).some(i => i.nome === "Albume")); if (!p) return false; p.ingredienti.push({ nome: "Albume", qta: 60, unita: "g", lock: true, cercato: "Albume" }); return true; });
+      || prova(g => { const n = primoNonEscluso(["Albume", "Tofu", "Lenticchie cotte"]); if (!n) return false; const p = g.pasti.find(x => slot.has(x.pasto) && x.auto && ["cena", "pranzo"].includes(x.pasto) && !(x.ingredienti || []).some(i => i.nome === n)); if (!p) return false; p.ingredienti.push({ nome: n, qta: n === "Lenticchie cotte" ? 80 : 60, unita: "g", lock: true, cercato: n }); return true; });
     if (!fatto) break;
   }
 }
@@ -1236,7 +1245,7 @@ function aggiungiCondimento(data, slot) {
 // scelto in base a cosa manca, tra gli alimenti che non escludi, senza mai superare grassi, carboidrati e kcal
 const CONTORNI = {
   carbo: { principale: [["Riso basmati cotto", 200], ["Patate lesse", 300], ["Pane integrale", 100], ["Gallette di riso", 40]], piccolo: [["Banana", 150], ["Mela", 200], ["Gallette di riso", 30], ["Pane integrale", 60]] },   // prima i più magri
-  prot: { principale: [["Petto di pollo", 150], ["Fesa di tacchino", 150], ["Uova", 120], ["Lenticchie cotte", 200], ["Ceci cotti", 200]], piccolo: [["Yogurt greco 0%", 170], ["Skyr", 150], ["Uova", 100], ["Hummus", 60]] },
+  prot: { principale: [["Petto di pollo", 150], ["Fesa di tacchino", 150], ["Uova", 120], ["Tofu", 150], ["Lenticchie cotte", 200], ["Ceci cotti", 200]], piccolo: [["Yogurt greco 0%", 170], ["Skyr", 150], ["Uova", 100], ["Yogurt di soia", 170], ["Edamame", 100], ["Hummus", 60]] },
 };
 function aggiungiContorno(data, slot) {
   const A = window.ALIMENTI || {}, T = targetData(data);
@@ -1477,7 +1486,8 @@ function alimentiIdeaHTML(c) {
     if (!mosse.length && m.carboidrati >= 5) mosse = mosseCarbo(c.data, c.pasto, m);
     if (!mosse.length && m0.proteine > 4) mosse = mosseProteine(c.data, c.pasto, m, false);
     if (!mosse.length && typeof piccoliCompletamenti === "function") mosse = piccoliCompletamenti(c.data, c.pasto, m);
-    mosse = mosse.filter(x => !String(x.key).includes("|lig|") && !(sp && x.d.kcal > 320) && !(pre && x.d.grassi > 3) && !furbiScartati.has(x.key)).slice(0, 3);
+    mosse = mosse.filter(x => !String(x.key).includes("|lig|") && !(sp && x.d.kcal > 320) && !(pre && x.d.grassi > 3) && !furbiScartati.has(x.key)
+      && !(typeof alimentoEscluso === "function" && alimentoEscluso(String(x.key).split("|")[2] || ""))).slice(0, 3);   // mai cibi che hai escluso nel Profilo
     if (!mosse.length) return `<p class="hint">Niente che ci stia nelle kcal che restano</p>`;
     return `<h4 class="cosa-testa"><span>💡 Idee</span></h4><div class="sugg-ricette">${mosse.map(x => { const [, , nome, g] = x.key.split("|"); return `<button class="var-furbo lib-furbo" data-lib-add="${esc(nome)}" data-lib-g="${g}" data-lib-fisso="1">${x.testa}<em>${numeriMossa(x.d)}</em></button>`; }).join("")}</div>`;
   } catch (e) { return ""; }
