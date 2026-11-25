@@ -1015,6 +1015,8 @@ function pastoModificato(c) {
 // che restano nella giornata (contando gli altri pasti, non questo). ↻ ne mostra altre 3; toccandone una sostituisce il pasto.
 function altreIdeeHTML(c) {
   if (!c || !c.vivo || c.bozza || !c.items.length || typeof ricetteConsigliate !== "function") return "";
+  // con alimenti «Da aggiungere» non ancora confermati niente idee: le idee non li contano e proporrebbero un pasto intero. Tornano dopo ✓ Aggiungi
+  if (c.items.some(it => it.nuovo) || (c.piattiNuovi || []).length) return "";
   const g = giornoDiario(c.data), idx = new Set(g.pasti.map((p, k) => p.pasto === c.pasto ? k : -1).filter(k => k >= 0));
   const attuali = new Set(g.pasti.filter(p => p.pasto === c.pasto).map(p => p.ricetta || p.nome));
   const chiaveAltre = [...attuali].join("|") + "|" + Math.round(mancaData(c.data).kcal);   // si ricalcola se cambia il pasto o le kcal che restano
@@ -1511,6 +1513,8 @@ function righeDaParlato(testo) {
     return { r, testo: p };
   });
 }
+// più alimenti o parole «parlate» nel campo: si legge come una frase
+const sembraFrase = (v) => { v = String(v || "").trim(); return v.split(/\s+/).length >= 3 && /[,;.]|\s(?:e|ed|con|più|poi)\s|\b(?:ho|etto|etti|piatto|ciotola|manciata|bicchiere|tazza|inserisci|aggiungi|colazione|pranzo|cena|merenda|spuntino)\b/i.test(v); };
 function aggiungiDaParlato(testo) {
   const c = liberoCtx, ignoti = [];
   righeDaParlato(testo).forEach(x => {
@@ -1526,7 +1530,7 @@ function aggiungiDaParlato(testo) {
 // il campo per dettare (si apre col pulsante sotto la ricerca) e le cose non riconosciute
 function dettaHTML(c) {
   const ign = (c.ignoti || []).map((t, i) => `<div class="lib-ignota"><span>❓ <b>${esc(t)}</b><small>Non lo conosco</small></span><button class="btn-sec" data-lib="ignota-cerca" data-i="${i}">Cerca</button><button class="lib-del" data-lib="ignota-togli" data-i="${i}" aria-label="Togli">✕</button></div>`).join("");
-  if (!c.detta) return `${ign}<button class="btn-link lib-detta-apri" data-lib="detta-apri">🎤 Detta o scrivi tutto il pasto</button>`;
+  if (!c.detta) return ign;   // si detta con il tasto «Detta» della barra in basso: con il pasto aperto va in questo pasto
   return `${ign}<div class="lib-detta">
       <textarea id="lib-detta" class="qta-input" rows="3" autocomplete="off" autocapitalize="sentences" placeholder="es. due uova, una fetta di pane integrale e un caffè"></textarea>
       <p class="campo-nota">Tocca il 🎤 della tastiera e parla. Poi controlla le quantità e tocca ✓ Aggiungi.</p>
@@ -1924,7 +1928,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (liberoCtx && e.key === "Enter" && e.target.id === "lib-input") {
       e.preventDefault();
-      aggiungiDaTesto(e.target.value); liberoCtx.addAperto = false; rirenderLibero(); rifocusInput(); // il campo resta pronto per il prossimo alimento
+      // una frase intera (scritta o dettata con il 🎤 della tastiera: «un piatto di pasta e un'insalata») la legge il lettore del parlato
+      if (sembraFrase(e.target.value)) aggiungiDaParlato(pastoDaFrase(e.target.value).resto || e.target.value); else aggiungiDaTesto(e.target.value);
+      liberoCtx.addAperto = false; rirenderLibero(); rifocusInput(); // il campo resta pronto per il prossimo alimento
     }
   });
   // chiudendo il modale si esce dal pasto libero
@@ -1960,6 +1966,7 @@ function pastoDaFrase(testo) {
 // il giorno su cui si detta: quello aperto in Oggi, altrimenti oggi
 const dataDetta = () => document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" ? dataDiario : oggiISO();
 function inviaDettato(testo) {
+  document.querySelectorAll(".detta-velo").forEach(v => v.remove());   // sicurezza: niente «Ti ascolto…» sopra la scelta del pasto
   testo = String(testo || "").trim();
   if (!testo) { avviso("Non ho sentito niente: riprova"); return; }
   const { pasto, resto } = pastoDaFrase(testo);
@@ -1991,51 +1998,110 @@ function apriDettaTesto(nota) {
   const ta = document.getElementById("detta-oggi"); if (ta) ta.focus();
   document.getElementById("detta-oggi-invia").addEventListener("click", () => { const v = document.getElementById("detta-oggi").value; if (!v.trim()) { avviso("Scrivi o detta cosa hai mangiato"); return; } closeModal(true); inviaDettato(v); });
 }
-// tieni premuto e parla
+// tieni premuto e parla: il tasto «Detta» della barra in basso. Con un pasto aperto quello che dici va in quel pasto;
+// altrimenti nel pasto che nomini («a colazione…») o in quello che scegli
+// tocco breve: solo il promemoria «Tieni premuto per parlare» (il microfono non parte)
+// dove il microfono dell'app non funziona: dalla barra il campo per scrivere, nel pasto la ricerca (lì si detta con il 🎤 della tastiera)
+// c'è un pasto aperto (il suo pannello, con il campo di ricerca)? allora si detta in quello
+const pastoApertoPerDetta = () => !!(liberoCtx && liberoCtx.vivo && !document.getElementById("modal").hidden && document.getElementById("lib-input"));
+function micRipiego(modo, nota) {
+  if (pastoApertoPerDetta()) modo = "pasto";
+  if (modo === "pasto" && liberoCtx) {
+    const i = document.getElementById("lib-input"); if (i) { i.placeholder = "Detta o scrivi…"; i.focus(); }
+    if (nota) avviso(nota); return;
+  }
+  apriDettaTesto(nota);
+}
+function micTesto(modo, testo) {
+  if (pastoApertoPerDetta()) modo = "pasto";
+  if (modo === "pasto" && liberoCtx) {   // dentro un pasto si resta in quel pasto: «a cena…» detto nel pranzo va nel pranzo
+    aggiungiDaParlato(pastoDaFrase(testo).resto || testo); rirenderLibero(); return;
+  }
+  inviaDettato(testo);
+}
 (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null, premuto = false, inizio = 0, testoFinale = "", testoParziale = "", velo = null, errore = null, partito = false;
+  let rec = null, premuto = false, testoFinale = "", testoParziale = "", velo = null, errore = null, partito = false, finito = true, modo = "barra", bottone = null, attesa = null, timerPromemoria = null;
+  // un riquadro solo: su iPhone il tocco può arrivare due volte e ne restava uno «Ti ascolto…» sopra la scelta del pasto
+  const togliTuttiVeli = () => document.querySelectorAll(".detta-velo").forEach(v => v.remove());
   const mostraVelo = () => {
+    togliTuttiVeli();
     velo = document.createElement("div"); velo.className = "detta-velo";
     velo.innerHTML = `<div class="detta-bolla"><div class="detta-onda">🎤</div><p class="detta-stato">Ti ascolto… rilascia per finire</p><p class="detta-live"></p></div>`;
     document.body.appendChild(velo);
   };
   const aggiornaVelo = () => { const l = velo && velo.querySelector(".detta-live"); if (l) l.textContent = (testoFinale + " " + testoParziale).trim(); };
-  const togliVelo = () => { if (velo) velo.remove(); velo = null; };
-  const avvia = () => {
-    testoFinale = ""; testoParziale = ""; errore = null; partito = false;
-    try {
-      rec = new SR(); rec.lang = "it-IT"; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
-      rec.onstart = () => { partito = true; };
-      rec.onresult = (e) => { testoParziale = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) testoFinale += " " + r[0].transcript; else testoParziale += r[0].transcript; } aggiornaVelo(); };
-      rec.onerror = (e) => { errore = e.error || "errore"; };
-      rec.onend = () => { if (premuto) return; finisci(); };   // finché tieni premuto resta il velo (iPhone a volte si ferma da solo nelle pause)
-      rec.start(); mostraVelo();
-      if (typeof vibra === "function") vibra();
-    } catch (e) { rec = null; togliVelo(); apriDettaTesto("Su questo telefono il microfono dell'app non è disponibile: usa il 🎤 della tastiera."); }
+  const togliVelo = () => { togliTuttiVeli(); velo = null; };
+  // tocco breve: il riquadro grande con «Tieni premuto per parlare» per un paio di secondi, come WhatsApp (niente schermate)
+  const promemoria = () => {
+    togliTuttiVeli(); clearTimeout(timerPromemoria);
+    const p = document.createElement("div"); p.className = "detta-velo promemoria";
+    p.innerHTML = `<div class="detta-bolla"><div class="detta-onda">🎤</div><p class="detta-stato">Tieni premuto per parlare</p></div>`;
+    document.body.appendChild(p);
+    timerPromemoria = setTimeout(() => p.remove(), 2200);
   };
-  let finito = false;
   const finisci = () => {
     if (finito) return; finito = true;
     const testo = (testoFinale + " " + testoParziale).trim();
     togliVelo();
-    if (errore === "not-allowed" || errore === "service-not-allowed" || (!partito && !testo)) { apriDettaTesto(errore === "not-allowed" ? "Il microfono non è permesso per questa app: usa il 🎤 della tastiera (o permettilo nelle impostazioni del telefono)." : "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
+    if (errore === "not-allowed" || errore === "service-not-allowed" || (!partito && !testo)) {
+      micRipiego(modo, errore === "not-allowed" ? "Il microfono non è permesso per questa app: usa il 🎤 della tastiera (o permettilo nelle impostazioni del telefono)." : "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return;
+    }
     if (!testo) { avviso("Non ho sentito niente: tieni premuto mentre parli"); return; }
-    inviaDettato(testo);
+    micTesto(modo, testo);
   };
-  document.addEventListener("DOMContentLoaded", () => {
-    const b = document.getElementById("tab-detta"); if (!b) return;
-    b.addEventListener("contextmenu", (e) => e.preventDefault());
-    if (!SR) { b.addEventListener("click", () => apriDettaTesto()); return; }   // senza riconoscimento vocale: il campo, sempre
-    // il microfono parte solo se tieni premuto un attimo: un tocco breve apre il campo (senza chiedere il permesso del microfono)
-    let attesa = null;
-    b.addEventListener("pointerdown", (e) => { e.preventDefault(); premuto = true; finito = false; inizio = Date.now(); b.classList.add("ascolta"); attesa = setTimeout(() => { attesa = null; if (premuto) avvia(); }, 250); });
-    const rilascia = () => {
-      if (!premuto) return; premuto = false; b.classList.remove("ascolta");
-      if (attesa) { clearTimeout(attesa); attesa = null; finito = true; apriDettaTesto(); return; }   // un tocco breve: il campo per scrivere
-      try { rec ? rec.stop() : finisci(); } catch (e) { finisci(); }
-      setTimeout(finisci, 1500);   // se il telefono non avvisa della fine, si va avanti lo stesso
+  // un «giro» di ascolto. L'iPhone smette di ascoltare da solo dopo un attimo di silenzio: finché tieni premuto si riparte,
+  // e quello già sentito resta (così si può fare una pausa, o cominciare a parlare con calma)
+  let inizioAscolto = 0, giri = 0;
+  const ascolta = () => {
+    const r = new SR(); rec = r; r.lang = "it-IT"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
+    r.onstart = () => { partito = true; };
+    r.onresult = (e) => { if (rec !== r) return; testoParziale = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const x = e.results[i]; if (x.isFinal) testoFinale += " " + x[0].transcript; else testoParziale += x[0].transcript; } aggiornaVelo(); };
+    r.onerror = (e) => { if (rec === r) errore = e.error || "errore"; };
+    r.onend = () => {
+      if (rec !== r) return;
+      if (testoParziale) { testoFinale += " " + testoParziale; testoParziale = ""; }   // l'ultima frase non ancora «definitiva» non si perde
+      const bloccato = errore === "not-allowed" || errore === "service-not-allowed";
+      if (premuto && !bloccato && giri < 20 && Date.now() - inizioAscolto < 60000) { giri++; errore = null; try { ascolta(); } catch (e) { finisci(); } return; }
+      if (premuto) { premuto = false; if (bottone) bottone.classList.remove("ascolta"); }   // un minuto (o il microfono bloccato): si chiude da solo, il riquadro non resta mai aperto
+      finisci();
     };
-    b.addEventListener("pointerup", rilascia); b.addEventListener("pointercancel", rilascia); b.addEventListener("pointerleave", rilascia);
+    r.start();
+  };
+  const avvia = () => {
+    testoFinale = ""; testoParziale = ""; errore = null; partito = false; giri = 0; inizioAscolto = Date.now();
+    if (rec) { try { rec.onend = null; rec.abort(); } catch (e) {} rec = null; }   // un ascolto alla volta
+    try {
+      ascolta(); mostraVelo();
+    } catch (e) { rec = null; finito = true; togliVelo(); micRipiego(modo, "Su questo telefono il microfono dell'app non è disponibile: usa il 🎤 della tastiera."); }
+  };
+  const rilascia = () => {
+    if (!premuto) return; premuto = false; if (bottone) bottone.classList.remove("ascolta");
+    if (!attesa && typeof vibra === "function") vibra();   // un tic al rilascio (dentro il tocco: su iPhone si sente)
+    if (attesa) { clearTimeout(attesa); attesa = null; finito = true; if (SR) promemoria(); else micRipiego(modo); return; }   // tocco breve
+    try { rec ? rec.stop() : finisci(); } catch (e) { finisci(); }
+    setTimeout(finisci, 1500);   // se il telefono non avvisa della fine, si va avanti lo stesso
+  };
+  document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest("[data-mic]")) e.preventDefault(); });
+  document.addEventListener("pointerdown", (e) => {
+    const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
+    e.preventDefault(); if (premuto) return;   // il doppio tocco dell'iPhone: uno solo
+    if (attesa) clearTimeout(attesa);
+    modo = b.dataset.mic; bottone = b; premuto = true; finito = false;
+    if (typeof vibra === "function") vibra();   // un tic appena premi, come WhatsApp (nell'istante del tocco: su iPhone si sente)
+    if (!SR) { attesa = setTimeout(() => {}, 0); return; }   // senza riconoscimento vocale: al rilascio il ripiego
+    b.classList.add("ascolta");
+    // il microfono parte solo se tieni premuto un attimo: un tocco breve mostra solo il promemoria (senza chiedere il permesso del microfono)
+    attesa = setTimeout(() => { attesa = null; if (premuto) avvia(); }, 250);
+  });
+  document.addEventListener("pointerup", rilascia); document.addEventListener("pointercancel", rilascia);
+  // sicurezze: su iPhone a volte il rilascio non arriva come «pointer»; e se l'app va in secondo piano si chiude tutto
+  document.addEventListener("touchend", rilascia); document.addEventListener("touchcancel", rilascia);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) rilascia(); });
+  // il riquadro «Ti ascolto…» si può anche toccare per finire (se il telefono non ha avvisato del rilascio)
+  document.addEventListener("click", (e) => {
+    if (!(e.target.closest && e.target.closest(".detta-velo:not(.promemoria)"))) return;
+    premuto = false; if (bottone) bottone.classList.remove("ascolta");   // il dito è sul riquadro: non sta più tenendo premuto «Detta»
+    try { rec && rec.stop(); } catch (x) {} setTimeout(finisci, 600);
   });
 })();
