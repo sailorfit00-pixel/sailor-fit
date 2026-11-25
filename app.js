@@ -80,7 +80,7 @@ function basaleMifflin({ uomo, eta, cm, kg }) {
 const CATEGORIE_CIBO = {
   carneRossa: /manzo|vitello|bresaola|agnello|cavallo|cuore di|trippa|lingua di|rognone|carpaccio|spezzatino|stufato|brasato|bollito|ossobuco|ragù|cotoletta alla milanese|kebab|hamburger di manzo|panino hamburger|lasagne|saltimbocca/,
   pollame: /pollo|tacchino|anatra|nuggets|coniglio/,
-  maiale: /maiale|prosciutto|salsiccia|wurstel|mortadella|pancetta|salam|salumi|guanciale|speck|bacon(?! di tacchino)|strutto|hot dog|carbonara|amatriciana|tagliere|club sandwich|capricciosa|diavola|tortellini|gyoza|ramen/,
+  maiale: /maiale|prosciutto|salsiccia|wurstel|mortadella|pancetta|salam|salumi|guanciale|speck|bacon(?! di tacchino)|strutto|hot dog|carbonara|amatriciana|tagliere|club sandwich|capricciosa|diavola|tortellini|gyoza|ramen|gelatina in fogli/,   // la gelatina in fogli di solito è di origine suina
   altraCarne: /brodo di carne|supplì|paella|riso alla cantonese|pad thai|involtini primavera|gelatina in fogli|collagene/,
   pesce: /salmone|tonno|merluzzo|sgombro|orata|branzino|sardine|alici|acciughe|trota|platessa|pesce|nasello|surimi|aringa|baccalà|stoccafisso|dentice|sogliola|sushi|nigiri|maki|sashimi|poke|omega 3|paella/,
   crostacei: /gamber|polpo|calamar|cozze|seppie|vongole|totani|scampi|mazzancolle|aragosta|ostriche|paella/,
@@ -93,6 +93,8 @@ const CATEGORIE_CIBO = {
   funghi: /fungh|porcini|champignon/,
   piccante: /piccante|peperoncino|sriracha|harissa|diavola|wasabi|curry|kimchi|garam masala/,
   miele: /miele/,
+  // bevande alcoliche (per chi non beve alcol): non le ricette, che non ne contengono
+  alcol: /^vino|vino (rosso|bianco|rosato)|birra|spritz|prosecco|spumante|champagne|\bgin\b|gin tonic|vodka|\brum\b|mojito|negroni|aperol|limoncello|whisky|grappa|sangria|cocktail|liquor|marsala/,
   // allergeni che spesso sono «nascosti» in altri alimenti (tahina = sesamo, dado = sedano…): l'app è prudente
   sesamo: /sesam|tahin|hummus|za'atar|halva/,
   sedano: /sedano|brodo|dado|minestrone|ribollita|ragù|caponata|zuppa di legumi/,
@@ -106,11 +108,11 @@ const ESCLUSIONI_DIETA = { tutto: [], vegetariana: ["carneRossa", "pollame", "ma
 const ALLERGIE = [["glutine", "Glutine", "🌾"], ["latticini", "Lattosio", "🥛"], ["uova", "Uova", "🥚"], ["fruttaSecca", "Frutta secca", "🌰"], ["arachidi", "Arachidi", "🥜"], ["pesce", "Pesce", "🐟"], ["crostacei", "Crostacei/molluschi", "🦐"], ["soia", "Soia", "🫛"],
   ["sesamo", "Sesamo", "⚪"], ["sedano", "Sedano", "🥬"], ["senape", "Senape", "🟡"], ["lupini", "Lupini", "🫘"], ["solfiti", "Solfiti", "🍷"]];
 // una parola scritta a mano che è un allergene noto vale come quella categoria: «sesamo» esclude anche tahina e hummus
-const PAROLE_ALLERGENI = [[/^sesam|^tahin/, "sesamo"], [/^sedan/, "sedano"], [/^senap/, "senape"], [/^arachid|^noccioline/, "arachidi"], [/^lupin/, "lupini"], [/^solfit/, "solfiti"],
+const PAROLE_ALLERGENI = [[/^alcol|^alcool|^superalcol|^liquor/, "alcol"], [/^sesam|^tahin/, "sesamo"], [/^sedan/, "sedano"], [/^senap/, "senape"], [/^arachid|^noccioline/, "arachidi"], [/^lupin/, "lupini"], [/^solfit/, "solfiti"],
   [/^glutin|^grano|^frument|^orzo|^segale|^farro/, "glutine"], [/^lattos|^latte|^latticin|^caseina/, "latticini"], [/^uov|^albume/, "uova"], [/^pesc[ei]$/, "pesce"], [/^crostace|^gamber|^mollusch|^frutti di mare/, "crostacei"],
   [/^soia/, "soia"], [/^frutta (secca|a guscio)|^noci$|^nocciol|^mandorl|^pistacch|^anacard/, "fruttaSecca"]];
 const categoriaDiParola = (w) => { const n = normCibo(w); const t = PAROLE_ALLERGENI.find(([re]) => re.test(n)); return t ? t[1] : null; };
-const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/tacchino", "🍗"], ["maiale", "Maiale/salumi", "🥓"], ["pesce", "Pesce e frutti di mare", "🐟"], ["uova", "Uova", "🥚"], ["latticini", "Latticini", "🧀"], ["legumi", "Legumi", "🫘"], ["funghi", "Funghi", "🍄"], ["piccante", "Piccante", "🌶️"]];
+const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/tacchino", "🍗"], ["maiale", "Maiale/salumi", "🥓"], ["pesce", "Pesce e frutti di mare", "🐟"], ["uova", "Uova", "🥚"], ["latticini", "Latticini", "🧀"], ["legumi", "Legumi", "🫘"], ["funghi", "Funghi", "🍄"], ["piccante", "Piccante", "🌶️"], ["alcol", "Alcol", "🍷"]];
 function categorieEscluse(pf = leggiProfilo()) {
   const e = pf.esclusioni || {};
   const nm = (e.nonMangio || []).flatMap(c => c === "pesce" ? ["pesce", "crostacei"] : [c]);   // «non mangio pesce» vale anche per gamberi, cozze, polpo…
@@ -1144,7 +1146,7 @@ function repartoDi(nome) {
   const n = nome.toLowerCase();
   const R = [
     ["Casa e igiene", /carta (igienica|assorbente|da cucina|forno)|scottex|tovagli|fazzolett|detersiv|detergent|sapone|bagnoschiuma|shampoo|balsamo|dentifric|spazzolin|deodorant|assorbent|cotone|cotton fioc|rasoi|schiuma da barba|crema (viso|mani|corpo)|spugn|strofinacc|pezz[ae]|candeggin|ammorbidente|lavastoviglie|lavatrice|pulitor|sgrassator|anticalcare|ammoniaca|sacchett|sacchi|pellicola|alluminio|carta forno|stuzzicadenti|candele|lampadin|pile\b|batterie|insetticida|deumidificator|igienizzant|mascherin|cerotti|disinfettant|salviett|spray|lucido|scopa|paletta|secchio|guanti|filtri|capsule (caff|lavast)|lettiera|mangime/],
-    ["Dispensa", /^(burro d'arachidi|burro di mandorle|fecola|amido|lievito|bicarbonato|vaniglia|zucchero|eritritolo|dolcificante|stevia|sciroppo|miele|marmellata|confettura|nutella|crema di (nocciole|pistacchio)|cacao|pangrattato|gelatina|proteine in polvere|tapioca|semolino|maltodestrine|t[eè]$|tisana|matcha|caff[eè]|patatine in busta|popcorn)/],
+    ["Dispensa", /^(proteine|burro d'arachidi|burro di mandorle|fecola|amido|lievito|bicarbonato|vaniglia|zucchero|eritritolo|dolcificante|stevia|sciroppo|miele|marmellata|confettura|nutella|crema di (nocciole|pistacchio)|cacao|pangrattato|gelatina|proteine in polvere|tapioca|semolino|maltodestrine|t[eè]$|tisana|matcha|caff[eè]|patatine in busta|popcorn)/],
     ["Bevande", /^(acqua|coca cola|fanta|succo|limonata|birra|vino|prosecco|gin$|vodka|rum$|tonica|bevanda isotonica|energy)/],
     ["Pane, pasta e cereali", /^farina|noodles|^pasta|ramen|fogli di riso|ravioli|tagliatelle|gnocchi|tortellini|biscotti secchi|^pane|^pancarr/],
     ["Carne e pesce", /bresaola|tacchino|pollo|manzo|vitello|maiale|salmone|tonno|gamber|merluzzo|sgombro|prosciutto|dentice|spigola|branzino|orata|sogliola|totani|scampi|mazzancolle|aragosta|ostriche|polpo|calamari|cozze|vongole|trota|nasello|pesce|baccal|stoccafisso|aringa|guanciale|salame|salsiccia|speck|trippa|coniglio|agnello|anatra|cavallo|wurstel|mortadella|pancetta|sardine|alici|seppie|platessa|surimi|strutto/],
@@ -1193,7 +1195,7 @@ function segnaInCasa(nome, si, grammi) {
 // Quanto ne hai in casa: alla spesa si assume una confezione tipica (in grammi, per il riso e la pasta da crudo);
 // ogni volta che lo scrivi nel diario si sottrae. Quando è quasi finito torna da solo in lista; se non lo usi, comunque dopo qualche giorno.
 const PACCO_TIPICO = [
-  [/^albume/i, 500], [/^uova/i, 330], [/^skyr/i, 450], [/^yogurt/i, 250], [/^fiocchi di latte/i, 200], [/^ricotta/i, 250], [/^mozzarella|^burrata|^scamorza|^feta/i, 250],
+  [/^albume/i, 500], [/^uova/i, 330], [/^latte(?! di cocco)|^bevanda di (avena|soia|riso|mandorla)/i, 1000], [/^skyr/i, 450], [/^yogurt/i, 250], [/^fiocchi di latte/i, 200], [/^ricotta/i, 250], [/^mozzarella|^burrata|^scamorza|^feta/i, 250],
   [/^petto di pollo|^coscia/i, 500], [/^fesa di tacchino|^bresaola|^prosciutto/i, 150], [/^tofu|^seitan|^tempeh/i, 200], [/^proteine in polvere/i, 900],
   [/^riso|^pasta|^couscous|^quinoa|^farro|^noodles|^orzo|^bulgur|^miglio/i, 500], [/^fiocchi d'avena|^farina|^granola|^muesli/i, 500], [/^pane|^piadina|^tortilla|^crackers|^gallette/i, 300],
   [/^olio|^aceto|^salsa di soia/i, 500], [/^parmigiano|^grana|^pecorino/i, 200], [/^mandorle|^noci|^nocciole|^anacardi|^pistacchi|^arachidi|^semi|^burro d'arachidi|^burro di mandorle/i, 200],
@@ -1244,6 +1246,9 @@ function correggiScorteGonfiate() {
 }
 function scadiPresi() {
   correggiScorteGonfiate();
+  return leggiPresi();   // le voci spuntate restano finché tocchi «🧹 Nuova spesa»: niente più ritorni automatici
+}
+function scadiPresiVecchio() {
   const presi = leggiPresi(); if (!presi.size) return presi;
   const c = leggiInCasaRaw(), da = addGiorniISO(oggiISO(), -GIORNI_PRESI);
   let cambiato = false;
@@ -1329,12 +1334,20 @@ function consumiPerAlimento(giorniISO) {
   Object.values(st).forEach(e => { e.g = Math.max(e.g * sett, ...Object.values(e.perGiorno)); delete e.perGiorno; });
   return { st, nValidi: validi.length, validi };
 }
-// La lista della spesa mostra ciò che hai mangiato: oggi e i 13 giorni prima (non i giorni pianificati)
+// La lista della spesa: se nei prossimi 7 giorni hai pasti pianificati, è quello che serve per quei pasti;
+// altrimenti quello che mangi di solito (oggi e i 13 giorni prima, ridotto a una settimana)
+function giorniPiano() {
+  const d = typeof leggiDiario === "function" ? leggiDiario() : {}, oggi = oggiISO(), out = [];
+  for (let k = 0; k < 7; k++) { const x = addGiorniISO(oggi, k); if (d[x] && (d[x].pasti || []).length) out.push(x); }
+  return out.some(x => x > oggi) ? out : [];   // basta un giorno pianificato da domani in poi
+}
 function statSpesa() {
+  const piano = giorniPiano();
+  if (piano.length) { const r = consumiPerAlimento(piano); return { st: r.st, nGiorni: r.nValidi, modo: "piano", giorni: piano }; }
   const oggi = oggiISO();
   const giorni = []; for (let k = 0; k < GIORNI_SPESA; k++) giorni.push(addGiorniISO(oggi, -k));   // anche oggi: chi fa la spesa la sera trova i pasti della giornata
   const r = consumiPerAlimento(giorni);
-  return { st: r.st, nGiorni: r.nValidi };
+  return { st: r.st, nGiorni: r.nValidi, modo: "abitudini" };
 }
 function fmtPeso(x, u) {
   if (x >= 1000) return (Math.round(x / 100) / 10).toString().replace(".", ",") + (u === "ml" ? " l" : " kg");
@@ -1363,14 +1376,27 @@ function voceSpesaHTML(nome, preso, info, extra, q) {
     <input type="checkbox" data-spesa="${esc(nome)}" ${q ? `data-q="${Math.round(q)}"` : ""} ${preso ? "checked" : ""}><span>${esc(nome)}</span>${info ? `<em class="spesa-qta">${info}</em>` : ""}</label>
     ${extra ? `<button class="lib-del" data-spesa-del="${esc(nome)}" aria-label="Togli dalla lista">${ICONA_CESTINO}</button>` : ""}</li>`;
 }
-let spesaDispensaAperta = false;
-const SPESA_SALTA = /^(acqua|sale|spezie|tè|caffè|bicarbonato|lievito per dolci|vaniglia|purea di mela|salsa yogurt-limone|uova al tegamino|patate lesse|patate al forno|gin|gin tonic|vodka|rum|whisky|birra|prosecco|spritz|vino|vino bianco|vino rosso|liquore|amaro|grappa|aperol|campari)$/i;   // + alcolici (si bevono fuori: in lista solo se li aggiungi tu a mano)   // quello che non si compra (si prepara in casa)
+const SPESA_SALTA = /^(acqua|sale|spezie|tè|caffè|bicarbonato|vaniglia|purea di mela|salsa yogurt-limone|uova al tegamino|patate lesse|patate al forno|gin|gin tonic|vodka|rum|whisky|birra|prosecco|spritz|vino|vino bianco|vino rosso|liquore|amaro|grappa|aperol|campari)$/i;   // + alcolici (si bevono fuori: in lista solo se li aggiungi tu a mano)   // quello che non si compra (si prepara in casa)
 // in negozio non esiste "riso cotto": si compra il riso (le legumi cotti sono ceci e lenticchie)
 const nomeSpesa = (n) => /prosciutto/i.test(n) ? n : n.replace(/ (cotto|cotta|cotti|cotte)$/i, "");
+// Come si compra: frutta, verdura, carne e pesce a peso o a pezzi; il resto a confezioni.
+// Se ne serve meno di un terzo di una confezione (granola 30 g, pesto 20 g, lievito…), di solito ce l'hai: va in «Da controllare se c'è».
+const SPESA_A_PESO = new Set(["Frutta e verdura", "Carne e pesce"]);
+const PACCO_UOVA = 6;
+function compraSpesa(nome, nome0, g0) {
+  const rep = repartoDi(nome), g = qtaSettimanaG(nome0, g0);
+  if (SPESA_A_PESO.has(rep)) return { info: qtaSettimanaLabel(nome0, g0), q: g };
+  if (durataLunga(nome)) return { controllare: true };
+  const pacco = paccoG(nome);
+  if (g < pacco / 3) return { controllare: true };
+  const n = Math.max(1, Math.ceil(g / pacco - 0.1));   // 1,05 confezioni = 1; 1,4 = 2
+  if (/^uova$/i.test(nome)) return { info: `${n * PACCO_UOVA} uova`, q: n * pacco };
+  const noto = PACCO_TIPICO.some(([re]) => re.test(nome));
+  return { info: `${n} ${n === 1 ? "confezione" : "confezioni"}${noto ? ` da ${fmtPeso(pacco, UNITA_LIQUIDI.test(nome) ? "ml" : "g")}` : ""}`, q: n * pacco };
+}
 function spesaHTML() {
-  const { st } = statSpesa();
+  const stat = statSpesa(), { st } = stat;
   const presi = scadiPresi();
-  // quanto ne consumi di solito in una settimana (non quello che serve per il futuro e non meno quello che hai in casa)
   // "Pasta cotta" e "Pasta" sono la stessa cosa da comprare: una riga sola, coi grammi da crudo sommati
   const unite = {};
   Object.entries(st).filter(([nome, e]) => e.g > 0 && !SPESA_SALTA.test(nome) && !SPESA_COMPOSTI.test(nome)).forEach(([nome, e]) => {
@@ -1382,36 +1408,26 @@ function spesaHTML() {
   });
   const voci = Object.values(unite).map(u => {
     const [nome0, g0] = u.fonti.length === 1 ? u.fonti[0] : [u.nome, u.g];   // una fonte sola: etichetta di sempre ("~200 g da crudo")
-    return { nome: u.nome, giorni: u.giorni, info: qtaSettimanaLabel(nome0, g0), q: qtaSettimanaG(nome0, g0) };
+    return Object.assign({ nome: u.nome, giorni: u.giorni }, compraSpesa(u.nome, nome0, g0));
   });
   leggiExtraSpesa().forEach(nome => { if (!voci.some(v => v.nome.toLowerCase() === nome.toLowerCase())) voci.push({ nome, giorni: -1, info: "aggiunto da te", extra: true }); });
-  const introVuota = voci.length ? "" : `<li class="hint">🛒 Si riempie con i pasti che scrivi nel diario: quelli delle ultime 2 settimane, oggi compreso</li>`;
-  // dispensa: gli ingredienti del ricettario che non sono già nella lista, i più usati nelle ricette per primi
-  const conta = {};
-  const viste = new Set();
-  (typeof ricette !== "undefined" ? ricette : []).forEach(r => { const o = r._orig || r; if (viste.has(o.nome)) return; viste.add(o.nome);
-    new Set((o.ingredienti || []).filter(i => i.unita !== "q.b.").map(i => i.nome)).forEach(n => { if (!SPESA_SALTA.test(n) && !SPESA_COMPOSTI.test(n) && (window.ALIMENTI || {})[n] && !alimentoEscluso(n)) conta[nomeSpesa(n)] = (conta[nomeSpesa(n)] || 0) + 1; }); });
-  const inLista = new Set(voci.map(v => v.nome.toLowerCase()));
-  const dispensa = Object.entries(conta).filter(([n]) => !inLista.has(n.toLowerCase())).map(([nome, n]) => ({ nome, n, giorni: -1 }));
+  // da dove viene la lista
+  const fino = stat.modo === "piano" && stat.giorni.length ? stat.giorni[stat.giorni.length - 1] : null;
+  const intro = !voci.length ? `<li class="hint">🛒 Si riempie con i pasti: quelli pianificati nei prossimi 7 giorni oppure, se non ne hai, quelli che hai scritto nelle ultime 2 settimane</li>`
+    : stat.modo === "piano" ? `<li class="hint spesa-fonte">📅 Per i pasti pianificati: ${stat.giorni.length} ${stat.giorni.length === 1 ? "giorno" : "giorni"}, fino a ${typeof fmtGiornoLungo === "function" ? esc(fmtGiornoLungo(fino)) : fino}</li>`
+    : `<li class="hint spesa-fonte">🛒 Da quello che mangi di solito (ultime 2 settimane). Se pianifichi i prossimi giorni, la lista segue il piano.</li>`;
   const gruppi = {}, daControllare = [];
-  voci.filter(v => !presi.has(v.nome)).forEach(v => { if (!v.extra && durataLunga(v.nome)) daControllare.push(v); else (gruppi[repartoDi(v.nome)] ||= []).push(v); });
-  let html = introVuota + ORDINE_REPARTI.map(rep => {
+  voci.filter(v => !presi.has(v.nome)).forEach(v => { if (!v.extra && v.controllare) daControllare.push(v); else (gruppi[repartoDi(v.nome)] ||= []).push(v); });
+  let html = intro + ORDINE_REPARTI.map(rep => {
     const g = gruppi[rep];
     if (!g || !g.length) return "";
     g.sort((a, b) => (b.giorni - a.giorni) || a.nome.localeCompare(b.nome)); // prima ciò che mangi più spesso
     return `<li class="reparto-h">${rep}</li>` + g.map(v => voceSpesaHTML(v.nome, false, v.info, v.extra, v.q)).join("");
   }).join("");
-  // spezie, salse, olio…: le hai usate questa settimana, ma di solito ne hai ancora; dai un'occhiata in dispensa
-  if (daControllare.length) html += `<li class="reparto-h">🫙 Da controllare in dispensa</li>` + daControllare.sort((a, b) => a.nome.localeCompare(b.nome)).map(v => voceSpesaHTML(v.nome, false, "", false)).join("");
-  const dGruppi = {};
-  dispensa.filter(v => !presi.has(v.nome)).forEach(v => (dGruppi[repartoDi(v.nome)] ||= []).push(v));
-  const nDisp = dispensa.filter(v => !presi.has(v.nome)).length;
-  if (nDisp) html += `<li class="dispensa"><details id="spesa-disp" ${spesaDispensaAperta ? "open" : ""}><summary>🧺 Dispensa dal ricettario <em>${nDisp}</em></summary><ul>${ORDINE_REPARTI.map(rep => {
-    const g = dGruppi[rep]; if (!g || !g.length) return "";
-    g.sort((a, b) => (b.n - a.n) || a.nome.localeCompare(b.nome));
-    return `<li class="reparto-h">${rep}</li>` + g.map(v => voceSpesaHTML(v.nome, false, "", false)).join("");
-  }).join("")}</ul></details></li>`;
-  const giaPresi = voci.concat(dispensa).filter(v => presi.has(v.nome)).sort((a, b) => a.nome.localeCompare(b.nome));
+  // ne serve poco o dura mesi (spezie, salse, lievito, frutta secca…): di solito ce l'hai, basta controllare
+  if (daControllare.length) html += `<li class="reparto-h">🫙 Da controllare se c'è</li>` + daControllare.sort((a, b) => a.nome.localeCompare(b.nome)).map(v => voceSpesaHTML(v.nome, false, "", false)).join("");
+  const giaPresi = voci.filter(v => presi.has(v.nome)).concat([...presi].filter(n => !voci.some(v => v.nome === n)).map(nome => ({ nome })))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
   if (giaPresi.length) html += `<li class="reparto-h presi-h">✓ Già presi</li>` + giaPresi.map(v => voceSpesaHTML(v.nome, true, "", v.extra)).join("");
   return html;
 }
@@ -1426,7 +1442,9 @@ function apriSpesa() {
       <button class="btn lib-piu" data-azione="spesa-aggiungi" aria-label="Aggiungi">＋</button>
     </div>
     <div id="spesa-sugg" class="lib-autoc"></div>
-    <ul id="spesa">${spesaHTML()}</ul>`);
+    <ul id="spesa">${spesaHTML()}</ul>
+    <button class="btn-sec block spesa-reset" data-spesa-reset>🧹 Nuova spesa</button>
+    <p class="campo-nota">Toglie le spunte e le voci aggiunte a mano già prese: la lista riparte da zero.</p>`);
 }
 // mentre scrivi: gli alimenti che combaciano (un tocco e sono in lista) e, in cima, quello che hai scritto così com'è (detersivo, carta…)
 function suggerimentiSpesa() {
@@ -2890,6 +2908,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }, () => riapriProfilo(sc));
       return;
     }
+    if (e.target.closest("[data-spesa-reset]")) {   // 🧹 Nuova spesa: via le spunte (e le voci aggiunte a mano già prese)
+      const presiPrima = [...leggiPresi()], extraPrima = leggiExtraSpesa();
+      salvaPresi(new Set()); salvaExtraSpesa(extraPrima.filter(x => !presiPrima.includes(x))); renderSpesa();
+      avviso("Lista pronta per la nuova spesa", "Annulla", () => { salvaPresi(new Set(presiPrima)); salvaExtraSpesa(extraPrima); renderSpesa(); });
+      return;
+    }
     const sg = e.target.closest("[data-spesa-sugg]");
     if (sg) { aggiungiVoceSpesa(sg.dataset.spesaSugg || ""); return; }
     const sd = e.target.closest("[data-spesa-del]");
@@ -3052,7 +3076,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 
-  document.addEventListener("toggle", (e) => { if (e.target.id === "spesa-disp") spesaDispensaAperta = e.target.open; }, true);   // la dispensa resta aperta quando spunti una voce
+
 
   document.getElementById("file-backup").addEventListener("change", (e) => {
     const file = e.target.files[0];

@@ -2143,3 +2143,6 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 .pm-nuovo-piatto .pm-contatore { margin: 2px 0 0; }
 /* nel pasto le idee si toccano per aprirle (anteprima): niente ＋ */
 .lib-corpo .sugg-ricette .riga-ricetta::after { display: none; }
+/* lista della spesa: da dove viene e «Nuova spesa» */
+.spesa-fonte { margin: 2px 0 8px; }
+.spesa-reset { margin-top: 18px; }

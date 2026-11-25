@@ -41,7 +41,7 @@ const QZ = [
     nota: "Se in un giorno fai due allenamenti (es. equitazione e sala pesi), tocca tutti e due." },
   { k: "kmCorsa", t: "n", e: "🏃", q: "Quanti km corri di solito?", un: "km", ph: "5", min: 1, max: 60, dec: 1, salta: (R) => senzaSport(R) || !(R.sport || []).includes("corsa"),
     nota: "Servono a calcolare quanto consumi. Giorno per giorno puoi cambiarli in Oggi." },
-  { k: "oraAllen", t: "ora", e: "🕒", q: "Quando ti alleni, di solito?", salta: senzaSport,
+  { k: "oraAllen", t: "ora", e: "🕒", q: "Quando ti alleni, di solito?", salta: (R) => senzaSport(R) || !qzSportConOra(R).length,   // solo camminate: non cambiano i pasti, l'ora non serve
     nota: "Non serve l'ora esatta, basta il momento della giornata. Serve ad adattare i pasti: prima dell'allenamento uno più leggero, con i carboidrati che danno energia; dopo, proteine e carboidrati per recuperare. Se un giorno cambia, lo sistemi in Oggi." },
   { k: "pasti", t: "m", e: "🍽️", q: "Quali pasti fai ogni giorno?", o: QZ_PASTI, req: 1 },
   { k: "orari", t: "orari", e: "⏰", q: "A che ora mangi, più o meno?", nota: "Servono a sapere qual è il prossimo pasto e quando un pasto è passato." },
@@ -127,7 +127,9 @@ function qzMacroKg(R) {
   // contano i giorni con un allenamento vero: una camminata breve non chiede più proteine
   const giorni = senzaSport(R) ? 0 : leggeri ? (R.giorni || []).length : (R.giorni || []).filter(g => { const l = R.settimana && R.settimana[g]; return !l || !l.length || l.some(s => !QZ_SPORT_LEGGERI.includes(s)); }).length;
   const protKg = giorni === 0 ? 1.3 : leggeri ? 1.4 : giorni <= 3 ? 1.6 : 1.8;   // tre allenamenti a settimana (o meno) non chiedono le proteine di chi si allena tutti i giorni
-  return { protKg: R.obiettivo === "definire" && giorni > 0 ? Math.max(protKg, 2) : protKg, grassiKg: 0.8 };   // per definire servono più proteine, a tenere i muscoli
+  const pk = R.obiettivo === "definire" && giorni > 0 ? Math.max(protKg, 2) : protKg;   // per definire servono più proteine, a tenere i muscoli
+  // vegani: al massimo 1,6 g/kg. Con legumi e cereali di più non si arriva senza proteine in polvere a ogni pasto (e le ricette non ci starebbero)
+  return { protKg: R.dieta === "vegana" ? Math.min(pk, 1.6) : pk, grassiKg: 0.8 };
 }
 // stima dei primi obiettivi con le risposte (stessa formula di tipoInfo, per un giorno di riposo)
 function qzStima() {
