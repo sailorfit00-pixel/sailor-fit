@@ -2036,14 +2036,16 @@ function micTesto(modo, testo) {
   const promemoria = () => {
     togliTuttiVeli(); clearTimeout(timerPromemoria);
     const p = document.createElement("div"); p.className = "detta-velo promemoria";
-    p.innerHTML = `<div class="detta-bolla"><div class="detta-onda">🎤</div><p class="detta-stato">Tieni premuto per parlare</p></div>`;
+    p.innerHTML = `<div class="detta-bolla"><div class="detta-onda">🗣️</div><p class="detta-stato">Tieni premuto e parla</p><p class="detta-live">es. «a pranzo 150 g di riso e un'insalata»</p></div>`;
     document.body.appendChild(p);
-    timerPromemoria = setTimeout(() => p.remove(), 2200);
+    timerPromemoria = setTimeout(() => p.remove(), 3000);   // c'è anche l'esempio da leggere
   };
   const finisci = () => {
     if (finito) return; finito = true;
     const testo = (testoFinale + " " + testoParziale).trim();
     togliVelo();
+    // un tocco solo un po' più lungo (il dito tolto entro un secondo, nessuna parola): è un tocco, non un microfono che non va → solo il promemoria
+    if (!testo && errore !== "not-allowed" && errore !== "service-not-allowed" && Date.now() - inizioAscolto < 1200) { promemoria(); return; }
     if (errore === "not-allowed" || errore === "service-not-allowed" || (!partito && !testo)) {
       micRipiego(modo, errore === "not-allowed" ? "Il microfono non è permesso per questa app: usa il 🎤 della tastiera (o permettilo nelle impostazioni del telefono)." : "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return;
     }
