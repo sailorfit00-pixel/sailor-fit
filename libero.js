@@ -2112,12 +2112,219 @@ function vaiAlGiornoDetta(data) {
   return true;
 }
 
+// 4) PESO: «peso 61,4», «stamattina pesavo 61 e 4», «mi sono pesata: 61 chili e 400», «ieri pesavo 61,8»
+const PESO_COMANDO = /\b(?:peso|pesavo|peso di|pesata|pesato|pesa|mi sono pesat[oa]|la bilancia (?:dice|segna))\b/;
+function kgDaFrase(t) {
+  const n = (x) => parseFloat(String(x).replace(",", "."));
+  let m = t.match(/(\d{2,3})\s*(?:kg|chili|chilo|kili)?\s*(?:e|virgola|punto|,|\.)\s*(\d{1,3})\s*(grammi|g\b|etti)?/);
+  if (m) { const dec = m[3] && /gramm|^g/.test(m[3]) || m[2].length === 3 ? n(m[2]) / 1000 : m[3] && /etti/.test(m[3]) ? n(m[2]) / 10 : n("0." + m[2]); return Math.round((n(m[1]) + dec) * 10) / 10; }
+  m = t.match(/(\d{2,3}(?:[.,]\d+)?)/);
+  return m ? Math.round(n(m[1]) * 10) / 10 : NaN;
+}
+function comandoPeso(testo) {
+  const t = fraseDetta(testo);
+  if (!PESO_COMANDO.test(t)) return false;
+  const kg = kgDaFrase(t.replace(/\b(?:alle|ore)\s+\d+(?:[:.]\d+)?/g, " "));
+  if (!(kg >= 30 && kg <= 200)) { avviso("Non ho capito il peso: di' per esempio «peso 61,4»"); return true; }
+  const g = giorniNellaFrase(t), data = g.length ? dataDelGiorno(g[0], -1) : oggiISO();
+  if (data > oggiISO()) { avviso("Il peso si registra per oggi o per i giorni passati"); return true; }
+  const altre = leggiPesi().filter(p => p.data !== data && p.data < data), ultima = altre[altre.length - 1];
+  const diff = ultima ? Math.round((kg - ultima.kg) * 10) / 10 : null, f = (x) => String(x).replace(".", ",");
+  const gia = leggiPesi().find(p => p.data === data);
+  editCtx = null; liberoCtx = null;
+  openModal(`<h3 class="modal-title">⚖️ Peso di ${esc(nomeGiornoDetta(data))}</h3>
+    <div class="voce-numero"><b>${fmtKg(kg)}</b><span>kg</span></div>
+    ${diff !== null ? `<p class="hint${Math.abs(diff) > 3 ? " voce-attenzione" : ""}">${diff === 0 ? "Uguale" : `${diff > 0 ? "+" : "−"}${f(Math.abs(diff))} kg rispetto`} all'ultima pesata (${esc(fmtData(ultima.data))}: ${fmtKg(ultima.kg)} kg)${Math.abs(diff) > 3 ? ". È tanto: controlla che sia giusto." : ""}</p>` : ""}
+    ${gia ? `<p class="hint">Sostituisce la pesata già scritta (${fmtKg(gia.kg)} kg).</p>` : ""}
+    <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="voce-peso-ok">Salva</button></div></div>`);
+  document.getElementById("voce-peso-ok").addEventListener("click", () => {
+    const pesi = leggiPesi().filter(p => p.data !== data); pesi.push({ data, kg }); salvaPesi(pesi);
+    if (typeof aggiornaPesoProfilo === "function") aggiornaPesoProfilo();
+    closeModal(true); if (typeof renderOggi === "function") renderOggi();
+    avviso(`Peso salvato: ${fmtKg(kg)} kg`);
+  });
+  return true;
+}
+
+// 5) DOMANDE: «quanto mi manca?», «quante proteine mi mancano?», «cosa mangio a cena?», «cosa aggiungo?»
+const DOMANDA_MANCA = /\b(?:quant[oaie]|cosa|che cosa|come)\b[^?]*\b(?:manca|mancano|resta|restano|rimane|rimangono|posso ancora|sono messa|sono messo|sto messa|sto messo)\b|\ba che punto sono\b|\bcome sto andando oggi\b/;
+const DOMANDA_IDEE = /\b(?:cosa|che cosa|che)\s+(?:mangio|posso mangiare|mi consigli|mi suggerisci|aggiungo|posso aggiungere|preparo|cucino|faccio)\b|\b(?:idee|consigli|suggerimenti)\b/;
+function comandoDomanda(testo) {
+  const t = fraseDetta(testo), idee = DOMANDA_IDEE.test(t), manca = DOMANDA_MANCA.test(t);
+  if (!idee && !manca) return false;
+  const g = giorniNellaFrase(t), data = g.length ? dataDelGiorno(g[0], 1) : dataDetta(), pasti = pastiNellaFrase(t);
+  vaiAlGiornoDetta(data);
+  if (idee && !(manca && /\bquant/.test(t))) {   // idee: il pasto nominato (con le sue idee e i consigli furbi), altrimenti «cosa aggiungere» della giornata
+    const p = pasti.length && momentiGiorno(data).includes(pasti[0].p) ? pasti[0].p : null;
+    if (p) apriPastoDiario(data, null, p); else apriCosaAggiungere();
+    return true;
+  }
+  const m = mancaData(data), T = targetData(data);
+  const voci = [["kcal", "Calorie", "kcal"], ["proteine", "Proteine", "g"], ["carboidrati", "Carboidrati", "g"], ["grassi", "Grassi", "g"]];
+  const chiesto = /protein/.test(t) ? "proteine" : /carboidrat|carbo\b/.test(t) ? "carboidrati" : /grass/.test(t) ? "grassi" : /calori|kcal/.test(t) ? "kcal" : null;
+  const ord = chiesto ? voci.filter(v => v[0] === chiesto).concat(voci.filter(v => v[0] !== chiesto)) : voci;
+  const riga = ([k, l, u]) => { const v = Math.round(m[k]); return `<div class="voce-manca${k === chiesto ? " chiesto" : ""}"><span>${l}</span><b class="${v < 0 ? "sopra" : ""}">${v > 0 ? `mancano ${v} ${u}` : v < 0 ? `sopra di ${-v} ${u}` : "ok ✓"}</b><small>obiettivo ${Math.round(T[k])} ${u}</small></div>`; };
+  editCtx = null; liberoCtx = null;
+  openModal(`<h3 class="modal-title">📊 ${esc(nomeGiornoDetta(data).replace(/^./, c => c.toUpperCase()))}</h3>
+    <div class="voce-mancano">${ord.map(riga).join("")}</div>
+    <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Chiudi</button><button class="btn" id="voce-cosa">💡 Cosa aggiungo?</button></div></div>`);
+  document.getElementById("voce-cosa").addEventListener("click", () => { closeModal(true); apriCosaAggiungere(); });
+  return true;
+}
+
+// 6) SOSTITUISCI: «sostituisci il pollo con il tacchino», «cambia il riso con le patate a cena», «metti il tacchino al posto del pollo domani»,
+//    «tacchino invece del pollo». Fonte di proteine → stesse proteine; il resto → stesse calorie. Se dici i grammi («con 150 g di tacchino») valgono quelli.
+const ARTICOLI_DETTA = /^(?:(?:il|lo|la|i|gli|le|un|uno|una|del|dello|della|dei|degli|delle|di|al|allo|alla|ai|agli|alle)\s+|l'|un'|dell'|all')+/;
+function comandoSostituisci(testo) {
+  let t = fraseDetta(testo), x = null, y = null, m;
+  if (!/\b(?:sostituisci|sostituire|sostituiscimi|cambia|cambiami|cambiare|scambia|rimpiazza|al posto|invece)\b/.test(t)) return false;
+  const giorni = giorniNellaFrase(t), pasti = pastiNellaFrase(t);
+  const data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta(), pasto = pasti.length ? pasti[0].p : null;
+  // via giorni e pasti (con le parole che li introducono), restano solo i due alimenti
+  t = togliGiorni(t, giorni).replace(/\b(?:a|al|alla|per|nel|nella|del|della|di|dal|dalla|in)?\s*(?:colazione|pranzo|dopo\s*cena|dopocena|cena|merenda|pre[- ]?workout|spuntino)\b/g, " ").replace(/\s+/g, " ").trim();
+  if ((m = t.match(/\b(?:sostituisci|sostituire|sostituiscimi|cambia|cambiami|cambiare|scambia|rimpiazza)\s+(.+?)\s+(?:con|in)\s+(.+)$/))) { x = m[1]; y = m[2]; }
+  else if ((m = t.match(/\b(?:metti|mettimi|usa)\s+(.+?)\s+al posto\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { y = m[1]; x = m[2]; }
+  else if ((m = t.match(/^(?:metti|mettimi|usa)?\s*(.+?)\s+invece\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { y = m[1]; x = m[2]; }
+  if (!x || !y) return false;
+  const pulisci = (s) => s.replace(/[.,!?]/g, " ").trim().replace(ARTICOLI_DETTA, "").trim();
+  x = pulisci(x); y = pulisci(y);
+  const A = window.ALIMENTI || {}, xn = norm(x).replace(/i$|e$/, "");
+  // l'alimento da cambiare: tra i pasti di quel giorno (solo quel pasto, se l'hai detto)
+  const trovati = [];
+  (giornoDiario(data).pasti || []).forEach((p, pi) => { if (pasto && p.pasto !== pasto) return; (p.ingredienti || []).forEach((i, ii) => {
+    const g = grammiIng(i); if (!(g > 0) || i.unita === "q.b.") return;
+    const nn = norm(i.nome), ok = nn.includes(norm(x)) || nn.includes(xn) || norm(x).split(" ").filter(w => w.length > 2).every(w => nn.includes(w.replace(/i$|e$/, "")));
+    if (ok) trovati.push({ pi, ii, nome: i.nome, qta: g, pasto: p.pasto });
+  }); });
+  const dove = `${pasto ? nomePasto(pasto, data) + " di " : "pasti di "}${nomeGiornoDetta(data)}`;
+  if (!trovati.length) { avviso(`Non trovo «${x}» nei ${pasto ? "" : ""}${dove}`); return true; }
+  // il nuovo alimento (con i grammi, se li hai detti)
+  let r = null; try { r = leggiRigaIngrediente(y); } catch (e) {}
+  let nuovo = r && r.nome && A[r.nome] ? r.nome : (cercaAlimenti(y) || []).find(n => A[n]);
+  if (!nuovo) { avviso(`Non conosco «${y}»: scrivilo in un pasto per cercarlo`); return true; }
+  const grammiDetti = /\d/.test(y) && r && r.nome === nuovo && r.qta > 0 ? Math.round(grammiIng(r) || r.qta) : 0;
+  const qtaNuova = (v) => {
+    if (grammiDetti) return grammiDetti;
+    const a0 = A[v.nome], a1 = A[nuovo];
+    const prot = a0[1] * 4 / Math.max(1, a0[0]) >= 0.25 && a1[1] >= 8;
+    const g = prot ? v.qta * a0[1] / a1[1] : v.qta * a0[0] / Math.max(1, a1[0]);
+    return Math.max(5, Math.min(GRAMMI_MAX_FONTI[nuovo] || 400, Math.round(g / 5) * 5));
+  };
+  const conferma = (v) => {
+    const q = qtaNuova(v), d0 = macroAlimento(v.nome, v.qta), d1 = macroAlimento(nuovo, q);
+    const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
+    openModal(`<h3 class="modal-title">🔄 ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
+      <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span>${esc(nuovo)} <b>${q} g</b></span></div>
+      <p class="hint">${numeriMossa(d)}${grammiDetti ? "" : ` · ${A[v.nome][1] * 4 / Math.max(1, A[v.nome][0]) >= 0.25 && A[nuovo][1] >= 8 ? "stesse proteine" : "stesse calorie"}`}</p>
+      <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="voce-sost-ok">Sostituisci</button></div></div>`);
+    document.getElementById("voce-sost-ok").addEventListener("click", () => {
+      const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
+      const ingrPrima = clone(p.ingredienti);
+      p.ingredienti[v.ii] = { nome: nuovo, qta: q, unita: UNITA_LIQUIDI.test(nuovo) ? "ml" : "g", lock: true, cercato: nuovo };
+      delete p.auto; rinominaLibero(p, ingrPrima); aggiornaMacro(p);
+      scriviGiorno(data, g);
+      closeModal(true); if (typeof renderOggi === "function") renderOggi();
+      avviso(`${nuovo} al posto di ${v.nome.toLowerCase()}`);
+    });
+  };
+  editCtx = null; liberoCtx = null;
+  vaiAlGiornoDetta(data);
+  if (trovati.length === 1) { conferma(trovati[0]); return true; }
+  // in più pasti: scegli quale
+  openModal(`<h3 class="modal-title">🔄 Quale ${esc(x)}?</h3><p class="hint">Al suo posto: ${esc(nuovo.toLowerCase())}</p>
+    <div class="detta-pasti">${trovati.map((v, k) => `<button class="btn-sec" data-voce-sost="${k}">${ICONA_PASTO[v.pasto] || "🍽️"} ${esc(NomePasto(v.pasto, data))}: ${esc(v.nome.toLowerCase())} ${Math.round(v.qta)} g</button>`).join("")}</div>`);
+  document.querySelectorAll("[data-voce-sost]").forEach(b => b.addEventListener("click", () => conferma(trovati[+b.dataset.voceSost])));
+  return true;
+}
+
+// 7) ALLENAMENTO: «oggi ho fatto un'ora di CrossFit», «domani riposo», «ho corso 6 km», «45 minuti di pesi e mezz'ora di camminata», «mi alleno alle 18»
+// Si apre la scheda «Allenamenti» del giorno già compilata: controlli e tocchi ✓ Salva (i pasti si adattano come sempre)
+const SPORT_PAROLE = [
+  ["crossfit", /\bcross\s*fit\b|\bcrossfit\b|\bwod\b/], ["pesi", /\b(?:sala pesi|pesi|palestra|pesistica|bodybuilding)\b/], ["funzionale", /\b(?:funzionale|allenamento funzionale|circuito|hiit)\b/],
+  ["corsa", /\b(?:corsa|corso|correre|corsetta|running|corro|correrò|correro)\b/], ["camminata", /\b(?:camminata|camminato|camminare|cammino|passeggiata|passeggiato|camminerò|camminero)\b/],
+  ["bici", /\b(?:bici|bicicletta|pedalato|pedalata|ciclismo|spinning|cyclette)\b/], ["nuoto", /\b(?:nuoto|nuotato|nuotare|piscina)\b/], ["yoga", /\b(?:yoga|pilates)\b/],
+  ["padel", /\b(?:padel|tennis)\b/], ["ballo", /\b(?:ballo|ballato|ballare|danza|zumba)\b/], ["equitazione", /\b(?:equitazione|cavallo|cavalcato|cavalcare|maneggio)\b/],
+  ["squadra", /\b(?:calcio|calcetto|pallavolo|basket|sport di squadra)\b/],
+];
+const RIPOSO_COMANDO = /\b(?:riposo|giorno libero|niente (?:allenamento|sport|palestra)|nessun allenamento|non (?:mi alleno|mi sono allenat[oa]|faccio sport|ho fatto sport|vado in palestra|mi allenerò|mi allenero)|salto (?:l'allenamento|la palestra))\b/;
+const ALLEN_COMANDO = /\b(?:mi alleno|mi sono allenat[oa]|mi allenerò|mi allenero|allenamento|allenarmi|ho fatto|faccio|farò|faro|vado a|sono andat[oa] a)\b/;
+// lo sport del Profilo per una parola detta (anche gli sport aggiunti da te, per nome)
+function sportDetti(t, pf) {
+  const out = [];
+  SPORT_PAROLE.forEach(([k, re]) => {
+    const m = t.match(re); if (!m) return;
+    const sp = pf.sport.find(s => s.id === k) || pf.sport.find(s => norm(s.nome).includes(k)) || (k === "yoga" && pf.sport.find(s => /yoga|pilates/.test(norm(s.nome)))) || (k === "padel" && pf.sport.find(s => /padel|tennis/.test(norm(s.nome)))) || (k === "squadra" && pf.sport.find(s => /squadra|calc|pallavolo|basket/.test(norm(s.nome))));
+    out.push({ i: m.index, l: m[0].length, k, sp: sp || null, parola: m[0] });
+  });
+  pf.sport.forEach(sp => { const n = norm(sp.nome); if (n.length < 4 || out.some(o => o.sp === sp)) return; const i = norm(t).indexOf(n); if (i >= 0) out.push({ i, l: n.length, k: sp.id, sp, parola: sp.nome }); });
+  return out.sort((a, b) => a.i - b.i);
+}
+// durate dette: minuti o km, con la posizione nella frase
+function durateDette(t) {
+  const out = [], numero = (w) => numParola(w);
+  const re = /(\d+(?:[.,]\d+)?|un'|un|una|mezz'|mezza|due|tre|quattro|cinque)\s*(ora|ore|oretta|h\b|minuti|minuto|min\b|km|chilometri|chilometro|kilometri)(?:\s+e\s+(mezza|mezzo|un quarto|tre quarti|\d+)(?:\s*(?:minuti|min))?)?/g;
+  let m;
+  while ((m = re.exec(t))) {
+    const u = m[2], km = /km|chilom|kilom/.test(u);
+    let v = /^mezz/.test(m[1]) ? 0.5 : numero(m[1]);
+    if (/^(?:ora|ore|oretta|h)$/.test(u)) { v *= 60; const e = m[3]; if (e) v += e === "mezza" || e === "mezzo" ? 30 : e === "un quarto" ? 15 : e === "tre quarti" ? 45 : +e; }
+    else if (km && m[3] && /^\d+$/.test(m[3])) v = parseFloat(m[1] + "." + m[3]);
+    if (v > 0) out.push({ i: m.index, l: m[0].length, v: km ? Math.round(v * 10) / 10 : Math.round(v), km });
+  }
+  return out;
+}
+// l'ora detta: «alle 18», «alle 18:30», «alle 7 di sera», «alle sei e mezza»
+function oraDetta(t) {
+  const m = t.match(/\balle\s+(\d{1,2}|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici)(?:[:.](\d{2})|\s+e\s+(mezza|un quarto|tre quarti|\d{1,2}))?(?:\s+(?:di|del|della)?\s*(mattina|pomeriggio|sera|stasera))?/);
+  if (!m) return null;
+  const P = { una: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12 };
+  let h = P[m[1]] || +m[1];
+  const min = m[2] ? +m[2] : m[3] === "mezza" ? 30 : m[3] === "un quarto" ? 15 : m[3] === "tre quarti" ? 45 : m[3] ? +m[3] : 0;
+  if (h < 12 && (/pomeriggio|sera/.test(m[4] || "") || /\bstasera\b/.test(t) || h <= 5)) h += 12;   // «alle 6» da sola si intende di mattina; «alle 3» di pomeriggio
+  return h >= 0 && h < 24 ? h + min / 60 : null;
+}
+function comandoAllenamento(testo) {
+  const t = fraseDetta(testo), pf = leggiProfilo();
+  if (pastiNellaFrase(t).length && !/\balleno|allenamento\b/.test(t)) return false;   // «a pranzo…»: è un pasto
+  const riposo = RIPOSO_COMANDO.test(t), sport = riposo ? [] : sportDetti(t, pf), durate = durateDette(t), ora = oraDetta(t);
+  if (!riposo && !sport.length && !(ora !== null && /\balleno|allenamento|allenarmi|palestra\b/.test(t))) return false;
+  if (!riposo && sport.length && !ALLEN_COMANDO.test(t) && !durate.length && !giorniNellaFrase(t).length && ora === null) return false;   // una parola sola («pesi»): non basta
+  const g = giorniNellaFrase(t), data = g.length ? dataDelGiorno(g[0], /\b(?:ho fatto|ho corso|ho camminato|mi sono allenat|ho nuotato|ho pedalato|ho ballato)/.test(t) ? -1 : 1) : dataDetta();
+  if (riposo) { vaiAlGiornoDetta(data); apriAllenamentiGiorno(data, "riposo"); return true; }
+  const mancanti = sport.filter(s => !s.sp);
+  if (mancanti.length && mancanti.length === sport.length) { avviso(`«${mancanti[0].parola}» non è tra i tuoi sport: aggiungilo nel Profilo`); return true; }
+  let ids = sport.filter(s => s.sp).map(s => s.sp.id);
+  if (!ids.length) ids = sportDelTipo(giornoDiario(data).tipo);   // solo l'ora («mi alleno alle 18»): gli sport già scelti per quel giorno
+  if (!ids.length) { avviso("Dimmi anche che sport fai (es. «alle 18 pesi»)"); return true; }
+  // ogni durata va allo sport che la segue («un'ora di CrossFit») o, se no, a quello più vicino («CrossFit per un'ora»)
+  const dur = Object.assign({}, durateDelTipo(giornoDiario(data).tipo));
+  Object.keys(dur).forEach(k => { if (!ids.includes(k)) delete dur[k]; });
+  const conSp = sport.filter(s => s.sp);
+  durate.forEach(d => {
+    let s = conSp.find(x => x.i >= d.i + d.l && x.i - (d.i + d.l) <= 6 && /^\s*(?:di|de|a|in)?\s*$/.test(t.slice(d.i + d.l, x.i)));
+    if (!s) s = conSp.reduce((b, x) => !b || Math.abs(x.i - d.i) < Math.abs(b.i - d.i) ? x : b, null);
+    const sp = s ? s.sp : ids.length === 1 ? pf.sport.find(x => x.id === ids[0]) : null; if (!sp) return;
+    if (!!sp.perKm === d.km) dur[sp.id] = d.v;
+    else if (sp.perKm && !d.km && d.v > 0) dur[sp.id] = Math.round(d.v / 6 * 10) / 10;   // corsa detta in minuti: circa 6 minuti al km
+  });
+  const ore = ora !== null ? Object.fromEntries(ids.filter(id => id !== "camminata").map(id => [id, ora])) : null;
+  vaiAlGiornoDetta(data);
+  apriAllenamentiGiorno(data, chiaveTipo(ids, dur), ore);
+  if (mancanti.length) avviso(`«${mancanti[0].parola}» non è tra i tuoi sport: aggiungilo nel Profilo`);
+  return true;
+}
+
 function inviaDettato(testo) {
   document.querySelectorAll(".detta-velo").forEach(v => v.remove());   // sicurezza: niente «Ti ascolto…» sopra la scelta del pasto
   testo = String(testo || "").trim();
   if (!testo) { avviso("Non ho sentito niente: riprova"); return; }
+  // l'ordine conta: «quanto mi manca?» è una domanda, non la spesa; «peso 61» prima degli sport («pesi»)
+  if (comandoDomanda(testo)) return;
+  if (comandoPeso(testo)) return;
   if (SPESA_COMANDO.test(fraseDetta(testo))) { apriConfermaSpesa(testo); return; }
+  if (comandoSostituisci(testo)) return;
   const cp = comandoCopia(testo); if (cp) { eseguiCopia(cp); return; }
+  if (comandoAllenamento(testo)) return;
   // un altro giorno («domani a pranzo…», «giovedì a cena…»): si scrive in quel giorno
   const t0 = fraseDetta(testo), giorni = giorniNellaFrase(t0);
   const data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta();
@@ -2149,7 +2356,7 @@ function apriDettaTesto(nota) {
     <div class="lib-detta"><textarea id="detta-oggi" class="qta-input" rows="3" autocomplete="off" autocapitalize="sentences" placeholder="es. a colazione 150 g di yogurt greco e un cappuccino"></textarea>
     <div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="detta-oggi-invia">Continua</button></div>
     <p class="campo-nota">Tocca il 🎤 della tastiera e parla, oppure scrivi. Di' anche il pasto («a pranzo…»); poi controlli le quantità e tocchi ✓ Aggiungi.</p>
-    <p class="campo-nota">Puoi anche dire: «domani a pranzo riso basmati e tonno» · «rifai il pranzo di ieri anche oggi» · «copia la cena di lunedì su giovedì» · «aggiungi albumi alla spesa».</p></div>`);
+    <p class="campo-nota">Puoi anche dire: «domani a pranzo riso basmati e tonno» · «rifai il pranzo di ieri anche oggi» · «copia la cena di lunedì su giovedì» · «aggiungi albumi alla spesa» · «peso 61,4» · «quanto mi manca?» · «cosa mangio a cena?» · «sostituisci il pollo con il tacchino» · «oggi un'ora di CrossFit» · «domani riposo».</p></div>`);
   const ta = document.getElementById("detta-oggi"); if (ta) ta.focus();
   document.getElementById("detta-oggi-invia").addEventListener("click", () => { const v = document.getElementById("detta-oggi").value; if (!v.trim()) { avviso("Scrivi o detta cosa hai mangiato"); return; } closeModal(true); inviaDettato(v); });
 }

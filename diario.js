@@ -2007,6 +2007,15 @@ function oreSportGiorno(data) {
   pf.sport.forEach(sp => { const h = g.ore && typeof g.ore[sp.id] === "number" ? g.ore[sp.id] : typeof sp.ora === "number" ? sp.ora : typeof pf.allenOra === "number" ? pf.allenOra : null; if (h !== null) out[sp.id] = h; });
   return out;
 }
+// gli allenamenti di un giorno (da Oggi, o precompilati a voce: chiave = sport e durate, ore = { sport: ora })
+function apriAllenamentiGiorno(d, chiave, ore) {
+  apriSceltaAllenamenti(`Allenamenti · ${d === oggiISO() ? "oggi" : fmtGiornoLungo(d)}`, chiave !== undefined ? chiave : giornoDiario(d).tipo,
+    (k) => { const gg = giornoDiario(d); gg.tipo = k;
+      if (sceltaAllenOre) { const ids = sportDelTipo(k), o = {}; ids.forEach(id => { if (typeof sceltaAllenOre[id] === "number") o[id] = sceltaAllenOre[id]; }); if (Object.keys(o).length) { gg.ore = o; delete gg.orario; } else delete gg.ore; }   // le ore di quel giorno
+      scriviGiorno(d, gg); }, () => { closeModal(); renderOggi(); }, d);
+  if (ore && sceltaAllen && sceltaAllen.ore) { Object.assign(sceltaAllen.ore, ore); document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); }
+  if (chiave !== undefined) setTimeout(() => { const o = document.querySelector("#modal .allen-ore"); if (o) o.scrollIntoView({ block: "center" }); }, 60);   // compilata a voce: si vedono subito durata e ora
+}
 let sceltaAllen = null; // { titolo, sel: Set di id sport, salva(chiave), dopo() }
 function apriSceltaAllenamenti(titolo, chiave, salva, dopo, data) {
   sceltaAllen = { titolo, sel: new Set(sportDelTipo(chiave)), salva, dopo, data, ore: data ? oreSportGiorno(data) : null, dur: durateDelTipo(chiave) };   // dur: quanto dura ogni sport quel giorno (se diverso dal solito)
@@ -2243,14 +2252,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { passive: true });
   oggi.addEventListener("click", (e) => {
     const sa = e.target.closest("[data-scegli-allen-data]");
-    if (sa) {
-      const d = sa.dataset.scegliAllenData;
-      apriSceltaAllenamenti(`Allenamenti · ${d === oggiISO() ? "oggi" : fmtGiornoLungo(d)}`, giornoDiario(d).tipo,
-        (k) => { const gg = giornoDiario(d); gg.tipo = k;
-          if (sceltaAllenOre) { const ids = sportDelTipo(k), ore = {}; ids.forEach(id => { if (typeof sceltaAllenOre[id] === "number") ore[id] = sceltaAllenOre[id]; }); if (Object.keys(ore).length) { gg.ore = ore; delete gg.orario; } else delete gg.ore; }   // le ore di quel giorno
-          scriviGiorno(d, gg); }, () => { closeModal(); renderOggi(); }, d);
-      return;
-    }
+    if (sa) { apriAllenamentiGiorno(sa.dataset.scegliAllenData); return; }
     const sh = e.target.closest("[data-sett-home]");
     if (sh) { offsetSettHome = Math.min(1, offsetSettHome + +sh.dataset.settHome); giornoSelSett = null; renderOggi(); return; }
     const ag = e.target.closest("[data-apri-giorno]");
