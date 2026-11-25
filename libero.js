@@ -903,7 +903,8 @@ function campoAggiungiHTML(c) {
       <button class="btn-sec lib-scan" data-lib="scan" aria-label="Leggi il codice a barre">📷</button>
       <button class="btn lib-piu" data-lib="aggiungi" aria-label="Aggiungi ingrediente">＋</button>
     </div>
-    <div id="lib-autoc" class="lib-autoc">${doppioneHTML(c)}</div>`;
+    <div id="lib-autoc" class="lib-autoc">${doppioneHTML(c)}</div>
+    ${dettaHTML(c)}`;
 }
 // «2 pz», «½ pz» solo se i pezzi tornano (interi o mezzi); altrimenti in grammi: niente «4,4 pz» di fette biscottate
 function doseLeggibile(nome, g) {
@@ -1466,6 +1467,72 @@ function aggiungiDaTesto(testo) {
   ricalcolaLibero();
 }
 
+// -------- Pasto detto a voce (o scritto di fila): «ho mangiato due uova, una fetta di pane e un caffè» --------
+// Si usa il 🎤 della tastiera del telefono: qui si «traduce» il parlato in righe che il lettore degli ingredienti capisce.
+const RIEMPITIVI_PARLATO = /\b(allora|dunque|ehm|ok|inserisci|aggiungi|metti|segna|registra|scrivi|ho mangiato|ho bevuto|ho preso|mi sono (?:fatt[oa]|pres[oa]|mangiat[oa])|ho fatto|ci ho messo|anche|circa|più o meno|piu o meno|tipo|diciamo|per (?:colazione|pranzo|cena|merenda|spuntino)|a (?:colazione|pranzo|cena|merenda)|stamattina|stamani|oggi|stasera|stanotte)\b/g;
+const NUMERI_PAROLA = { un: 1, uno: 1, una: 1, "un'": 1, mezzo: 0.5, mezza: 0.5, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9, dieci: 10 };
+const NUM_PAROLA_RE = "(\\d+(?:[.,]\\d+)?|un'|un|uno|una|mezzo|mezza|due|tre|quattro|cinque|sei|sette|otto|nove|dieci)";
+const numParola = (w) => w === undefined || w === "" ? 1 : NUMERI_PAROLA[w] !== undefined ? NUMERI_PAROLA[w] : parseFloat(String(w).replace(",", "."));
+// misure «a voce» → grammi o millilitri; le porzioni («un piatto di…») → la dose solita
+const MISURE_PARLATO = [
+  [/^(?:etto|etti)$/, 100, "g"], [/^(?:manciata|manciate)$/, 30, "g"], [/^(?:bicchiere|bicchieri)$/, 200, "ml"], [/^(?:tazza|tazze)$/, 250, "ml"],
+  [/^(?:tazzina|tazzine)$/, 40, "ml"], [/^(?:lattina|lattine)$/, 330, "ml"], [/^(?:bottiglietta|bottigliette)$/, 500, "ml"], [/^(?:calice|calici)$/, 150, "ml"],
+  [/^(?:piatto|piatti|piattino|ciotola|ciotole|porzione|porzioni|scodella|scodelle|coppetta|coppette)$/, 0, "porz"],
+];
+// a voce le parole arrivano giuste: l'alimento trovato deve contenere la parola principale detta («frittelle di zia Pina» non è «Pinoli»)
+function credibile(r) {
+  if (!r || !r.nome) return false;
+  const w = norm(r.cercato || "").split(/[\s']+/).find(x => x.length >= 3);
+  return !w || norm(r.nome).includes(stem(w)) || PREFERITI[norm(r.cercato)] === r.nome;
+}
+function righeDaParlato(testo) {
+  let t = String(testo || "").toLowerCase().replace(/[’`]/g, "'").replace(/[.!?\n]+/g, ",").replace(/\b(?:e poi|poi|e dopo|dopo|e anche|inoltre)\b/g, ",").replace(RIEMPITIVI_PARLATO, " ").replace(/\bun paio di\b/g, "2").replace(/\bun (?:po'|pochino|pochettino) d(?:i\s*|')/g, "mezza porzione di ").replace(/\s+/g, " ");
+  const intera = (x) => { const r = leggiRigaIngrediente(x); if (!r || !r.nome) return false; const a = norm(r.nome), b = norm(r.cercato); return a === b || a.includes(b) || PREFERITI[b] === r.nome; };
+  // si divide su virgole, «e», «più», «con» (ma «pizza funghi e speck» o «pane con pomodoro», se sono un alimento solo, restano interi)
+  const parti = t.split(/[,;+]/).map(s => s.trim()).filter(Boolean)
+    .flatMap(x => /\s(e|ed|più|piu)\s/.test(x) && !intera(x) ? x.split(/\s(?:e|ed|più|piu)\s/) : [x])
+    .flatMap(x => /\scon\s/.test(x) && !intera(x) ? x.split(/\scon\s+(?:(?:il|lo|la|le|gli|i|una|uno|un|della|dello|delle|del|dei|degli)\s+|l'|un'|dell')?/) : [x])
+    .map(x => x.trim().replace(/^(?:e|ed|di|il|lo|la|le|gli|i)\s+/, "").replace(/^l'/, "").trim()).filter(x => x.length >= 2);
+  return parti.map(p => {
+    // «un etto di bresaola», «due bicchieri di latte», «un piatto di pasta al pomodoro»
+    const m = p.match(new RegExp("^" + NUM_PAROLA_RE + "?\\s*([a-zà-ù]+)\\s+(?:di|d')\\s*(.+)$"));
+    const mis = m && MISURE_PARLATO.find(([re]) => re.test(m[2]));
+    if (mis) {
+      const n = numParola(m[1]), r = leggiRigaIngrediente(m[3]);
+      if (!credibile(r)) return { testo: p };
+      if (mis[2] === "porz") return { r, qta: Math.round((porzioneSolita(r.nome) || 0) * n), testo: p };
+      return { r, qta: Math.round(mis[1] * n), unita: "g", testo: p };
+    }
+    const r = leggiRigaIngrediente(p);
+    if (!credibile(r)) return { testo: p };
+    // «un'insalata», «una pasta al pomodoro»: un numero senza misura per un alimento che non si conta a pezzi = una porzione (non «1 g»)
+    const nm = p.match(new RegExp("^" + NUM_PAROLA_RE + "\\s"));
+    if ((r.unita === "g" || r.unita === "ml") && r.qta <= 10 && (nm || /^un'/.test(p))) return { r, qta: Math.round((porzioneSolita(r.nome) || 0) * (nm ? numParola(nm[1]) : 1)), testo: p };
+    return { r, testo: p };
+  });
+}
+function aggiungiDaParlato(testo) {
+  const c = liberoCtx, ignoti = [];
+  righeDaParlato(testo).forEach(x => {
+    if (!x.r) { ignoti.push(x.testo.replace(/^(?:un'|una|uno|un|le|la|lo|il|gli|i|l')\s*/, "").replace(/^(?:\d+|due|tre|quattro|cinque)\s+/, "")); return; }
+    let qta, lock, unita;
+    if (x.qta > 0) { qta = x.qta; lock = true; unita = x.unita; }
+    else { ({ qta, lock } = qtaDaRiga(x.r)); unita = ["g", "ml"].includes(x.r.unita) ? "g" : ["pz", "cucchiaio", "cucchiaino"].includes(x.r.unita) ? x.r.unita : undefined; }
+    aggiungiAlimento(c, x.r.nome, qta, lock, { cercato: x.r.cercato, unita });
+  });
+  c.ignoti = [...new Set([...(c.ignoti || []), ...ignoti])];   // quello che non conosco: una riga «❓», da cercare con un tocco
+  ricalcolaLibero();
+}
+// il campo per dettare (si apre col pulsante sotto la ricerca) e le cose non riconosciute
+function dettaHTML(c) {
+  const ign = (c.ignoti || []).map((t, i) => `<div class="lib-ignota"><span>❓ <b>${esc(t)}</b><small>Non lo conosco</small></span><button class="btn-sec" data-lib="ignota-cerca" data-i="${i}">Cerca</button><button class="lib-del" data-lib="ignota-togli" data-i="${i}" aria-label="Togli">✕</button></div>`).join("");
+  if (!c.detta) return `${ign}<button class="btn-link lib-detta-apri" data-lib="detta-apri">🎤 Detta o scrivi tutto il pasto</button>`;
+  return `${ign}<div class="lib-detta">
+      <textarea id="lib-detta" class="qta-input" rows="3" autocomplete="off" autocapitalize="sentences" placeholder="es. due uova, una fetta di pane integrale e un caffè"></textarea>
+      <p class="campo-nota">Tocca il 🎤 della tastiera e parla. Poi controlla le quantità e tocca ✓ Aggiungi.</p>
+      <div class="barra-due"><button class="btn-sec" data-lib="detta-chiudi">Annulla</button><button class="btn" data-lib="detta-leggi">Metti nella lista</button></div></div>`;
+}
+
 // Una ricetta resta "la ricetta" finché ne mangi gli stessi ingredienti (anche in quantità diverse).
 // Se ne cambi, aggiungi o togli, diventa un piatto di ingredienti singoli: la ricetta nel ricettario non cambia.
 function ricettaModificata(c) {
@@ -1613,17 +1680,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (b) {
       const a = b.dataset.lib;
       if (a === "aggiungi") { const inp = document.getElementById("lib-input"); aggiungiDaTesto(inp.value); c.addAperto = false; rirenderLibero(); rifocusInput(); }
+      else if (a === "detta-apri") { c.detta = true; rirenderLibero(); const t = document.getElementById("lib-detta"); if (t) t.focus(); }
+      else if (a === "detta-chiudi") { c.detta = false; rirenderLibero(); }
+      else if (a === "detta-leggi") {
+        const t = document.getElementById("lib-detta"), v = String((t && t.value) || "").trim();
+        if (!v) { avviso("Scrivi o detta cosa hai mangiato"); return; }
+        aggiungiDaParlato(v); c.detta = false; rirenderLibero();
+      }
+      else if (a === "ignota-cerca") { const i = +b.dataset.i, t = (c.ignoti || [])[i]; c.ignoti.splice(i, 1); c.ignoto = t; c._ignotaTorna = t; rirenderLibero(); }   // la pagina «Non trovo…»: ricette simili, cerca online, crea l'alimento
+      else if (a === "ignota-togli") { (c.ignoti || []).splice(+b.dataset.i, 1); rirenderLibero(); }
       else if (a === "mostra-add") { c.addAperto = true; rirenderLibero(); const i2 = document.getElementById("lib-input"); if (i2) i2.focus(); }
       else if (a === "annulla-modifiche") {   // il pasto torna com'era (con le aggiunte confermate)
         if (c._giorno0 !== undefined) tornaAllaFoto(c);
         closeModal(true); if (typeof renderOggi === "function") renderOggi(); avviso("Modifiche annullate");
       }
       else if (a === "salva-modifiche") { if (typeof vibra === "function") vibra(); if (typeof fotoPasto === "function") fotoPasto(c); closeModal(true); avviso("✓ Modifiche salvate"); }
-      else if (a === "annulla-nuovi") { c.items = c.items.filter(x => !x.nuovo); c.piattiNuovi = []; ricalcolaLibero(); rirenderLibero(); }   // via quello scelto e non aggiunto
+      else if (a === "annulla-nuovi") { c.items = c.items.filter(x => !x.nuovo); c.piattiNuovi = []; c.ignoti = []; ricalcolaLibero(); rirenderLibero(); }   // via quello scelto e non aggiunto
       else if (a === "aggiungi-nuovi") { if (typeof vibra === "function") vibra(); confermaNuovi(c); avviso("✓ Aggiunto"); document.getElementById("toast")?.classList.add("ok"); }
       else if (a === "conferma-bozza") { c._conferma = true; c.bozza = false; try { rirenderLibero(); } finally { c._conferma = false; } if (liberoCtx === c) rirenderLibero(); avviso("✓ Pasto salvato"); document.getElementById("toast")?.classList.add("ok"); }   // ora il pasto è nel diario: si vede il riepilogo
       else if (a === "al-modifica") { c.modificaAl = b.dataset.nome; c.ignotoNuovo = true; c.ignoto = null; c.ignotoCodice = null; rirenderLibero(); }
-      else if (a === "ignoto-annulla") { c.modificaAl = null; c.ignotoNuovo = false; c.ignoto = null; c.ignotoCodice = null; c.ricercaOFF = null; rirenderLibero(); }
+      else if (a === "ignoto-annulla") { if (c._ignotaTorna && c.ignoto === c._ignotaTorna) c.ignoti = [c._ignotaTorna, ...(c.ignoti || [])]; c._ignotaTorna = null;   // tornando al pasto senza sceglierlo, resta nella lista dei «❓»
+        c.modificaAl = null; c.ignotoNuovo = false; c.ignoto = null; c.ignotoCodice = null; c.ricercaOFF = null; rirenderLibero(); }
       else if (a === "ignoto-salva") {
         let et = leggiCampiEtichetta("etic-libero");
         if (et && et.errore) { avviso(et.errore); return; }
@@ -1853,3 +1930,112 @@ document.addEventListener("DOMContentLoaded", () => {
   // chiudendo il modale si esce dal pasto libero
   // (la chiusura del pasto la gestisce closeModal: se c'è qualcosa da salvare, prima chiede)
 });
+
+// =============================================================
+//  «🎤 Detta» (barra in basso): «a colazione 150 g di yogurt greco e un cappuccino»
+//  Tieni premuto e parla, al rilascio si apre il pasto con gli alimenti da confermare.
+//  Dove il telefono non lo permette (o con un tocco breve) si apre un campo: lì si usa il 🎤 della tastiera.
+// =============================================================
+// il pasto detto nella frase (e la frase senza quelle parole); null se non c'è
+function pastoDaFrase(testo) {
+  let t = " " + String(testo || "").toLowerCase().replace(/[’`]/g, "'") + " ";
+  const momenti = typeof momentiGiorno === "function" ? momentiGiorno(dataDetta()) : ORDINE_TEMPO;
+  const sera = typeof nomeSera === "function" ? norm(nomeSera()) : "";
+  const regole = [
+    ["sera", /\b(?:(?:a|per|il|lo|nel(?:lo)?)\s+)?(?:dopo\s*cena|dopocena)\b/],
+    ["colazione", /\b(?:(?:a|per|la|nella|alla)\s+)?colazione\b/],
+    ["pranzo", /\b(?:(?:a|per|il|nel|al)\s+)?pranzo\b/],
+    ["spuntino", /\b(?:(?:a|per|la|nella|alla|il|nel|al)\s+)?(?:merenda|pre[- ]?workout|prima dell'allenamento)\b/],
+    ["mattina", /\b(?:(?:a|per|lo|nello|allo|come)\s+)?spuntino(?:\s+(?:di\s+|della\s+|a\s+|del(?:la)?\s+)?(?:metà\s+)?mattin[ao])?(?![a-zà-ù])/],
+    ["cena", /\b(?:(?:a|per|la|nella|alla)\s+)?cena\b/],
+  ];
+  if (sera && sera.length >= 4 && momenti.includes("sera")) regole.unshift(["sera", new RegExp("\\b(?:(?:a|per|nel(?:la|lo)?)\\s+)?" + sera.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b")]);
+  for (const [p, re] of regole) {
+    if (!re.test(t)) continue;
+    if (p === "sera" && !momenti.includes("sera")) continue;
+    return { pasto: p, resto: t.replace(re, " ").replace(/\s+/g, " ").trim() };
+  }
+  return { pasto: null, resto: t.trim() };
+}
+// il giorno su cui si detta: quello aperto in Oggi, altrimenti oggi
+const dataDetta = () => document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" ? dataDiario : oggiISO();
+function inviaDettato(testo) {
+  testo = String(testo || "").trim();
+  if (!testo) { avviso("Non ho sentito niente: riprova"); return; }
+  const { pasto, resto } = pastoDaFrase(testo);
+  if (pasto && resto) { apriPastoConDettato(pasto, resto); return; }
+  // il pasto non l'hai detto: si sceglie con un tocco
+  const data = dataDetta(), momenti = momentiGiorno(data);
+  editCtx = null; liberoCtx = null;
+  openModal(`<h3 class="modal-title">In quale pasto?</h3>
+    <p class="detta-frase">«${esc(testo)}»</p>
+    <div class="detta-pasti">${momenti.map(p => `<button class="btn-sec" data-detta-pasto="${p}">${ICONA_PASTO[p] || "🍽️"} ${esc(NomePasto(p, data))}</button>`).join("")}</div>`);
+  document.querySelectorAll("[data-detta-pasto]").forEach(b => b.addEventListener("click", () => { closeModal(true); apriPastoConDettato(b.dataset.dettaPasto, resto || testo); }));
+}
+function apriPastoConDettato(pasto, testo) {
+  const data = dataDetta();
+  if (document.body.dataset.tab !== "oggi") { const t = document.getElementById("tab-oggi"); if (t) t.click(); }   // si torna in Oggi: è lì che il pasto si vede
+  apriPastoDiario(data, null, pasto);
+  if (!liberoCtx || liberoCtx.pasto !== pasto) return;
+  aggiungiDaParlato(testo);
+  rirenderLibero();
+}
+// tocco breve, o telefono senza riconoscimento vocale: il campo dove scrivere (o dettare con la tastiera)
+function apriDettaTesto(nota) {
+  editCtx = null; liberoCtx = null;
+  openModal(`<h3 class="modal-title">🎤 Cosa hai mangiato?</h3>
+    ${nota ? `<p class="hint">${nota}</p>` : ""}
+    <div class="lib-detta"><textarea id="detta-oggi" class="qta-input" rows="3" autocomplete="off" autocapitalize="sentences" placeholder="es. a colazione 150 g di yogurt greco e un cappuccino"></textarea>
+    <div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="detta-oggi-invia">Continua</button></div>
+    <p class="campo-nota">Tocca il 🎤 della tastiera e parla, oppure scrivi. Di' anche il pasto («a pranzo…»); poi controlli le quantità e tocchi ✓ Aggiungi.</p></div>`);
+  const ta = document.getElementById("detta-oggi"); if (ta) ta.focus();
+  document.getElementById("detta-oggi-invia").addEventListener("click", () => { const v = document.getElementById("detta-oggi").value; if (!v.trim()) { avviso("Scrivi o detta cosa hai mangiato"); return; } closeModal(true); inviaDettato(v); });
+}
+// tieni premuto e parla
+(() => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, premuto = false, inizio = 0, testoFinale = "", testoParziale = "", velo = null, errore = null, partito = false;
+  const mostraVelo = () => {
+    velo = document.createElement("div"); velo.className = "detta-velo";
+    velo.innerHTML = `<div class="detta-bolla"><div class="detta-onda">🎤</div><p class="detta-stato">Ti ascolto… rilascia per finire</p><p class="detta-live"></p></div>`;
+    document.body.appendChild(velo);
+  };
+  const aggiornaVelo = () => { const l = velo && velo.querySelector(".detta-live"); if (l) l.textContent = (testoFinale + " " + testoParziale).trim(); };
+  const togliVelo = () => { if (velo) velo.remove(); velo = null; };
+  const avvia = () => {
+    testoFinale = ""; testoParziale = ""; errore = null; partito = false;
+    try {
+      rec = new SR(); rec.lang = "it-IT"; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+      rec.onstart = () => { partito = true; };
+      rec.onresult = (e) => { testoParziale = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) testoFinale += " " + r[0].transcript; else testoParziale += r[0].transcript; } aggiornaVelo(); };
+      rec.onerror = (e) => { errore = e.error || "errore"; };
+      rec.onend = () => { if (premuto) return; finisci(); };   // finché tieni premuto resta il velo (iPhone a volte si ferma da solo nelle pause)
+      rec.start(); mostraVelo();
+      if (typeof vibra === "function") vibra();
+    } catch (e) { rec = null; togliVelo(); apriDettaTesto("Su questo telefono il microfono dell'app non è disponibile: usa il 🎤 della tastiera."); }
+  };
+  let finito = false;
+  const finisci = () => {
+    if (finito) return; finito = true;
+    const testo = (testoFinale + " " + testoParziale).trim();
+    togliVelo();
+    if (errore === "not-allowed" || errore === "service-not-allowed" || (!partito && !testo)) { apriDettaTesto(errore === "not-allowed" ? "Il microfono non è permesso per questa app: usa il 🎤 della tastiera (o permettilo nelle impostazioni del telefono)." : "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
+    if (!testo) { avviso("Non ho sentito niente: tieni premuto mentre parli"); return; }
+    inviaDettato(testo);
+  };
+  document.addEventListener("DOMContentLoaded", () => {
+    const b = document.getElementById("tab-detta"); if (!b) return;
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+    if (!SR) { b.addEventListener("click", () => apriDettaTesto()); return; }   // senza riconoscimento vocale: il campo, sempre
+    // il microfono parte solo se tieni premuto un attimo: un tocco breve apre il campo (senza chiedere il permesso del microfono)
+    let attesa = null;
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); premuto = true; finito = false; inizio = Date.now(); b.classList.add("ascolta"); attesa = setTimeout(() => { attesa = null; if (premuto) avvia(); }, 250); });
+    const rilascia = () => {
+      if (!premuto) return; premuto = false; b.classList.remove("ascolta");
+      if (attesa) { clearTimeout(attesa); attesa = null; finito = true; apriDettaTesto(); return; }   // un tocco breve: il campo per scrivere
+      try { rec ? rec.stop() : finisci(); } catch (e) { finisci(); }
+      setTimeout(finisci, 1500);   // se il telefono non avvisa della fine, si va avanti lo stesso
+    };
+    b.addEventListener("pointerup", rilascia); b.addEventListener("pointercancel", rilascia); b.addEventListener("pointerleave", rilascia);
+  });
+})();

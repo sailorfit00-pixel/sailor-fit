@@ -631,7 +631,7 @@ main { padding: 0 16px; }
 .btn-profilo { width: 42px !important; height: 42px !important; border-radius: 50% !important; font-size: 19px !important; }
 
 /* ---- Barra di navigazione in basso ---- */
-.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(var(--barra-rgb),.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line2); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; display: grid; grid-template-columns: repeat(5, 1fr); background: rgba(var(--barra-rgb),.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line2); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
 .tabbar button { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 600; padding: 4px 0; border-radius: 14px; cursor: pointer; }
 .tabbar .tb-ico { font-size: 21px; line-height: 1.15; filter: grayscale(1) opacity(.7); transition: filter .15s; }
 body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body[data-tab="andamento"] #apri-andamento, body[data-tab="altro"] #apri-menu { color: var(--accent); }
@@ -2181,7 +2181,9 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 .oggi-azioni .compila-box { width: 100%; }
 .compila-spiega { margin: 2px 4px 10px; font-size: 14px; line-height: 1.4; color: var(--muted); text-align: center; }
 .compila-spiega b { color: var(--text); }
-.btn.btn-compila { min-height: 54px; font-size: 17px; font-weight: 700; background: var(--lilla); border-color: var(--lilla); color: var(--k-1a1426); }
+/* più discreto di un pulsante pieno: fondo tenue e scritta nel colore dell'app (si nota, ma non domina la pagina) */
+.btn.btn-compila { width: auto; display: block; margin: 0 auto; min-height: 44px; padding: 10px 22px; font-size: 15px; font-weight: 700; border-radius: 999px;
+  background: var(--lilla-bg); border: 1.5px solid rgba(var(--lilla-rgb),.6); color: var(--lilla); }
 /* tema chiaro: il contorno bianco della barra sforata sul bianco non si vede; arancione si confonde con la barra dei carboidrati.
    Ogni barra ha il contorno del suo colore, più scuro */
 /* contorno nella tonalità più scura dello stesso colore della barra: si vede, ma resta in armonia */
@@ -2189,3 +2191,29 @@ html[data-tema="chiaro"] .mc-bar span.sopra, html[data-tema="chiaro"] .prog-bar 
 html[data-tema="chiaro"] .mc-bar span.mb-p.sopra, html[data-tema="chiaro"] .prog-bar span.mb-p.sopra { box-shadow: inset 0 0 0 2px #2c5f99; }
 html[data-tema="chiaro"] .mc-bar span.mb-c.sopra, html[data-tema="chiaro"] .prog-bar span.mb-c.sopra { box-shadow: inset 0 0 0 2px #7d5c08; }
 html[data-tema="chiaro"] .mc-bar span.mb-g.sopra, html[data-tema="chiaro"] .prog-bar span.mb-g.sopra { box-shadow: inset 0 0 0 2px #b04630; }
+
+/* pasto: «🎤 Detta o scrivi tutto il pasto» (si usa il microfono della tastiera) e le cose non riconosciute */
+.lib-detta-apri { display: block; width: 100%; text-align: center; margin: 6px 0 2px; font-size: 15px; }
+.lib-detta { margin: 8px 0 4px; }
+.lib-detta textarea { width: 100%; text-align: left; padding: 10px 12px; min-height: 84px; resize: vertical; font: inherit; font-size: 16px; line-height: 1.35; }
+.lib-detta .campo-nota { margin: 6px 2px 8px; }
+.lib-detta .barra-due { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.lib-detta .barra-due .btn, .lib-detta .barra-due .btn-sec { margin: 0; min-height: 46px; }
+.lib-ignota { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 8px 6px 8px 12px; border-radius: 14px; background: var(--card2); border: 1px dashed rgba(var(--ink-rgb),.25); }
+.lib-ignota > span { flex: 1; min-width: 0; }
+.lib-ignota small { display: block; color: var(--muted); font-size: 12.5px; }
+.lib-ignota .btn-sec { flex: 0 0 auto; width: auto; margin: 0; min-height: 36px; padding: 6px 14px; }
+
+/* «🎤 Detta» al centro della barra: tieni premuto e parla (un tocco apre il campo per scrivere) */
+.tabbar .tab-detta { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; color: var(--lilla); }
+.tabbar .detta-ico { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; margin: -22px 0 0; border-radius: 50%; background: var(--lilla); color: var(--k-1a1426); font-size: 22px; box-shadow: 0 4px 12px rgba(0,0,0,.35); transition: transform .15s, background .15s; }
+.tabbar .tab-detta.ascolta .detta-ico { transform: scale(1.15); background: #e5534b; animation: detta-pulsa 1.1s ease-in-out infinite; }
+@keyframes detta-pulsa { 0%,100% { box-shadow: 0 0 0 0 rgba(229,83,75,.55); } 50% { box-shadow: 0 0 0 12px rgba(229,83,75,0); } }
+.detta-velo { position: fixed; inset: 0; z-index: 65; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; padding: 0 16px calc(var(--tabbar-h, 64px) + 40px + env(safe-area-inset-bottom)); pointer-events: none; }
+.detta-bolla { width: 100%; max-width: 420px; background: var(--card); border-radius: 22px; padding: 18px 18px 16px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.detta-onda { font-size: 30px; }
+.detta-stato { margin: 6px 0 4px; font-weight: 700; }
+.detta-live { margin: 0; min-height: 1.4em; color: var(--muted); font-size: 15px; }
+.detta-frase { margin: 0 0 12px; color: var(--muted); font-style: italic; }
+.detta-pasti { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.detta-pasti .btn-sec { margin: 0; min-height: 50px; }
