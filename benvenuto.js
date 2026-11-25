@@ -35,6 +35,8 @@ const QZ_DIETE_NOTE = /cheto|keto|paleo|zona|dukan|digiuno|low ?carb|fodmap|medi
 const senzaSport = (R) => !(R.sport || []).length || (R.sport || []).includes(QZ_NESSUNO);
 // tipo: t testo · n numero · u una scelta · m più scelte · orari · colore · nomeApp · riepilogo
 const QZ = [
+  // la prima schermata per chi apre l'app per la prima volta: benvenuto, «Iniziamo» e il ripristino del backup (rifacendo il questionario dal Profilo non c'è)
+  { k: "intro", t: "intro", e: "🌙", q: "Benvenuta/o!", salta: () => !!(qz && qz.rifai) },
   { k: "nome", t: "t", e: "👋", q: "Come ti chiami?", ph: "Il tuo nome", opz: 1, nota: "Serve solo per salutarti nell'app." },
   { k: "sesso", t: "u", e: "🙋", q: "Sei…", o: [["Donna", "👩", "donna"], ["Uomo", "👨", "uomo"]] },
   { k: "eta", t: "n", e: "🎂", q: "Quanti anni hai?", un: "anni", ph: "34", min: 10, max: 100 },
@@ -104,8 +106,12 @@ function apriQuestionario(rifai) {
   else if (rifai) qz = { R: qzRisposteAttuali(), step: 0, rifai: true };
   else qz = { R: { orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, ORARI_DEFAULT[p]])), colore: "lilla", iconaApp: "🌙", nomeApp: "Sailor Fit" }, step: 0, rifai: false };
   editCtx = null;
+  if (!qzAttiva(QZ[qz.step])) qz.step = qzProssimo(qz.step, 1);
   openModal(`<div class="qz" id="qz"></div>`);
   document.getElementById("modal").classList.add("modal-qz");
+  // prima volta: il questionario occupa tutto lo schermo e non si chiude (né ✕, né tocco fuori, né la barra in basso) finché non lo finisci o ripristini un backup
+  document.getElementById("modal").classList.toggle("qz-primo", !qz.rifai);
+  document.body.classList.toggle("qz-primo", !qz.rifai);
   qzRender();
 }
 // la persona nuova: al posto della vecchia schermata unica
@@ -172,11 +178,21 @@ function qzRender() {
   const box = document.getElementById("qz"); if (!box || !qz) return;
   if (qz.step >= QZ.length) qz.step = QZ.length - 1;
   const q = QZ[qz.step], R = qz.R, v = R[q.k];
-  const tot = QZ.filter(qzAttiva).length, fatti = QZ.slice(0, qz.step).filter(qzAttiva).length;
-  let h = `<div class="qz-top"><button class="qz-ind" data-qz-ind aria-label="Indietro" ${qz.step === 0 ? "hidden" : ""}>←</button>
+  const conta = (x) => qzAttiva(x) && x.t !== "intro";   // la schermata di benvenuto non è una domanda
+  const tot = QZ.filter(conta).length, fatti = QZ.slice(0, qz.step).filter(conta).length;
+  const primo = qzProssimo(-1, 1);   // la prima schermata attiva: niente «indietro»
+  let h = q.t === "intro" ? "" : `<div class="qz-top"><button class="qz-ind" data-qz-ind aria-label="Indietro" ${qz.step <= primo ? "hidden" : ""}>←</button>
     <div class="qz-bar"><i style="width:${Math.round(fatti / tot * 100)}%"></i></div></div>
     <h2 class="qz-q"><span>${q.e}</span>${esc(q.q)}</h2>`;
-  if (q.t === "t" || q.t === "n") {
+  if (q.t === "intro") {
+    const nome = esc((R.nomeApp || "Sailor Fit").trim() || "Sailor Fit");
+    h += `<div class="qz-intro">
+      <img class="qz-intro-ico" src="apple-touch-icon.png" alt="">
+      <h2 class="qz-intro-t">Ti diamo il benvenuto in ${nome}</h2>
+      <p class="qz-intro-p">Qualche domanda veloce (circa 2 minuti) e calcoliamo calorie, proteine, carboidrati e grassi su misura per te.</p>
+      <p class="qz-pic">Potrai cambiare tutto quando vuoi dal Profilo.</p>
+    </div>`;
+  } else if (q.t === "t" || q.t === "n") {
     h += `<div class="qz-u"><input class="qz-inp" id="qz-inp" ${q.t === "n" ? (q.dec ? `type="text" inputmode="decimal" autocomplete="off"` : `type="number" inputmode="numeric" step="1"`) : `type="text" autocomplete="given-name"`}
       placeholder="${esc(q.ph || "")}" value="${esc(v ?? "")}">${q.un ? `<b>${q.un}</b>` : ""}</div>`;
   } else if (q.t === "u" || q.t === "m") {
@@ -229,17 +245,18 @@ function qzRender() {
       ${qz.rifai ? `<p class="qz-pic">Il diario non cambia. Si aggiornano profilo, settimana tipo, orari e cibi esclusi.</p>` : ""}</div>`;
   }
   if (q.nota && q.t !== "ora") h += `<p class="qz-pic">${esc(q.nota)}</p>`;
-  if (qz.step === 0 && !qz.rifai) h += `<button class="btn-link qz-backup" data-azione="ripristina">Hai già usato l'app? Ripristina un backup ›</button>`;
+  if (q.t === "intro") h += `<button class="btn-link qz-backup" data-azione="ripristina">Hai già usato l'app? Ripristina un backup ›</button>`;
   const ultimo = q.t === "riepilogo";
-  h += `<div class="qz-foot"><button class="btn block" id="qz-avanti" ${qzValido(q) ? "" : "disabled"}>${ultimo ? "✓ Inizia" : q.opz && !v && !(q.altro && String(R[q.altro] || "").trim()) ? "Salta →" : "Avanti →"}</button></div>`;
+  h += `<div class="qz-foot"><button class="btn block" id="qz-avanti" ${qzValido(q) ? "" : "disabled"}>${ultimo ? "✓ Inizia" : q.t === "intro" ? "Iniziamo →" : q.opz && !v && !(q.altro && String(R[q.altro] || "").trim()) ? "Salta →" : "Avanti →"}</button></div>`;
   box.innerHTML = h;
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
+  if (sh) sh.classList.toggle("qz-sheet-intro", q.t === "intro");
   const inp = document.getElementById("qz-inp"); if (inp && !v) setTimeout(() => { try { inp.focus(); } catch (e) {} }, 150);
 }
 function qzAggiornaBtn() {
   const q = QZ[qz.step], b = document.getElementById("qz-avanti"); if (!b) return;
   b.disabled = !qzValido(q);
-  if (q.t !== "riepilogo") b.textContent = q.opz && !qz.R[q.k] && !(q.altro && String(qz.R[q.altro] || "").trim()) ? "Salta →" : "Avanti →";
+  if (q.t !== "riepilogo" && q.t !== "intro") b.textContent = q.opz && !qz.R[q.k] && !(q.altro && String(qz.R[q.altro] || "").trim()) ? "Salta →" : "Avanti →";
 }
 
 document.addEventListener("input", (e) => {
@@ -284,6 +301,12 @@ document.addEventListener("change", (e) => {
   const h = oraDa(e.target.value); if (h !== null) qz.R.orari[e.target.dataset.qzOra] = h;
   qzSalva(); qzRender();
 });
+// iPhone: quando si apre la tastiera la pagina scorre verso l'alto e la domanda spariva. Nelle domande con un solo campo (nome, età, altezza, peso)
+// il pannello torna in cima: domanda e campo restano visibili sopra la tastiera, con «Avanti» subito sotto
+document.addEventListener("focusin", (e) => {
+  if (!qz || e.target.id !== "qz-inp") return;
+  [80, 320, 650].forEach(t => setTimeout(() => { const sh = document.querySelector("#modal .modal-sheet"); if (sh && document.activeElement === e.target) sh.scrollTop = 0; }, t));
+});
 document.addEventListener("keydown", (e) => {
   if (qz && e.key === "Enter" && e.target.id === "qz-inp") { e.preventDefault(); qzAvanti(); }
   if (qz && e.key === "Enter" && e.target.id === "qz-sp-nuovo") { e.preventDefault(); qzAggiungiSport(); }
@@ -291,7 +314,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("click", (e) => {
   if (!qz || !e.target.closest || !e.target.closest("#qz")) return;
   const q = QZ[qz.step];
-  if (e.target.closest("[data-qz-ind]")) { const i = qzProssimo(qz.step, -1); if (i >= 0) { qz.step = i; qzSalva(); qzRender(); } return; }
+  if (e.target.closest("[data-qz-ind]")) { const i = qzProssimo(qz.step, -1); if (i >= 0 && QZ[i].t !== "intro") { qz.step = i; qzSalva(); qzRender(); } return; }
   if (e.target.closest("#qz-avanti")) { qzAvanti(); return; }
   const ob = e.target.closest("[data-qz-o]");
   if (ob) {
@@ -420,5 +443,9 @@ function qzFine() {
 }
 // chiudendo il questionario a metà: le risposte restano per quando lo riapri; il colore torna quello salvato
 { const m = document.getElementById("modal");
-  if (m) new MutationObserver(() => { if (m.hidden && m.classList.contains("modal-qz")) { m.classList.remove("modal-qz"); qz = null; applicaPersonalizzazione(); } })
-    .observe(m, { attributes: true, attributeFilter: ["hidden"] }); }
+  if (m) new MutationObserver(() => {
+    if (!m.hidden) return;
+    if (m.classList.contains("modal-qz")) { m.classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo"); qz = null; applicaPersonalizzazione(); }
+    // persona nuova che non ha ancora finito (es. ha annullato il ripristino del backup): il questionario torna, dal punto in cui era
+    if (localStorage.getItem("mp_benvenuto") === "da fare") setTimeout(() => { if (m.hidden && localStorage.getItem("mp_benvenuto") === "da fare") apriBenvenuto(); }, 60);
+  }).observe(m, { attributes: true, attributeFilter: ["hidden"] }); }

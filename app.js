@@ -11,6 +11,11 @@ try {
     localStorage.setItem("mp_tipi", JSON.stringify(Array(7).fill("riposo")));
     localStorage.setItem("mp_tipi_nov26", "1");
   }
+  // aperta prima con una versione vecchia dell'app (che creava il profilo senza segnare il questionario) e mai usata: è ancora una persona nuova
+  else if (!localStorage.getItem("mp_benvenuto") && !localStorage.getItem("mp_diario")) {
+    const pf0 = JSON.parse(localStorage.getItem("mp_profilo") || "{}");
+    if (!pf0.eta && !pf0.altezza && !pf0.nome) localStorage.setItem("mp_benvenuto", "da fare");
+  }
 } catch (e) {}
 const GIORNI = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"];
 
@@ -1725,6 +1730,8 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("[data-pf-annulla]")) { ripristinaProfiloPrima(); riapriProfilo(); avviso("Modifiche annullate"); return; }
 });
 function closeModal(forza) {
+  // il questionario della prima volta non si chiude per sbaglio (✕, tocco fuori, Esc, barra in basso): si finisce, o si ripristina un backup
+  if (!forza && typeof qz !== "undefined" && qz && !qz.rifai && document.getElementById("qz")) return;
   // chiudendo il Profilo con modifiche non salvate: prima si chiede
   if (!forza && document.getElementById("form-profilo")) {
     if (profiloModificato()) { chiediSalvataggioProfilo(); return; }
@@ -2643,6 +2650,8 @@ function ripristinaBackup(testo) {
     Object.keys(localStorage).filter(k => k.startsWith("mp_")).forEach(k => localStorage.removeItem(k));
     Object.entries(b.dati).forEach(([k, v]) => { if (k.startsWith("mp_") && k !== "mp_adatta" && k !== "mp_storico") localStorage.setItem(k, v); });
     localStorage.setItem("mp_adatta", "1");   // al riavvio i dati vecchi si adattano alla versione nuova
+    localStorage.setItem("mp_benvenuto", "fatto");   // con un backup il questionario della prima volta non serve
+    try { sessionStorage.removeItem("sf_benvenuto_corso"); } catch (e) {}
     location.reload();
   }, null, true);   // tasto di conferma verde
 }

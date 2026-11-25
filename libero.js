@@ -168,6 +168,13 @@ const PEZZI_MEZZI = /pizza|focaccia/i;
 function qtaPezziInteri(nome, u, qta) { const gu = grammiPerUnita(nome, u); if (!(eIntero(nome, u) && gu)) return qta; const m = PEZZI_MEZZI.test(String(nome)) ? 2 : 1; return Math.max(1, Math.round(qta / gu * m)) / m * gu; }
 // prossimo valore dopo un tocco su − / ＋: il multiplo del passo successivo (0,6 pz con passo 1 → 1, non 2)
 const prossimoMultiplo = (att, d, passo) => Math.max(passo, (d > 0 ? Math.floor(att / passo + 1e-9) + 1 : Math.ceil(att / passo - 1e-9) - 1) * passo);
+// grammi dopo un tocco su − / ＋ (senza unità a pezzi/cucchiai): di 10 in 10 (sotto i 10 di 1 in 1);
+// gli alimenti che si usano a piccole dosi (olio, burro, frutta secca, semi, parmigiano…) di 1 in 1 (10 → 11 → 12 g): per i salti grandi ci sono le pillole sotto il contatore
+function grammiDopoStep(nome, att, d, minimo) {
+  let piccolo = false; try { piccolo = !!(window.ALIMENTI || {})[nome] && profiloBase(nome).tip <= 25; } catch (e) {}
+  if (piccolo) return Math.max(minimo, d > 0 ? Math.floor(att + 1e-9) + 1 : Math.ceil(att - 1e-9) - 1);
+  return Math.max(minimo, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10) : (att <= 10 ? Math.ceil(att) - 1 : Math.ceil(att / 10) * 10 - 10));
+}
 function passoQuantita(it) {
   const u = unitaDi(it), gu = grammiPerUnita(it.nome, u);
   if (gu) return { gu, passo: eIntero(it.nome, u) && !PEZZI_MEZZI.test(String(it.nome)) || (u === "pz" && gu < 100 && !PEZZI_MEZZI.test(String(it.nome))) ? 1 : 0.5 };
@@ -607,7 +614,7 @@ function elencoConsigli(c, m) {
   const g100 = (r, i) => (A[r.nome] ? A[r.nome][i] : 0) * r.qta / 100;
   const manca = {
     prot: !righe.some(r => A[r.nome] && A[r.nome][1] >= 8 && g100(r, 1) >= 10),
-    carbo: !righe.some(r => A[r.nome] && A[r.nome][2] >= 12 && g100(r, 2) >= 15),
+    carbo: !righe.some(r => A[r.nome] && A[r.nome][2] >= 12 && (g100(r, 2) >= 15 || A[r.nome][2] * 4 / Math.max(1, A[r.nome][0]) >= 0.5)),   // anche poche patate o una fetta di pane sono già la base: si aumentano quelle, non se ne aggiunge un'altra
     grassi: !righe.some(r => A[r.nome] && g100(r, 3) >= 5),
     fibre: !righe.some(r => VERDURE_CONSIGLI.includes(r.nome) || /verdur|insalata/i.test(r.nome) || ((X[r.nome] || [])[2] || 0) * r.qta / 100 >= 6),   // fibre vere (legumi, tanta verdura): le patate o un po' di pane integrale non bastano
   };
@@ -1091,8 +1098,7 @@ function rigaQuantitaHTML(p, k, it, u) {
 function qtaDopoStep(nome, qta, u, d) {
   const { gu, passo } = passoQuantita({ nome, qta, unita: u });
   const att = gu ? qta / gu : qta;
-  const nuovo = gu ? prossimoMultiplo(att, d, passo)
-    : Math.max(0, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10) : (att <= 10 ? Math.ceil(att) - 1 : Math.ceil(att / 10) * 10 - 10));
+  const nuovo = gu ? prossimoMultiplo(att, d, passo) : grammiDopoStep(nome, att, d, 0);
   return gu ? Math.round(nuovo * gu * 10) / 10 : nuovo;
 }
 // totale del pasto DOPO l'aggiunta: quello che c'è già nel pasto + l'idea che stai guardando (così si confronta con la quota del pasto)
@@ -1281,7 +1287,8 @@ function liberoHTML() {
       vals = n.map(x => [Math.round(x * gu * 10) / 10, fmtQta(x)]); suff = sigleUnita(u);
     } else {
       const b = porzioneSolita(it.nome) || 100, r = (g) => g >= 100 ? Math.round(g / 10) * 10 : Math.max(5, Math.round(g / 5) * 5);
-      vals = [...new Set([0.5, 1, 1.5, 2].map(f => r(b * f)))].map(g => [g, String(g)]); suff = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
+      let piccolo = false; try { piccolo = !!(window.ALIMENTI || {})[it.nome] && profiloBase(it.nome).tip <= 25; } catch (e) {}
+      vals = (piccolo ? [5, 10, 15, 20, 30] : [...new Set([0.5, 1, 1.5, 2].map(f => r(b * f)))]).map(g => [g, String(g)]);   // olio, frutta secca…: il contatore va di 1 g, le pillole fanno i salti suff = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
     }
     return `<div class="lib-preset" role="group" aria-label="Quantità rapida">${vals.map(([g, t]) => `<button class="lib-preset-b${Math.abs(g - it.qta) < 0.6 ? " on" : ""}" data-lib-preset="${k}|${g}">${t}<small> ${suff}</small></button>`).join("")}</div>`;
   };
@@ -1765,9 +1772,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const it = c.items[+st.dataset.libStep], d = +st.dataset.d, { gu, passo } = passoQuantita(it);
       if (gu && !it.unita) it.unita = unitaDi(it);   // l'unità che vedi resta quella mentre la cambi (niente salti da pezzi a grammi)
       const att = gu ? it.qta / gu : it.qta;
-      const nuovo = gu ? prossimoMultiplo(att, d, passo)
-        : Math.max(1, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10)    // grammi: di 10 in 10, sotto i 10 di 1 in 1
-                            : (att <= 10 ? Math.ceil(att) - 1 : Math.ceil(att / 10) * 10 - 10));
+      const nuovo = gu ? prossimoMultiplo(att, d, passo) : grammiDopoStep(it.nome, att, d, 1);   // grammi: di 10 in 10; olio, frutta secca… di 1 in 1
       it.qta = gu ? Math.round(nuovo * gu * 10) / 10 : nuovo; it.lock = true; // un decimale: 11 mandorle restano 11, non 10,8
       ricalcolaLibero(); rirenderLibero(); return;
     }

@@ -1967,15 +1967,18 @@ button.ant-fit.on { border-style: solid; background: rgba(var(--lilla-rgb),.20);
 .qz-sc.qz-giorni { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .qz-b { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 16px; border-radius: 16px; background: var(--card2); border: 2px solid rgba(var(--ink-rgb),.08); font: inherit; font-size: 17px; font-weight: 500; line-height: 1.25; text-align: left; color: var(--text); cursor: pointer; width: 100%; }
 .qz-b .qz-e { font-size: 22px; flex: 0 0 auto; line-height: 1; }
-.qz-b.on { background: var(--lilla); border-color: var(--lilla); color: var(--k-1a1426); font-weight: 700; }
-.qz-b.on::after { content: "✓"; margin-left: auto; font-size: 18px; }
+/* scelta selezionata: cambia solo il colore. Stesso spessore del testo e spazio della ✓ già riservato,
+   così la scritta non va a capo e il pulsante non si allarga (prima «Definire (meno grasso, più tono)» scattava su due righe) */
+.qz-b.on { background: var(--lilla); border-color: var(--lilla); color: var(--k-1a1426); }
+.qz-b::after { content: "✓"; margin-left: auto; padding-left: 4px; font-size: 18px; font-weight: 700; visibility: hidden; }
+.qz-b.on::after { visibility: visible; }
 /* questionario: gli sport di ogni giorno (anche due) */
 .qz-sett { display: grid; gap: 12px; }
 .qz-sett-r b { display: block; font-size: 14px; color: var(--muted); margin: 0 0 6px 2px; }
 .qz-sett-s { display: flex; flex-wrap: wrap; gap: 8px; }
 .qz-b.qz-mini { width: auto; min-height: 44px; padding: 8px 12px; gap: 8px; font-size: 15px; border-radius: 14px; }
 .qz-b.qz-mini .qz-e { font-size: 18px; }
-.qz-b.qz-mini.on::after { margin-left: 4px; font-size: 14px; }
+.qz-b.qz-mini::after { margin-left: 0; padding-left: 0; font-size: 14px; }
 .qz-u { display: flex; align-items: center; gap: 12px; }
 .qz-u b { font-size: 17px; font-weight: 500; color: var(--muted); }
 .qz-inp { width: 100%; font: inherit; font-size: 20px; font-weight: 500; padding: 15px 16px; border-radius: 16px; border: 2px solid rgba(var(--ink-rgb),.08); background: var(--card2); color: var(--text); }
@@ -2170,7 +2173,7 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 .qz-altro-sp .qz-pic { margin: 6px 0 8px; text-align: left; }
 .qz-fatica { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .qz-fatica .qz-b.qz-mini { flex-direction: column; justify-content: center; gap: 2px; padding: 8px 4px; text-align: center; font-size: 14px; }
-.qz-fatica .qz-b.qz-mini.on::after { display: none; }
+.qz-fatica .qz-b.qz-mini::after { display: none; }
 .qz-togli { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(var(--ink-rgb),.08); color: var(--text); font-size: 15px; cursor: pointer; }
 .qz-altro-riga { display: flex; gap: 8px; margin-top: 12px; align-items: stretch; }
 .qz-altro-riga .qz-inp { flex: 1; min-width: 0; }
@@ -2224,3 +2227,30 @@ html[data-tema="chiaro"] .tabbar .tab-detta.ascolta .detta-ico { background: #1a
 .detta-velo.promemoria { background: none; animation: detta-appare .18s ease-out; }
 @keyframes detta-appare { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .detta-velo:not(.promemoria) .detta-bolla { pointer-events: auto; cursor: pointer; }   /* toccandolo si finisce, se il rilascio non è arrivato */
+
+/* ===== Questionario della prima volta: a tutto schermo, è la prima cosa che si vede (niente ✕, niente barra in basso) ===== */
+body.qz-primo .tabbar { display: none; }
+.modal.qz-primo { top: 0; bottom: 0; align-items: stretch; }
+.modal.qz-primo .modal-backdrop { background: var(--card); }
+.modal.qz-primo .modal-sheet { max-width: 640px; height: 100%; max-height: none; min-height: 0; border-radius: 0; padding-top: calc(env(safe-area-inset-top) + 14px); animation: none; }
+.modal.qz-primo .modal-close, .modal.qz-primo .modal-grip { display: none; }
+.modal.qz-primo .qz-top { margin-right: 0; }
+/* il pulsante «Avanti» in fondo allo schermo, il contenuto in alto */
+.modal-qz .modal-sheet { display: flex; flex-direction: column; }
+.modal-qz #modal-content { flex: 1 0 auto; display: flex; flex-direction: column; }
+.modal-qz .qz { flex: 1 0 auto; min-height: 0; }
+/* la schermata di benvenuto */
+.qz-intro { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 24px 2px 8px; }
+.qz-intro-ico { width: 88px; height: 88px; border-radius: 22px; margin-bottom: 22px; box-shadow: 0 8px 28px rgba(var(--lilla-rgb), .25); }
+.qz-intro-t { font-size: 30px; line-height: 1.2; margin: 0 0 14px; letter-spacing: -.3px; }
+.qz-intro-p { font-size: 18px; line-height: 1.45; margin: 0; color: var(--text); }
+.qz-intro + .qz-backup { align-self: center; }
+/* Tastiera aperta nel questionario: il pannello è alto quanto lo spazio sopra la tastiera (prima restava a tutta altezza
+   e finiva sopra lo schermo, portandosi via la domanda). Domanda in alto, campo sotto, «Avanti» subito sopra la tastiera. */
+body.tastiera .modal.modal-qz { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-h, 100%); align-items: stretch; }
+body.tastiera .modal-qz .modal-sheet { min-height: 0; height: 100%; max-height: none; padding-top: 10px; }
+body.tastiera .qz-top { margin-bottom: 10px; }
+body.tastiera .qz-q { font-size: 21px; margin-bottom: 12px; }
+body.tastiera .qz-q span { display: inline; font-size: 24px; margin: 0 8px 0 0; }
+body.tastiera .qz-foot { bottom: -24px; padding-bottom: 10px; }
+body.tastiera .qz-backup { display: none; }

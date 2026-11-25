@@ -1720,15 +1720,31 @@ const FONTI_CARBO_PASTO = {
   pre: [["Banana", 150], ["Gallette di riso", 40], ["Pane bianco", 80]],
   principale: [["Riso basmati cotto", 300], ["Pasta", 100], ["Patate", 350], ["Pane integrale", 100], ["Farro", 90]],
 };
-function mosseCarbo(data, p, m) {
+// se nel pasto c'è già una fonte di carboidrati (patate, riso, pane…) prima si propone di AUMENTARE quella («porta le patate da 150 a 220 g»):
+// nei pasti principali non si aggiunge una seconda base (patate + pasta non ha senso), negli spuntini sì, dopo.
+const fonteCarbo = (a) => a && a[2] >= 12 && a[2] * 4 / Math.max(1, a[0]) >= 0.5;
+function mosseCarbo(data, p, m, scritto) {
   const A = window.ALIMENTI || {}, need = m.carboidrati, out = [];
+  let basi = [];
+  if (scritto) {
+    try { basi = ingredientiPastoTutti(data, p).filter(r => fonteCarbo(A[r.nome]) && !MAI_CONSIGLIATI.test(r.nome)); } catch (e) {}
+    basi.forEach(r => {
+      const a = A[r.nome], tetto = Math.max(30, Math.min(r.qta * 1.2, 250));   // al massimo poco più del doppio di quanto c'è già
+      const extra = grammiCheCi(r.nome, need * 100 / a[2], tetto, m); if (!extra || extra.g < 10 || extra.d.carboidrati < Math.min(need * 0.4, 10)) return;
+      const nuova = Math.round((r.qta + extra.g) / 5) * 5;
+      out.push({ key: `${p}|por|${r.rif[0]}|${r.rif[1]}|${nuova}`, testa: `Porta <b>${esc(r.nome.toLowerCase())}</b> da ${Math.round(r.qta)} a <b>${nuova} g</b>`, d: extra.d, _p: Math.abs(extra.d.carboidrati - need) - 20 });
+    });
+    if (out.length && tipoFontiPasto(data, p) === "principale") return out.sort((a, b) => a._p - b._p);
+  }
+  const giaDentro = new Set(basi.map(r => r.nome));
   (FONTI_CARBO_PASTO[tipoFontiPasto(data, p)] || []).forEach(([nome, massimo]) => {
+    if (giaDentro.has(nome)) return;
     if (!A[nome] || MAI_CONSIGLIATI.test(nome)) return;
     const r = grammiCheCi(nome, need * 100 / A[nome][2], massimo, m); if (!r || r.d.carboidrati < Math.min(need * 0.4, 15)) return;
     out.push({ key: `${p}|agg|${nome}|${r.g}`, testa: `Aggiungi <b>${r.g} g di ${esc(nome.toLowerCase())}</b>`, d: r.d, _p: Math.abs(r.d.carboidrati - need) });
   });
-  const ruota = hashStr(data + p);
-  return out.sort((a, b) => (a._p + (((hashStr(a.key) + ruota) % 7) * 0.5)) - (b._p + (((hashStr(b.key) + ruota) % 7) * 0.5)));
+  const ruota = hashStr(data + p), rot = (x) => x.key.includes("|por|") ? 0 : ((hashStr(x.key) + ruota) % 7) * 0.5;   // «porta» resta sempre in testa
+  return out.sort((a, b) => (a._p + rot(a)) - (b._p + rot(b)));
 }
 // grassi che mancano: grassi buoni a piccole dosi (mai nel pre-workout)
 const FONTI_GRASSI = [["Olio EVO", 15], ["Mandorle", 30], ["Noci", 30], ["Avocado", 80]];
@@ -1747,7 +1763,7 @@ function mosseSingole(data, p, m, scritto) {
   const c = mancantiColmabili(m);
   const liste = [
     m.proteine > 10 && c.proteine >= 6 ? mosseProteine(data, p, m, scritto) : [],
-    m.carboidrati > 15 && c.carboidrati >= 10 ? mosseCarbo(data, p, m) : [],
+    m.carboidrati > 15 && c.carboidrati >= 10 ? mosseCarbo(data, p, m, scritto) : [],
     m.grassi > 8 && c.grassi >= 3.5 ? mosseGrassi(data, p, m) : [],
   ].filter(l => l.length);
   const out = [], visti = new Set();
