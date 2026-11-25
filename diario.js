@@ -8,12 +8,21 @@ let dataDiario = oggiISO(); // giorno visualizzato
 
 // Ordine "nel tempo" dei pasti e quota indicativa di ciascuno sulla giornata
 // "spuntino" è quello del pomeriggio (pre-workout): così i pasti già salvati restano al loro posto
-const ORDINE_TEMPO = ["colazione", "mattina", "pranzo", "spuntino", "cena"];
-const QUOTA_PASTO = { colazione: 0.22, mattina: 0.08, pranzo: 0.30, spuntino: 0.12, cena: 0.28 };
-const ICONA_PASTO = { colazione: "☕", mattina: "🍎", pranzo: "🍽️", spuntino: "🍌", cena: "🌙" };
-const NOME_PASTO = { colazione: "colazione", mattina: "spuntino", pranzo: "pranzo", spuntino: "pre-workout", cena: "cena" };
+// "sera": il sesto pasto, dopo cena, solo per chi lo sceglie nel questionario (con il nome che gli dà: «spuntino serale», «tisana e biscotti»…)
+const ORDINE_TEMPO = ["colazione", "mattina", "pranzo", "spuntino", "cena", "sera"];
+const ORDINE_BASE = ORDINE_TEMPO.filter(p => p !== "sera");   // i cinque pasti di sempre (chi non ha scelto niente)
+const QUOTA_PASTO = { colazione: 0.22, mattina: 0.08, pranzo: 0.30, spuntino: 0.12, cena: 0.28, sera: 0.07 };
+const ICONA_PASTO = { colazione: "☕", mattina: "🍎", pranzo: "🍽️", spuntino: "🍌", cena: "🌙", sera: "🌛" };
+const NOME_PASTO = { colazione: "colazione", mattina: "spuntino", pranzo: "pranzo", spuntino: "pre-workout", cena: "cena", sera: "spuntino serale" };
+const nomeSera = () => { const n = typeof leggiProfilo === "function" && String(leggiProfilo().nomeSera || "").trim(); return n ? n.charAt(0).toLowerCase() + n.slice(1) : NOME_PASTO.sera; };
+// gli spuntini (mattina, pomeriggio, dopo cena): ricette e quantità da spuntino
+const eSpuntino = (p) => p === "mattina" || p === "spuntino" || p === "sera";
+// dopo cena qualcosa di leggero e dolce (yogurt, frutta, una tisana con biscotti): niente uova, legumi, salumi, pesce o snack salati
+const NON_SERA = /uov|albume|tonno|bresaola|prosciutto|tacchino|pollo|salmone|sgombro|ceci|lenticch|fagiol|edamame|hummus|crackers|taralli|chips|feta|formaggio|pomodor|carot|cetriol|olive|caff|proteine vegetali|proteine in polvere|maltodestrine|gel energetico/i;
+const adattoSera = (nomi) => !NON_SERA.test([].concat(nomi).join("|"));
+const pastoRicetta = (p) => p === "mattina" || p === "sera" ? "spuntino" : p;   // le ricette della mattina e del dopo cena sono gli spuntini
 // Il pomeriggio è "pre-workout" nei giorni di sport e "merenda" nei giorni di riposo (se si passa la data)
-const nomePasto = (p, data) => p === "spuntino" && data && !preSera(data) ? "merenda" : p === "mattina" && data && preMattina(data) ? "pre-workout" : (NOME_PASTO[p] || p);   // «merenda»: non si confonde con lo spuntino della mattina
+const nomePasto = (p, data) => p === "sera" ? nomeSera() : p === "spuntino" && data && !preSera(data) ? "merenda" : p === "mattina" && data && preMattina(data) ? "pre-workout" : (NOME_PASTO[p] || p);   // «merenda»: non si confonde con lo spuntino della mattina
 const NomePasto = (p, data) => { const n = nomePasto(p, data); return n.charAt(0).toUpperCase() + n.slice(1); };
 // giorno con sport: lo spuntino del pomeriggio è il pre-workout
 const conSport = (data) => sportDelTipo(giornoDiario(data).tipo).some(id => id !== "camminata");   // una semplice camminata non cambia i pasti (niente pre-workout)
@@ -28,7 +37,7 @@ const orarioAllen = (data) => {
 
 // -------- I tuoi orari dei pasti (Profilo) --------
 // ore decimali (13.5 = 13:30); senza orari salvati valgono questi, quelli di sempre
-const ORARI_DEFAULT = { colazione: 8, mattina: 11, pranzo: 13.5, spuntino: 16, cena: 20.5 };
+const ORARI_DEFAULT = { colazione: 8, mattina: 11, pranzo: 13.5, spuntino: 16, cena: 20.5, sera: 22.5 };
 function orariPasti() {
   const o = (typeof leggiProfilo === "function" && leggiProfilo().orari) || {};
   const out = {}; ORDINE_TEMPO.forEach(p => { out[p] = typeof o[p] === "number" ? o[p] : ORARI_DEFAULT[p]; });
@@ -96,7 +105,7 @@ const postWorkout = (data, pasto) => pastiPost(data).includes(pasto);
 function momentiTutti(data) {
   // i pasti che fai (questionario/Profilo); senza scelta tutti e cinque. Un pasto che quel giorno ha già qualcosa resta comunque
   const scelti = typeof leggiProfilo === "function" && leggiProfilo().pasti;
-  if (!Array.isArray(scelti) || !scelti.length) return ORDINE_TEMPO;   // lo spuntino del pomeriggio c'è sempre, anche nei giorni di riposo (se lo salti resta tratteggiato)
+  if (!Array.isArray(scelti) || !scelti.length) return ORDINE_BASE;   // lo spuntino del pomeriggio c'è sempre, anche nei giorni di riposo (se lo salti resta tratteggiato)
   const conCibo = new Set(((leggiDiarioSolaLettura()[data] || {}).pasti || []).map(p => p.pasto));
   return ORDINE_TEMPO.filter(p => scelti.includes(p) || conCibo.has(p));
 }
@@ -814,7 +823,7 @@ function punteggioPasto(t, T) {
 const FAMIGLIE_DOLCI = [["pancake", /pancake/i], ["rolls", /cinnamon/i], ["bread", /banana bread/i], ["brownie", /brownie/i]];
 const famigliaDolce = (r) => { const f = FAMIGLIE_DOLCI.find(([, re]) => re.test(r.nome)); return f ? f[0] : null; };
 function dolciConsigliati(data, pasto) {
-  if (!["colazione", "mattina", "spuntino"].includes(pasto)) return [];
+  if (!["colazione", "mattina", "spuntino", "sera"].includes(pasto)) return [];
   const T = targetResiduoPasto(data, pasto);
   if (T.kcal < 120) return [];
   const migliori = {};
@@ -836,7 +845,7 @@ function ricetteInCasa(data, pasto, n = 3) {
   if (T.kcal < 120) return [];
   const viste = new Set();
   return ricette
-    .filter(r => r.pasto === (pasto === "mattina" ? "spuntino" : pasto) && !viste.has(r.nome) && viste.add(r.nome))
+    .filter(r => r.pasto === pastoRicetta(pasto) && !viste.has(r.nome) && viste.add(r.nome))
     .filter(r => !ricettaEsclusa(r))
     .map(r => ({ r, a: analizzaDispensa(r._orig || r, pantry) }))
     .filter(x => x.a.matched >= 2 && x.a.mancanti.length <= 1)
@@ -853,9 +862,9 @@ function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
   const basiOggi = giornoDiario(data).pasti.map(p => rilevaBaseProt(p)).filter(Boolean);
   const viste = new Set();
   return ricette
-    .filter(r => (r.pasto === (pasto === "mattina" ? "spuntino" : pasto) || (pasto === "colazione" && r.pasto === "spuntino" && r.preworkout && preColazione(data))) && !viste.has(r.nome) && viste.add(r.nome))
+    .filter(r => (r.pasto === pastoRicetta(pasto) || (pasto === "colazione" && r.pasto === "spuntino" && r.preworkout && preColazione(data))) && !viste.has(r.nome) && viste.add(r.nome))
     .filter((r, i, arr) => pasto === "colazione" ? !preColazione(data) || r.preworkout || !PESANTI_PRE.test(((r._orig || r).ingredienti || []).map(x => x.nome).join("|"))   // prima di allenarti: niente semi, frutta secca, burri, avocado
-      : !preWorkout(data, pasto) ? (pasto === "mattina" ? !r.preworkout : true) : (!arr.some(x => x.preworkout) || r.preworkout))
+      : !preWorkout(data, pasto) ? (pasto === "sera" ? !r.preworkout && adattoSera(((r._orig || r).ingredienti || []).map(x => x.nome)) : pasto === "mattina" ? !r.preworkout : true) : (!arr.some(x => x.preworkout) || r.preworkout))
     .filter(r => !ricettaEsclusa(r))
     .map(r => {
       const ps = porzioneSuMisura(r, T);
@@ -1051,7 +1060,7 @@ function aggiungiAlimentoAlPasto(data, pasto, nome, grammi) {
   return g.pasti.length - 1;
 }
 function aggiungiRicettaIn(data, pasto, nomeRicetta) {
-  const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === (pasto === "mattina" ? "spuntino" : pasto)) || ricette.find(x => x.nome === nomeRicetta);
+  const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === pastoRicetta(pasto)) || ricette.find(x => x.nome === nomeRicetta);
   if (!r) return -1;
   const ps = porzioneSuMisura(r, targetResiduoPasto(data, pasto));
   const g = giornoDiario(data);
@@ -1159,7 +1168,7 @@ function ideeCosaAggiungere(data, p, m, usate, basiC, basiP) {
   const T = targetData(data), Tp = targetPastoDiario(data, p), pre = preWorkout(data, p);
   if (m.kcal < 120 || sopraKcal(m)) return [];
   const mP = m.proteine > 10, mC = m.carboidrati > 15, mG = m.grassi > 8;
-  const spuntino = p === "mattina" || p === "spuntino";
+  const spuntino = eSpuntino(p);
   const ci = (t) => t.kcal <= m.kcal + 15 && t.carboidrati <= m.carboidrati + 1 && t.grassi <= m.grassi + 1 && t.kcal <= Tp.kcal * 1.1 + 15 && !(pre && t.grassi > 6) && !(spuntino && t.kcal > 300);   // gli spuntini restano spuntini
   const pool = ricetteConsigliate(data, p, 14).filter(x => !ricettaEsclusa(x.r) && !usate.has(x.r.nome) && ci(x.tot));
   pool.forEach(x => { const o = x.r._orig || x.r, c = rilevaBaseCarbo(o), pr = rilevaBaseProt(o); x._pun = (mP ? x.tot.proteine : 0) + (mC && !mP ? x.tot.carboidrati : 0) + (mG && !mP && !mC ? x.tot.grassi * 2 : 0) - (c && basiC.has(c) ? 1000 : 0) - (pr && basiP.has(pr) ? 25 : 0); });
@@ -1269,7 +1278,8 @@ function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = ()
   const A = window.ALIMENTI || {};
   const pre = preWorkout(data, pasto);
   const chiave = pasto === "principale" ? "principale" : pre ? "pre" : (pasto === "pranzo" || pasto === "cena") ? "principale" : pasto === "colazione" ? "colazione" : "spuntino";
-  const lista = PIATTI_COMPOSTI[chiave].filter(t => !scarta(t) && [t.P, t.C, t.F, t.V && t.V[0]].filter(Boolean).every(n => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n))));
+  const lista0 = PIATTI_COMPOSTI[chiave].filter(t => !scarta(t) && [t.P, t.C, t.F, t.V && t.V[0]].filter(Boolean).every(n => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n))));
+  const leggeri = pasto === "sera" ? lista0.filter(t => adattoSera([t.P, t.C, t.F, t.V && t.V[0]].filter(Boolean))) : lista0, lista = leggeri.length ? leggeri : lista0;   // dopo cena: solo quelli leggeri, se ce ne sono
   if (!lista.length) return null;
   const costruisci = (t) => {
     const per = (n, g, i) => A[n][i] * g / 100;
@@ -1376,12 +1386,12 @@ function completaProteine(data, slot) {
       prova(g => { for (const p of g.pasti) { if (!(slot.has(p.pasto) && p.auto)) continue; for (const i of p.ingredienti || []) { const a = A[i.nome];
         if (a && a[1] >= 15 && a[3] <= 4 && i.unita === "g" && i.qta + 10 <= (MAX[i.nome] || 250)) { i.qta += 10; return true; } } } return false; })
       // 2) yogurt greco in uno spuntino o a colazione
-      || prova(g => { const n = primoNonEscluso(["Yogurt greco 0%", "Skyr", "Yogurt di soia", "Edamame"]); if (!n) return false; const p = g.pasti.find(x => slot.has(x.pasto) && x.auto && ["spuntino", "mattina", "colazione"].includes(x.pasto) && !(x.ingredienti || []).some(i => i.nome === n)); if (!p) return false; p.ingredienti.push({ nome: n, qta: 50, unita: "g", lock: true, cercato: n }); return true; })
+      || prova(g => { const n = primoNonEscluso(["Yogurt greco 0%", "Skyr", "Yogurt di soia", "Edamame"]); if (!n) return false; const p = g.pasti.find(x => slot.has(x.pasto) && x.auto && ["spuntino", "mattina", "sera", "colazione"].includes(x.pasto) && !(x.ingredienti || []).some(i => i.nome === n)); if (!p) return false; p.ingredienti.push({ nome: n, qta: 50, unita: "g", lock: true, cercato: n }); return true; })
       // 3) albume a pranzo o a cena
       || prova(g => { const n = primoNonEscluso(["Albume", "Tofu", "Lenticchie cotte"]); if (!n) return false; const p = g.pasti.find(x => slot.has(x.pasto) && x.auto && ["cena", "pranzo"].includes(x.pasto) && !(x.ingredienti || []).some(i => i.nome === n)); if (!p) return false; p.ingredienti.push({ nome: n, qta: n === "Lenticchie cotte" ? 80 : 60, unita: "g", lock: true, cercato: n }); return true; })
       // 4) senza latticini o senza uova (vegani, intolleranti): proteine in polvere a colazione o in uno spuntino (20 g, al massimo 30)
       || (senzaLatteUova && prova(g => { const n = primoNonEscluso(["Proteine vegetali in polvere (pisello)", "Proteine in polvere"]); if (!n) return false;
-        for (const p of g.pasti) { if (!(slot.has(p.pasto) && p.auto && ["colazione", "mattina", "spuntino"].includes(p.pasto))) continue;
+        for (const p of g.pasti) { if (!(slot.has(p.pasto) && p.auto && ["colazione", "mattina", "spuntino", "sera"].includes(p.pasto))) continue;
           const i = (p.ingredienti || []).find(x => x.nome === n);
           const fatto = !i ? (p.ingredienti.push({ nome: n, qta: 20, unita: "g", lock: true, cercato: n }), true) : i.qta + 10 <= 30 ? (i.qta += 10, true) : false;
           if (!fatto) continue;
@@ -1495,12 +1505,12 @@ function aggiungiContorno(data, slot) {
   for (let giro = 0; giro < 3; giro++) {
     const m = mancaData(data); if (m.kcal <= Math.max(80, T.kcal * 0.05)) return;
     const tipo = m.carboidrati >= 20 ? "carbo" : m.proteine >= 15 ? "prot" : null; if (!tipo) return;
-    const g = giornoDiario(data), ordine = ["pranzo", "cena", "colazione", "mattina", "spuntino"];
+    const g = giornoDiario(data), ordine = ["pranzo", "cena", "colazione", "mattina", "spuntino", "sera"];
     // le proteine in più vanno in un pasto che non ha già una sua fonte (niente pollo aggiunto agli edamame o al tofu)
     const haFonte = (x) => (x.ingredienti || []).some(i => { const a = A[i.nome]; return a && a[1] >= 8 && a[1] * 4 >= a[0] * 0.25 && grammiIng(i) >= 60; });
     const p = ordine.map(s => g.pasti.find(x => x.pasto === s && slot.has(s) && x.auto && !pastoPassato(data, s) && (tipo !== "prot" || !haFonte(x)))).find(Boolean); if (!p) return;
     const grande = p.pasto === "pranzo" || p.pasto === "cena", lista = CONTORNI[tipo][grande ? "principale" : "piccolo"];
-    const scelta = lista.find(([n]) => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n)) && !(p.ingredienti || []).some(i => i.nome === n)); if (!scelta) return;
+    const scelta = lista.find(([n]) => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n)) && !(p.ingredienti || []).some(i => i.nome === n) && (p.pasto !== "sera" || adattoSera(n))); if (!scelta) return;
     const [nome, max] = scelta, a = A[nome], idx = tipo === "carbo" ? 2 : 1, manca = tipo === "carbo" ? m.carboidrati : m.proteine;
     let gr = Math.min(max, Math.floor(manca / (a[idx] / 100) / 10) * 10, Math.floor(m.kcal / (a[0] / 100) / 10) * 10);
     const copia = JSON.parse(JSON.stringify(g));
@@ -1673,7 +1683,7 @@ const FONTI_PROT_PASTO = {
   pre: [["Yogurt greco 0%", 200], ["Skyr", 200], ["Fesa di tacchino", 80], ["Proteine in polvere", 30], ["Proteine vegetali in polvere (pisello)", 30]],   // prima dell'allenamento: niente grassi né fibre
   principale: [["Petto di pollo", 200], ["Fesa di tacchino", 200], ["Tonno in scatola al naturale", 120], ["Gamberi", 250], ["Merluzzo", 250], ["Nasello", 250], ["Albume", 250], ["Tofu", 200], ["Manzo magro", 150], ["Bresaola", 80]],
 };
-const tipoFontiPasto = (data, p) => p === "colazione" ? "colazione" : (p === "mattina" || p === "spuntino") ? (preWorkout(data, p) ? "pre" : "spuntino") : "principale";
+const tipoFontiPasto = (data, p) => p === "colazione" ? "colazione" : eSpuntino(p) ? (preWorkout(data, p) ? "pre" : "spuntino") : "principale";
 const macroDi = (nome, g) => macroAlimento(nome, g);   // le kcal promesse = quelle registrate (4/4/9, come calcolaMacro)
 // quanti grammi di un alimento stanno in ciò che resta (grassi e carboidrati mai oltre; le calorie di poco)
 function grammiCheCi(nome, voluti, massimo, m) {
@@ -1751,7 +1761,7 @@ function alimentiIdeaHTML(c) {
     const m0 = mancaData(c.data), T = targetPastoDiario(c.data, c.pasto);
     const m = { kcal: Math.min(m0.kcal, T.kcal + 20), proteine: m0.proteine, carboidrati: Math.min(m0.carboidrati, T.carboidrati + 3), grassi: Math.min(m0.grassi, T.grassi + 1) };
     if (m.kcal < 40) return `<p class="hint">Niente che ci stia nelle kcal che restano</p>`;
-    const pre = preWorkout(c.data, c.pasto), sp = c.pasto === "mattina" || c.pasto === "spuntino";
+    const pre = preWorkout(c.data, c.pasto), sp = eSpuntino(c.pasto);
     let mosse = mosseSingole(c.data, c.pasto, m, false);
     // la quota di questo pasto può essere piccola (restano altri pasti da fare): soglie più basse, poi i piccoli completamenti
     if (!mosse.length && m.carboidrati >= 5) mosse = mosseCarbo(c.data, c.pasto, m);
@@ -1840,7 +1850,7 @@ function cosaAggiungereHTML() {
   const poche = mReale.kcal >= 25 && mReale.kcal <= 220 && !sopraKcal(mReale);   // restano poche kcal: piccoli completamenti (olio, frutta secca, yogurt…)
   const righe = momenti.map(p => {
     const scritto = gOggi.some(x => x.pasto === p);
-    const kcalPasto = gOggi.filter(x => x.pasto === p).reduce((a, x) => a + (x.kcal || 0), 0), spuntino = p === "mattina" || p === "spuntino";
+    const kcalPasto = gOggi.filter(x => x.pasto === p).reduce((a, x) => a + (x.kcal || 0), 0), spuntino = eSpuntino(p);
     const sopra = -m.carboidrati > Math.max(10, targetData(data).carboidrati * 0.05) || -m.grassi > Math.max(5, targetData(data).grassi * 0.1) || sopraKcal(m);
     const mp = m.proteine > 10;
     const piccolo = !sopra && (m.kcal <= 200 || Math.max(m.proteine, m.carboidrati, m.grassi) <= 25);   // poche kcal o pochi grammi da colmare: bastano ingredienti singoli, per ogni macro che manca
@@ -1943,7 +1953,7 @@ function macroCompattoHTML(nome, k, val, tot, pct) {
   const sopra = Math.round(val) > tot;                    // contorno bianco e "+N" appena superi l'obiettivo, anche di poco
   const piu = sopra ? Math.round(val) - tot : 0;
   return `<div class="mc">
-    <div class="mc-top"><span><i class="dot-${k}"></i>${nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b${piu ? ' class="mc-sopra"' : ""}>${Math.round(val)}</b>/${tot} g</span></div>
+    <div class="mc-top"><span><i class="dot-${k}"></i>${nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b>${Math.round(val)}</b>/${tot}<span class="mc-u"> g</span></span></div>
     <div class="mc-bar"><span class="mb-${k}${sopra ? " sopra" : ""}" style="width:${w}%"></span></div>
   </div>`;
 }
@@ -2093,8 +2103,14 @@ function renderOggi() {
       <div class="oggi-azioni">
         ${(() => {   // un solo pulsante alla volta: se c'è qualcosa da riempire "Compila", altrimenti "Cambia menu" (anche se i pasti li hai scritti tu)
           if (data < oggiISO()) return "";
-          const vuoto = momentiGiorno(data).some(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s));
-          if (vuoto) return `<button class="btn-link" data-compila-giorno>✨ Compila i pasti ${data === oggiISO() ? "di oggi" : "del giorno"}</button>`;
+          // un pasto vuoto, ma solo se resta abbastanza da riempirlo (con la giornata già in linea «Compila» non farebbe niente)
+          const vuoto = momentiGiorno(data).some(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s)) && (!g.pasti.length || mancaData(data).kcal >= 80);
+          if (vuoto) {   // la funzione più utile dell'app: un pulsante pieno; la prima volta (finché non lo usi) anche due righe che dicono cosa fa
+            const n = momentiGiorno(data).filter(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s)).length;
+            let nuovo = true; try { nuovo = localStorage.getItem("mp_compila_usato") !== "1"; } catch (e) {}
+            return `<div class="compila-box">${nuovo ? `<p class="compila-spiega">Riempio ${n === 1 ? "il pasto vuoto" : `i ${n} pasti vuoti`} con piatti che stanno ${g.pasti.length ? `nelle <b>${Math.max(0, Math.round(mancaData(data).kcal))} kcal</b> che restano` : `nelle tue <b>${targetData(data).kcal} kcal</b>`} e nei tuoi macro. Poi puoi cambiare tutto.</p>` : ""}
+              <button class="btn block btn-compila" data-compila-giorno>✨ Compila i pasti ${data === oggiISO() ? "di oggi" : "del giorno"}</button></div>`;
+          }
           if (!g.pasti.some(x => !pastoPassato(data, x.pasto))) return "";
           return `<button class="btn-link btn-cambia" data-rigenera-giorno>♺︎ Cambia menu del giorno</button>`;
         })()}
@@ -2263,6 +2279,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (e.target.closest("[data-compila-giorno]")) {
+      try { localStorage.setItem("mp_compila_usato", "1"); } catch (e) {}   // usato una volta: la spiegazione non serve più
+      if (typeof vibra === "function") vibra();
       const r = pianificaSettimana(dataDiario, dataDiario);
       renderOggi(); if (r.messe) avviso("✓ Pasti pronti", "Annulla", () => { annullaPianificazione(r.prima); renderOggi(); });
       return;

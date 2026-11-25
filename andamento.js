@@ -134,7 +134,7 @@ const IDEE_CARBO = [["pane", "Pane integrale"], ["riso", "Riso basmati cotto"], 
 const IDEE_FIBRE = [["verdura", "Zucchine"], ["legumi", "Lenticchie cotte"], ["frutta", "Mela"], ["cereali integrali", "Pane integrale"], ["riso integrale", "Riso integrale cotto"]];
 // il nome di un pasto nel periodo: la merenda è «pre-workout» solo se lo era nella maggior parte dei giorni
 function nomePastoPeriodo(p, giorni) {
-  if (p !== "spuntino" && p !== "mattina") return nomePasto(p);
+  if (p !== "spuntino" && p !== "mattina") return nomePasto(p);   // (anche il dopo cena: il suo nome)
   const pre = giorni.filter(g => typeof preWorkout === "function" && preWorkout(g.data, p)).length;
   return pre > giorni.length / 2 ? "pre-workout" : p === "spuntino" ? "merenda" : "spuntino";
 }
@@ -169,7 +169,7 @@ function analisi(giorni, pesiPeriodo) {
       const val = compl.map(g => sommaMacro(g.pasti.filter(x => x.pasto === p)).proteine);
       return { p, gap: media(compl.map(g => g.T.proteine * quotaPasto(g.data, p))) - media(val), val: media(val) };
     }).sort((a, b) => b.gap - a.gap)[0];
-    const idea = ideeCibi(IDEE_PROTEINE[perSlot.p] || IDEE_PROTEINE.pranzo);
+    const idea = ideeCibi(IDEE_PROTEINE[perSlot.p] || IDEE_PROTEINE[perSlot.p === "sera" ? "mattina" : "pranzo"]);
     out.push({ liv: "warn", peso: 9, testo: `Proteine sotto l'obiettivo in <b>${protBasse.length} giorni su ${compl.length}</b>. Il pasto più povero è <b>${nomePastoPeriodo(perSlot.p, compl)}</b> (media ${Math.round(perSlot.val)} g)${idea ? `: prova ad aggiungere ${idea}` : ""}.` });
   } else out.push({ liv: "ok", peso: 5, testo: `Proteine centrate in <b>${compl.length - protBasse.length} giorni su ${compl.length}</b>: ottimo per proteggere i muscoli.` });
 

@@ -91,6 +91,9 @@ const CATEGORIE_CIBO = {
   soia: /soia|tofu|edamame|tempeh|miso|tamari|teriyaki|burger vegetale|hoisin/,
   legumi: /ceci|fagiol|lenticchi|piselli|fave|cicerchie|lupini|hummus|falafel|pasta di legumi|edamame|zuppa di legumi|minestrone|baked beans|burger vegetale/,
   funghi: /fungh|porcini|champignon/,
+  // le alternative vegetali a carne, pesce e latticini (per chi non le vuole proposte). Non i legumi, l'edamame o la salsa di soia,
+  // e nemmeno le bevande vegetali da sole: in una torta o un porridge sono un ingrediente come un altro
+  sostitutiVeg: /tofu|tempeh|seitan|yogurt di soia|proteine vegetali|shake vegetale|(burger|hamburger|polpette|cotolett[ae]|affettat[oi]|formaggi?o?|panna) vegetal|soia texturizzata|mopur|muscolo di grano/,
   piccante: /piccante|peperoncino|sriracha|harissa|diavola|wasabi|curry|kimchi|garam masala/,
   miele: /miele/,
   // bevande alcoliche (per chi non beve alcol): non le ricette, che non ne contengono
@@ -116,7 +119,8 @@ const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/ta
 function categorieEscluse(pf = leggiProfilo()) {
   const e = pf.esclusioni || {};
   const nm = (e.nonMangio || []).flatMap(c => c === "pesce" ? ["pesce", "crostacei"] : [c]);   // «non mangio pesce» vale anche per gamberi, cozze, polpo…
-  return new Set([...(ESCLUSIONI_DIETA[e.dieta] || []), ...(e.allergie || []), ...nm]);
+  const veg = e.senzaVeg && !e.dieta ? ["sostitutiVeg"] : [];   // «niente piatti vegani» vale solo per chi non è vegetariano o vegano
+  return new Set([...(ESCLUSIONI_DIETA[e.dieta] || []), ...(e.allergie || []), ...nm, ...veg]);
 }
 // cibi scritti a mano («kiwi», «sedano»): minuscole e senza accenti; per le parole lunghe senza la vocale finale, così «fragola» esclude anche «Fragole»
 const normCibo = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
@@ -158,6 +162,7 @@ function motivoEscluso(nome) {
   if (nonMangio) return `contiene ${NOMI_CATEGORIA[nonMangio] || nonMangio}`;
   const w = paroleScritte(pf).find(w => parolaTrova(w, nome));
   if (w) return radiceCibo(w).length >= 3 && normCibo(nome).startsWith(radiceCibo(w)) ? "l'hai escluso tu" : `contiene ${normCibo(w)}`;   // «Kiwi»: non «contiene kiwi»
+  if (e.senzaVeg && !e.dieta && tocca("sostitutiVeg")) return "alternativa vegetale";
   return e.dieta === "vegana" ? "non è vegano" : e.dieta === "vegetariana" ? "non è vegetariano" : "escluso";
 }
 // una ricetta è esclusa se uno dei suoi ingredienti lo è (il nome della ricetta non conta: «pancake» senza uova restano)
@@ -2176,8 +2181,8 @@ function orariSportHTML(pf) {
   const usati = [...new Set(leggiTipi().flatMap(t => sportDelTipo(t)))], sport = pf.sport.filter(sp => usati.includes(sp.id) && sp.id !== "camminata");
   if (!usati.length) return `<p class="hint">Nella tua settimana tipo non ci sono allenamenti.</p>`;
   if (!sport.length) return `<p class="hint">La camminata è un'attività leggera: i pasti restano quelli di sempre (niente pre-workout). Le sue calorie si aggiungono alla giornata.</p>`;
-  const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_TEMPO;
-  const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena" };
+  const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_BASE;
+  const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena", sera: "lo spuntino dopo cena" };
   const oraDi = (sp) => typeof sp.ora === "number" ? sp.ora : typeof pf.allenOra === "number" ? pf.allenOra : null;
   const riga = (sp) => { const h = oraDi(sp); let t = "";
     if (h !== null) { const pre = spuntinoPreDa(scelti, o, h), dopo = scelti.find(p => o[p] >= h);
@@ -2225,9 +2230,9 @@ document.addEventListener("change", (e) => {
 document.addEventListener("change", (e) => {
   if (!e.target.matches || !e.target.matches("[data-orario]")) return;
   const nuovi = {}; document.querySelectorAll("[data-orario]").forEach(i => { const h = oraDa(i.value); if (h !== null) nuovi[i.dataset.orario] = h; });
-  const seq = ORDINE_TEMPO.map(p => nuovi[p]);
+  const seq = ORDINE_TEMPO.filter(p => p !== "sera" || p in nuovi).map(p => nuovi[p]);   // il dopo cena solo per chi ce l'ha
   if (seq.some(h => h === undefined) || seq.some((h, i) => i && h <= seq[i - 1])) { avviso("Gli orari dei pasti devono essere in ordine, dalla colazione alla cena"); riapriProfilo(); return; }
-  const pf = leggiProfilo(); pf.orari = nuovi; salvaProfilo(pf);
+  const pf = leggiProfilo(); pf.orari = Object.assign({}, pf.orari, nuovi); salvaProfilo(pf);
   if (typeof renderOggi === "function") renderOggi();
 });
 function apriBackup() {
@@ -2313,7 +2318,7 @@ function apriProfilo() {
     <h4>I tuoi orari</h4>
     <p class="campo-nota">Servono a capire quale pasto è il prossimo e quando un pasto è passato (si spunta da solo).</p>
     ${(() => { const o = orariPasti(), hh = (h) => fmtOra(h).padStart(5, "0");
-      return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].map(([k, l]) =>
+      return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].concat((pf.pasti || []).includes("sera") ? [["sera", esc(NomePasto("sera"))]] : []).map(([k, l]) =>
         `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
     ${orariSportHTML(pf)}
     <h4>Obiettivi che ne risultano</h4>
@@ -2346,6 +2351,7 @@ function esclusioniHTML(pf) {
   const scritte = (gr) => (e[gr] || []).map((w, i) => `<button class="chip attivo" data-escl-togli="${gr}|${i}" aria-label="Togli ${esc(w)}">✍️ ${esc(w)} ✕</button>`).join("");
   const campo = (gr, ph) => `<div class="escl-altro"><input class="qta-input" id="escl-altro-${gr}" data-escl-campo="${gr}" type="text" maxlength="30" placeholder="${ph}"><button class="btn lib-piu" data-escl-aggiungi="${gr}" aria-label="Aggiungi">＋</button></div>`;
   return `<p class="hint">Che alimentazione segui? <em>(facoltativo · tocca di nuovo per togliere)</em></p><div class="chips chips-capo">${[["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, e.dieta === k)).join("")}</div>
+    ${e.dieta ? "" : `<p class="hint">Ti proponiamo anche piatti vegani? <em>(con tofu, tempeh, seitan, yogurt di soia)</em></p><div class="chips chips-capo">${[["si", "Sì", "👍"], ["no", "No", "🙅"]].map(([k, l, ic]) => chip("senzaVeg", k, l, ic, (e.senzaVeg ? "no" : "si") === k)).join("")}</div>`}
     <p class="hint">Allergie o intolleranze</p><div class="chips chips-capo">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}${scritte("allergieAltre")}</div>
     ${campo("allergieAltre", "Altra allergia (es. sedano)")}
     <p class="hint">Cibi che non mangi</p><div class="chips chips-capo">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}${scritte("altri")}</div>
@@ -2373,6 +2379,7 @@ document.addEventListener("click", (e) => {
   if (es) {
     const [gr, k] = es.dataset.escl.split("|"), x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {});
     if (gr === "dieta") { if (x.dieta === k) delete x.dieta; else x.dieta = k; }   // un secondo tocco la toglie
+    else if (gr === "senzaVeg") { if (k === "no") x.senzaVeg = true; else delete x.senzaVeg; }
     else { const l = x[gr] = (x[gr] || []).slice(), p = l.indexOf(k); if (p > -1) l.splice(p, 1); else l.push(k); }
   }
   if (ic) pf.iconaApp = ic.dataset.persIcona;

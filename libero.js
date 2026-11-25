@@ -1041,7 +1041,7 @@ function sostituisciPastoCon(c, nomeRicetta) {
 }
 // Anteprima di una ricetta scelta dalle idee: il piatto con la porzione giusta e, se si può, la sua versione più fit (prima di aggiungerla)
 function anteprimaRicetta(c, nomeRicetta) {
-  const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === (c.pasto === "mattina" ? "spuntino" : c.pasto)) || ricette.find(x => x.nome === nomeRicetta);
+  const r = ricette.find(x => x.nome === nomeRicetta && x.pasto === pastoRicetta(c.pasto)) || ricette.find(x => x.nome === nomeRicetta);
   if (!r) return null;
   const ps = porzioneSuMisura(r, targetResiduoPasto(c.data, c.pasto));
   ps.kMisura = ps.k;   // la porzione su misura per le kcal che restano: si parte da 1 e si sale se serve
@@ -1385,7 +1385,7 @@ function salvaPiattoComeRicetta(c, nomeScritto) {
   const custom = leggiCustom();
   const esiste = ricette.some(r => r.nome === nome) && !custom.some(r => r.nome === nome);
   if (esiste) { avviso("Esiste già una ricetta con questo nome. Cambialo."); return false; }
-  const pasto = c.pasto === "mattina" ? "spuntino" : (c.pasto || "spuntino");
+  const pasto = pastoRicetta(c.pasto || "spuntino");
   const ingredienti = c.items.map(it => {
     const u = unitaDi(it), gu = grammiPerUnita(it.nome, u);
     if (gu) return { nome: it.nome, qta: Math.max(0.5, Math.round(it.qta / gu * 2) / 2), unita: u };

@@ -12,6 +12,11 @@ const QZ_SPORT = [["CrossFit", "🏋️", "crossfit"], ["Sala pesi", "💪", "pe
   ["Ballo", "💃", "ballo"], ["Equitazione", "🐴", "equitazione"], ["Sport di squadra", "🏐", "squadra"], ["Nessuno", "🛋️", "nessuno"]];
 // sport che l'app non ha di serie: si aggiungono con un'intensità adatta (kcal al minuto per kg)
 const QZ_SPORT_NUOVI = { nuoto: ["Nuoto", "🏊‍♀️", 0.09], yoga: ["Yoga/Pilates", "🧘‍♀️", 0.05], padel: ["Padel/Tennis", "🎾", 0.08], squadra: ["Sport di squadra", "🏐", 0.085] };
+// sport scritti a mano («Arrampicata»): l'app non sa quanto si consuma, lo dice chi risponde. [chiave, etichetta, emoji, kcal al minuto per kg, come…]
+const QZ_FATICA = [["leggero", "Leggero", "🙂", 0.05, "come yoga o una passeggiata"], ["medio", "Medio", "😅", 0.075, "come la bici"], ["intenso", "Intenso", "🥵", 0.1, "come CrossFit"]];
+const qzFaticaDi = (kMin) => kMin < 0.0625 ? "leggero" : kMin < 0.0875 ? "medio" : "intenso";
+// etichetta di uno sport del questionario (anche di uno scritto a mano): [nome, emoji, chiave]
+const qzSportInfo = (x) => QZ_SPORT.find(y => y[2] === x) || (() => { const a = (qz && qz.R.sportAltri || []).find(s => s.x === x); return a ? [a.nome, "🏅", x] : [x, "", x]; })();
 const QZ_PASTI = [["Colazione", "☕", "colazione"], ["Spuntino", "🍎", "mattina"], ["Pranzo", "🍝", "pranzo"], ["Merenda", "🥪", "spuntino"], ["Cena", "🍲", "cena"]];
 const QZ_GIORNI = [["Lunedì", "L", 0], ["Martedì", "M", 1], ["Mercoledì", "M", 2], ["Giovedì", "G", 3], ["Venerdì", "V", 4], ["Sabato", "S", 5], ["Domenica", "D", 6]];
 // [etichetta, emoji, valore, deficit %]; «definire»: taglio più morbido e più proteine, per perdere grasso tenendo i muscoli
@@ -24,6 +29,8 @@ const QZ_ORA_ALLEN = [["Presto", "🌅", "prima delle 8", 7], ["Mattina", "☀�
 const qzFasciaDi = (h) => typeof h === "number" ? QZ_ORA_ALLEN.reduce((b, f) => Math.abs(f[3] - h) < Math.abs(b[3] - h) ? f : b)[3] : null;
 const QZ_DIETA = [["Vegetariana", "🥕", "vegetariana"], ["Vegana", "🌱", "vegana"]];
 const QZ_NESSUNO = "nessuno";
+// nomi di diete (non di cibi): scritti in «Altro» non escludono niente
+const QZ_DIETE_NOTE = /cheto|keto|paleo|zona|dukan|digiuno|low ?carb|fodmap|mediterran|flexitar|pescetar|crudist|fruttar|alcalin|sirt|ipocalor|iperprotei|chetogen/;
 
 const senzaSport = (R) => !(R.sport || []).length || (R.sport || []).includes(QZ_NESSUNO);
 // tipo: t testo · n numero · u una scelta · m più scelte · orari · colore · nomeApp · riepilogo
@@ -43,9 +50,13 @@ const QZ = [
     nota: "Più o meno: serve a calcolare quanto consumi. Se un giorno è diverso (es. un'uscita lunga), lo cambi in Oggi toccando lo sport del giorno." },
   { k: "oraAllen", t: "ora", e: "🕒", q: "Quando ti alleni, di solito?", salta: (R) => senzaSport(R) || !qzSportConOra(R).length,   // solo camminate: non cambiano i pasti, l'ora non serve
     nota: "Non serve l'ora esatta, basta il momento della giornata. Serve ad adattare i pasti: prima dell'allenamento uno più leggero, con i carboidrati che danno energia; dopo, proteine e carboidrati per recuperare. Se un giorno cambia, lo sistemi in Oggi." },
-  { k: "pasti", t: "m", e: "🍽️", q: "Quali pasti fai ogni giorno?", o: QZ_PASTI, req: 1 },
+  { k: "pasti", t: "m", e: "🍽️", q: "Quali pasti fai ogni giorno?", o: QZ_PASTI, req: 1, altro: "pastoAltro", altroPh: "Altro, dopo cena (es. spuntino serale)",
+    nota: "Se dopo cena mangi qualcosa (uno yogurt, una tisana con biscotti…), scrivilo sopra: diventa un pasto in più, con il suo orario." },
   { k: "orari", t: "orari", e: "⏰", q: "A che ora mangi, più o meno?", nota: "Servono a sapere qual è il prossimo pasto e quando un pasto è passato." },
-  { k: "dieta", t: "u", e: "🥗", q: "Segui un'alimentazione particolare?", o: QZ_DIETA, opz: 1, nota: "Se no, vai avanti. Tocca di nuovo per togliere la scelta." },
+  { k: "dieta", t: "u", e: "🥗", q: "Segui un'alimentazione particolare?", o: QZ_DIETA, opz: 1, altro: "dietaAltri", altroPh: "Altro (es. senza zucchero)",
+    nota: "Se no, vai avanti. Se scrivi «senza zucchero», i piatti con lo zucchero non ti vengono proposti. Diete come la chetogenica l'app non le segue: scrivi i cibi che eviti." },
+  { k: "piattiVeg", t: "u", e: "🌱", q: "Ti proponiamo anche piatti vegani?", o: [["Sì, volentieri", "👍", "si"], ["No, non fanno per me", "🙅", "no"]], salta: (R) => !!R.dieta,
+    nota: "Piatti con tofu, tempeh, seitan, yogurt di soia o proteine vegetali. Frittate, legumi e yogurt restano comunque." },
   { k: "allergie", t: "m", e: "⚠️", q: "Hai allergie o intolleranze?", o: [["Nessuna", "👍", QZ_NESSUNO]].concat(ALLERGIE.map(([v, l, e]) => [l, e, v])), excl: QZ_NESSUNO,
     altro: "allergieAltri", altroPh: "Altra allergia (es. sedano)",
     nota: "Le ricette con questi alimenti non ti verranno proposte. L'app riconosce gli alimenti dal nome e può sbagliare: controlla sempre gli ingredienti." },
@@ -73,15 +84,17 @@ function qzRisposteAttuali() {
   const e = pf.esclusioni || {};
   return {
     nome: pf.nome || "", sesso: pf.sesso || "", eta: pf.eta || "", altezza: pf.altezza || "", peso: pf.peso || "", obiettivo: ob, lavoro: lav,
-    sport: sport.length ? sport.map(daSport).filter(Boolean) : [QZ_NESSUNO],
+    sport: sport.length ? sport.map(s => daSport(s) || (pf.sport.some(x => x.id === s) ? "a:" + s : null)).filter(Boolean) : [QZ_NESSUNO],
+    sportAltri: sport.filter(s => !daSport(s)).map(s => pf.sport.find(x => x.id === s)).filter(Boolean).map(sp => ({ x: "a:" + sp.id, nome: sp.nome, f: qzFaticaDi(sp.kMin || 0.075) })),
     giorni: tipi.map((t, i) => sportDelTipo(t).length ? i : -1).filter(i => i >= 0),
-    settimana: Object.fromEntries(tipi.map((t, i) => [i, sportDelTipo(t).map(daSport).filter(Boolean)]).filter(([, l]) => l.length)),
-    durate: Object.fromEntries(pf.sport.filter(sp => !sp.nascosto).map(sp => [daSport(sp.id), sp.perKm ? (sp.km || 5) : (sp.min || 60)]).filter(([x]) => x)),
-    oreSport: Object.fromEntries(pf.sport.filter(sp => typeof sp.ora === "number").map(sp => [daSport(sp.id), sp.ora]).filter(([x]) => x)),
+    settimana: Object.fromEntries(tipi.map((t, i) => [i, sportDelTipo(t).map(s => daSport(s) || "a:" + s).filter(Boolean)]).filter(([, l]) => l.length)),
+    durate: Object.fromEntries(pf.sport.filter(sp => !sp.nascosto).map(sp => [daSport(sp.id) || "a:" + sp.id, sp.perKm ? (sp.km || 5) : (sp.min || 60)]).filter(([x]) => x)),
+    oreSport: Object.fromEntries(pf.sport.filter(sp => typeof sp.ora === "number").map(sp => [daSport(sp.id) || "a:" + sp.id, sp.ora]).filter(([x]) => x)),
     oraAllen: typeof pf.allenOra === "number" ? pf.allenOra : pf.allenOrario === "mattina" ? 7.5 : pf.allenOrario === "sera" ? 19 : "",   // l'ora esatta: rifacendo il questionario non cambia
-    pasti: Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_TEMPO.slice(),
+    pasti: Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_BASE.slice(),
+    pastoAltro: (pf.pasti || []).includes("sera") ? String(pf.nomeSera || "Spuntino serale") : "",
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, o[p]])),
-    dieta: e.dieta || "", nonMangioAltri: (e.altri || []).join(", "), allergieAltri: (e.allergieAltre || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
+    dieta: e.dieta || "", piattiVeg: e.senzaVeg ? "no" : "si", nonMangioAltri: (e.altri || []).join(", "), allergieAltri: (e.allergieAltre || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
     colore: pf.colore || "lilla", iconaApp: pf.iconaApp || "🌙", nomeApp: pf.nomeApp || "Sailor Fit",
   };
 }
@@ -121,6 +134,7 @@ function qzValido(q) {
   if (q.t === "n") { const n = parseFloat(String(v ?? "").replace(",", ".")); return n >= q.min && n <= q.max; }
   if (q.t === "t") return String(v || "").trim() !== "";
   if (q.t === "u") return !!v;
+  if (q.k === "sport" && (qz.R.sportAltri || []).some(a => !a.f)) return false;   // uno sport scritto a mano senza la fatica: non si sa quanto consuma
   if (q.t === "m") return !q.req || (v || []).length > 0;
   if (q.t === "ora") { const sp = qzSportConOra(qz.R); return sp.length > 1 ? sp.every(x => typeof (qz.R.oreSport || {})[x] === "number") : typeof v === "number"; }
   if (q.t === "durate") { qzDuratePronte(); return Object.values(qz.R.durate).every(v => v > 0); }
@@ -132,10 +146,11 @@ function qzValido(q) {
 // proteine e grassi di partenza in base a quanto ti alleni: senza sport non servono le quantità da palestra
 // camminata e yoga/pilates sono attività leggere: non servono le proteine di chi fa pesi o CrossFit
 const QZ_SPORT_LEGGERI = ["camminata", "yoga"];
+const qzLeggero = (R, s) => QZ_SPORT_LEGGERI.includes(s) || (R.sportAltri || []).some(a => a.x === s && a.f === "leggero");
 function qzMacroKg(R) {
-  const leggeri = !senzaSport(R) && R.sport.every(s => QZ_SPORT_LEGGERI.includes(s));
+  const leggeri = !senzaSport(R) && R.sport.every(s => qzLeggero(R, s));
   // contano i giorni con un allenamento vero: una camminata breve non chiede più proteine
-  const giorni = senzaSport(R) ? 0 : leggeri ? (R.giorni || []).length : (R.giorni || []).filter(g => { const l = R.settimana && R.settimana[g]; return !l || !l.length || l.some(s => !QZ_SPORT_LEGGERI.includes(s)); }).length;
+  const giorni = senzaSport(R) ? 0 : leggeri ? (R.giorni || []).length : (R.giorni || []).filter(g => { const l = R.settimana && R.settimana[g]; return !l || !l.length || l.some(s => !qzLeggero(R, s)); }).length;
   const protKg = giorni === 0 ? 1.3 : leggeri ? 1.4 : giorni <= 3 ? 1.6 : 1.8;   // tre allenamenti a settimana (o meno) non chiedono le proteine di chi si allena tutti i giorni
   const pk = R.obiettivo === "definire" && giorni > 0 ? Math.max(protKg, 2) : protKg;   // per definire servono più proteine, a tenere i muscoli
   // vegani: al massimo 1,6 g/kg. Con legumi e cereali di più non si arriva senza proteine in polvere a ogni pasto (e le ricette non ci starebbero)
@@ -167,11 +182,18 @@ function qzRender() {
   } else if (q.t === "u" || q.t === "m") {
     const sel = q.t === "m" ? (v || []) : (v ? [v] : []);
     h += `<div class="qz-sc ${q.k === "giorni" ? "qz-giorni" : ""}">${q.o.map((o, i) => `<button class="qz-b ${sel.includes(o[2]) ? "on" : ""}" data-qz-o="${i}">${o[1] ? `<span class="qz-e">${o[1]}</span>` : ""}<span>${esc(o[0])}</span></button>`).join("")}</div>`;
+    if (q.k === "sport") {   // sport scritti a mano: ognuno con quanto è faticoso
+      h += (R.sportAltri || []).map(a => `<div class="qz-altro-sp"><div class="qz-altro-t"><b>🏅 ${esc(a.nome)}</b><button class="qz-togli" data-qz-sp-togli="${esc(a.x)}" aria-label="Togli ${esc(a.nome)}">✕</button></div>
+        <p class="qz-pic">Quanto è faticoso?</p><div class="qz-fatica">${QZ_FATICA.map(([k, l, e]) => `<button class="qz-b qz-mini ${a.f === k ? "on" : ""}" data-qz-fatica="${esc(a.x)}|${k}"><span class="qz-e">${e}</span><span>${l}</span></button>`).join("")}</div>
+        <p class="qz-pic">${QZ_FATICA.map(([, l, , , come]) => `${l} ${come}`).join(" · ")}</p></div>`).join("");
+      h += `<div class="qz-altro-riga"><input class="qz-inp" id="qz-sp-nuovo" type="text" maxlength="30" autocomplete="off" placeholder="Altro sport (es. arrampicata)"><button class="btn lib-piu" data-qz-sp-aggiungi aria-label="Aggiungi lo sport">＋</button></div>`;
+      if ((R.sportAltri || []).some(a => !a.f)) h += `<p class="qz-pic qz-err">Scegli quanto è faticoso ogni sport che hai scritto.</p>`;
+    }
     if (q.altro) h += `<input class="qz-inp qz-altro" id="qz-altro" type="text" placeholder="${esc(q.altroPh || "Altro")}" value="${esc(R[q.altro] || "")}">`;
     if (q.t === "m") h += `<p class="qz-pic">Puoi sceglierne più di uno</p>`;
   } else if (q.t === "ora" && qzSportConOra(R).length > 1) {   // più sport: il momento di ciascuno (anche nello stesso giorno, es. CrossFit la mattina ed equitazione il pomeriggio)
     const os = R.oreSport || {};
-    h += `<p class="qz-perche">${esc(q.nota)}</p><div class="qz-sett">${qzSportConOra(R).map(x => { const o = QZ_SPORT.find(y => y[2] === x) || [x, "", x], f = qzFasciaDi(os[x]);
+    h += `<p class="qz-perche">${esc(q.nota)}</p><div class="qz-sett">${qzSportConOra(R).map(x => { const o = qzSportInfo(x), f = qzFasciaDi(os[x]);
       return `<div class="qz-sett-r"><b>${o[1]} ${esc(o[0])}</b><div class="qz-sett-s">${QZ_ORA_ALLEN.map(([l, e, , h0]) => `<button class="qz-b qz-mini ${f === h0 ? "on" : ""}" data-qz-fasciasport="${x}|${h0}"><span class="qz-e">${e}</span><span>${l}</span></button>`).join("")}</div></div>`; }).join("")}</div>
       <p class="qz-pic">${QZ_ORA_ALLEN.map(([l, , q]) => `${l}: ${q}`).join(" · ")}</p>`;
   } else if (q.t === "ora") {
@@ -179,15 +201,15 @@ function qzRender() {
     h += `<p class="qz-perche">${esc(q.nota)}</p><div class="qz-sc">${QZ_ORA_ALLEN.map(([l, e, q, h0]) => `<button class="qz-b ${f === h0 ? "on" : ""}" data-qz-fascia="${h0}"><span class="qz-e">${e}</span><span>${l}<small class="qz-sub">${q}</small></span></button>`).join("")}</div>`;
   } else if (q.t === "durate") {
     qzDuratePronte();
-    h += `<div class="qz-orari">${(R.sport || []).filter(x => x !== QZ_NESSUNO).map(x => { const o = QZ_SPORT.find(y => y[2] === x) || [x, "", x], km = x === "corsa";
+    h += `<div class="qz-orari">${(R.sport || []).filter(x => x !== QZ_NESSUNO).map(x => { const o = qzSportInfo(x), km = x === "corsa";
       return `<label class="qz-ora"><span>${o[1]} ${esc(o[0])}</span><span class="qz-dur"><input type="text" inputmode="decimal" autocomplete="off" data-qz-durata="${x}" value="${String(R.durate[x]).replace(".", ",")}"><b>${km ? "km" : "min"}</b></span></label>`; }).join("")}</div>`;
   } else if (q.t === "settimana") {
     qzSettimanaPronta();
-    const sp = (R.sport || []).filter(x => x !== QZ_NESSUNO).map(x => QZ_SPORT.find(o => o[2] === x)).filter(Boolean);
+    const sp = (R.sport || []).filter(x => x !== QZ_NESSUNO).map(qzSportInfo);
     h += `<div class="qz-sett">${(R.giorni || []).slice().sort((a, b) => a - b).map(g => `<div class="qz-sett-r"><b>${QZ_GIORNI[g][0]}</b><div class="qz-sett-s">${sp.map(([l, e, x]) => `<button class="qz-b qz-mini ${(R.settimana[g] || []).includes(x) ? "on" : ""}" data-qz-sett="${g}|${x}"><span class="qz-e">${e}</span><span>${esc(l)}</span></button>`).join("")}</div></div>`).join("")}</div>`;
     if (!qzValido(q)) h += `<p class="qz-pic qz-err">Scegli almeno uno sport per ogni giorno.</p>`;
   } else if (q.t === "orari") {
-    const scelti = QZ_PASTI.filter(p => (R.pasti || []).includes(p[2]));
+    const scelti = QZ_PASTI.concat([[String(R.pastoAltro || "").trim() || "Dopo cena", "🌛", "sera"]]).filter(p => (R.pasti || []).includes(p[2]));
     h += `<div class="qz-orari">${scelti.map(([l, e, k]) => `<label class="qz-ora"><span>${e} ${l}</span><input type="time" step="900" data-qz-ora="${k}" value="${fmtOra(R.orari[k]).padStart(5, "0")}"></label>`).join("")}</div>`;
     if (!qzValido(q)) h += `<p class="qz-pic qz-err">Gli orari devono essere in ordine, dal primo all'ultimo pasto.</p>`;
   } else if (q.t === "colore") {
@@ -209,7 +231,7 @@ function qzRender() {
   if (q.nota && q.t !== "ora") h += `<p class="qz-pic">${esc(q.nota)}</p>`;
   if (qz.step === 0 && !qz.rifai) h += `<button class="btn-link qz-backup" data-azione="ripristina">Hai già usato l'app? Ripristina un backup ›</button>`;
   const ultimo = q.t === "riepilogo";
-  h += `<div class="qz-foot"><button class="btn block" id="qz-avanti" ${qzValido(q) ? "" : "disabled"}>${ultimo ? "✓ Inizia" : q.opz && !v ? "Salta →" : "Avanti →"}</button></div>`;
+  h += `<div class="qz-foot"><button class="btn block" id="qz-avanti" ${qzValido(q) ? "" : "disabled"}>${ultimo ? "✓ Inizia" : q.opz && !v && !(q.altro && String(R[q.altro] || "").trim()) ? "Salta →" : "Avanti →"}</button></div>`;
   box.innerHTML = h;
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
   const inp = document.getElementById("qz-inp"); if (inp && !v) setTimeout(() => { try { inp.focus(); } catch (e) {} }, 150);
@@ -217,7 +239,7 @@ function qzRender() {
 function qzAggiornaBtn() {
   const q = QZ[qz.step], b = document.getElementById("qz-avanti"); if (!b) return;
   b.disabled = !qzValido(q);
-  if (q.t !== "riepilogo") b.textContent = q.opz && !qz.R[q.k] ? "Salta →" : "Avanti →";
+  if (q.t !== "riepilogo") b.textContent = q.opz && !qz.R[q.k] && !(q.altro && String(qz.R[q.altro] || "").trim()) ? "Salta →" : "Avanti →";
 }
 
 document.addEventListener("input", (e) => {
@@ -226,12 +248,16 @@ document.addEventListener("input", (e) => {
   if (e.target.id === "qz-inp") { qz.R[q.k] = e.target.value; qzSalva(); qzAggiornaBtn(); }
   if (e.target.id === "qz-altro") {
     qz.R[q.altro] = e.target.value;
+    if (q.k === "pasti") {   // il pasto dopo cena c'è finché ha un nome
+      const p = (qz.R.pasti || []).filter(x => x !== "sera"); if (e.target.value.trim()) p.push("sera"); qz.R.pasti = p;
+      if (typeof qz.R.orari.sera !== "number") qz.R.orari.sera = ORARI_DEFAULT.sera;
+    }
     // scrivendo un'allergia o un cibo, «Nessuna» / «Niente» non ha più senso: si toglie (senza ridisegnare, così la tastiera resta aperta)
     if (q.excl && e.target.value.trim() && (qz.R[q.k] || []).includes(q.excl)) {
       qz.R[q.k] = qz.R[q.k].filter(x => x !== q.excl);
       const i = q.o.findIndex(o => o[2] === q.excl), b = document.querySelector(`[data-qz-o="${i}"]`); if (b) b.classList.remove("on");
     }
-    qzSalva(); return;
+    qzSalva(); qzAggiornaBtn(); return;
   }
   if (e.target.id === "qz-nome-app") { qz.R.nomeApp = e.target.value; const a = document.querySelector(".qz-anteprima"); if (a) a.textContent = `${qz.R.iconaApp} ${qz.R.nomeApp || "Sailor Fit"}`; qzSalva(); qzAggiornaBtn(); }
 });
@@ -260,6 +286,7 @@ document.addEventListener("change", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (qz && e.key === "Enter" && e.target.id === "qz-inp") { e.preventDefault(); qzAvanti(); }
+  if (qz && e.key === "Enter" && e.target.id === "qz-sp-nuovo") { e.preventDefault(); qzAggiungiSport(); }
 });
 document.addEventListener("click", (e) => {
   if (!qz || !e.target.closest || !e.target.closest("#qz")) return;
@@ -278,6 +305,11 @@ document.addEventListener("click", (e) => {
     }
     qzSalva(); qzRender(); return;
   }
+  if (e.target.closest("[data-qz-sp-aggiungi]")) { qzAggiungiSport(); return; }
+  const spT = e.target.closest("[data-qz-sp-togli]");
+  if (spT) { const x = spT.dataset.qzSpTogli; qz.R.sportAltri = (qz.R.sportAltri || []).filter(a => a.x !== x); qz.R.sport = (qz.R.sport || []).filter(s => s !== x); qzSalva(); qzRender(); return; }
+  const fat = e.target.closest("[data-qz-fatica]");
+  if (fat) { const [x, k] = fat.dataset.qzFatica.split("|"), a = (qz.R.sportAltri || []).find(s => s.x === x); if (a) a.f = k; qzSalva(); qzRender(); return; }
   const st = e.target.closest("[data-qz-sett]");   // un giorno della settimana: tocca gli sport che fai (anche due)
   if (st) { const [g, x] = st.dataset.qzSett.split("|"), l = qz.R.settimana[g] || [], i = l.indexOf(x); if (i > -1) l.splice(i, 1); else l.push(x); qz.R.settimana[g] = l; qzSalva(); qzRender(); return; }
   const fs = e.target.closest("[data-qz-fasciasport]");   // il momento di uno sport (più sport)
@@ -289,6 +321,17 @@ document.addEventListener("click", (e) => {
   const ic = e.target.closest("[data-qz-icona]");
   if (ic) { qz.R.iconaApp = ic.dataset.qzIcona; qzSalva(); qzRender(); return; }
 });
+// «Altro sport»: diventa uno sport scelto (se è già nella lista, si sceglie quello)
+function qzAggiungiSport() {
+  const inp = document.getElementById("qz-sp-nuovo"), nome = String((inp && inp.value) || "").trim().replace(/^./, c => c.toUpperCase());
+  if (normCibo(nome).length < 3) { avviso("Scrivi il nome dello sport"); return; }
+  const R = qz.R, gia = QZ_SPORT.find(o => normCibo(o[0]) === normCibo(nome)) || (R.sportAltri || []).find(a => normCibo(a.nome) === normCibo(nome));
+  const x = gia ? (gia.x || gia[2]) : "a:" + slug(nome);
+  if (!gia) (R.sportAltri = R.sportAltri || []).push({ x, nome, f: "" });
+  R.sport = (R.sport || []).filter(s => s !== QZ_NESSUNO); if (!R.sport.includes(x)) R.sport.push(x);
+  qzSalva(); qzRender();
+  const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = sh.scrollHeight;   // si vede subito la domanda sulla fatica
+}
 function qzAvanti() {
   const q = QZ[qz.step]; if (!qzValido(q)) return;
   if (q.t === "riepilogo") { qzFine(); return; }
@@ -304,8 +347,9 @@ function qzFine() {
     nome: String(R.nome || "").trim(), sesso: R.sesso, eta: Math.round(+R.eta), altezza: Math.round(+R.altezza), peso: kg, bmrAuto: true,
     deficit: (QZ_OBIETTIVI.find(x => x[2] === R.obiettivo) || QZ_OBIETTIVI[0])[3],
     fattoreAttivita: (QZ_LAVORO.find(x => x[2] === R.lavoro) || QZ_LAVORO[0])[3],
-    pasti: ORDINE_TEMPO.filter(p => (R.pasti || []).includes(p)),
-    orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, R.orari[p]])),
+    pasti: ORDINE_TEMPO.filter(p => (R.pasti || []).includes(p) && (p !== "sera" || String(R.pastoAltro || "").trim())),
+    nomeSera: String(R.pastoAltro || "").trim(),
+    orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, typeof R.orari[p] === "number" ? R.orari[p] : ORARI_DEFAULT[p]])),
     esclusioni: { allergie: (R.allergie || []).filter(x => x !== QZ_NESSUNO), nonMangio: (R.nonMangio || []).filter(x => x !== QZ_NESSUNO),
       altri: String(R.nonMangioAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3),
       allergieAltre: String(R.allergieAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3) },
@@ -313,9 +357,16 @@ function qzFine() {
     obiettivo: R.obiettivo || "dimagrire",
   });
   if (R.dieta) pf.esclusioni.dieta = R.dieta;
+  else if (R.piattiVeg === "no") pf.esclusioni.senzaVeg = true;   // niente tofu, seitan, bevande vegetali… (chi è vegetariano o vegano li vuole)
+  // alimentazione scritta a mano («senza zucchero», «niente pane»): il cibo va tra quelli che non mangi; i nomi di diete (chetogenica…) no, non sono cibi
+  String(R.dietaAltri || "").split(/[,;\n]|\be\b/).map(x => x.trim().replace(/^(senza|niente|no|zero|poco|poca|pochi|poche)\s+/i, "").trim())
+    .filter(x => normCibo(x).length >= 3 && !QZ_DIETE_NOTE.test(normCibo(x)))
+    .forEach(x => { if (!pf.esclusioni.altri.some(w => normCibo(w) === normCibo(x))) pf.esclusioni.altri.push(x); });
+  if (/pescetar/.test(normCibo(R.dietaAltri))) ["carneRossa", "pollame", "maiale"].forEach(c => { if (!pf.esclusioni.nonMangio.includes(c)) pf.esclusioni.nonMangio.push(c); });   // pescetariana: niente carne, il pesce sì
   ["altri", "allergieAltre", "allergie", "nonMangio"].forEach(k => { if (!pf.esclusioni[k].length) delete pf.esclusioni[k]; });
   if (!senzaSport(R) && typeof R.oraAllen === "number") { pf.allenOra = R.oraAllen; delete pf.allenOrario; }
   if (!pf.nome) delete pf.nome;
+  if (!pf.nomeSera) delete pf.nomeSera;
   if (nuovo) Object.assign(pf, qzMacroKg(R), { recupero: 80 });   // chi rifà il questionario tiene i suoi macro
   // sport: quelli scelti si vedono (anche se erano stati tolti), quelli nuovi si aggiungono; per una persona nuova gli altri si nascondono
   const scelti = senzaSport(R) ? [] : R.sport.filter(x => x !== QZ_NESSUNO);
@@ -326,6 +377,14 @@ function qzFine() {
       const [nome, icona, kMin] = QZ_SPORT_NUOVI[s];
       let sp = pf.sport.find(x => x.nome.toLowerCase() === nome.toLowerCase());
       if (!sp) { sp = { id: slug(nome), nome, icona, kMin, min: 60 }; pf.sport.push(sp); }
+      delete sp.nascosto; return sp.id;
+    }
+    const altro = (R.sportAltri || []).find(a => a.x === s);
+    if (altro) {   // scritto a mano: quello del Profilo con lo stesso nome, o uno nuovo con la fatica scelta
+      const kMin = (QZ_FATICA.find(f => f[0] === altro.f) || QZ_FATICA[1])[3];
+      let sp = pf.sport.find(x => x.id === s.slice(2)) || pf.sport.find(x => x.nome.toLowerCase() === altro.nome.toLowerCase());
+      if (!sp) { let id = slug(altro.nome) || "sport"; while (pf.sport.some(x => x.id === id)) id += "2"; sp = { id, nome: altro.nome, icona: "🏅", kMin, min: 60 }; pf.sport.push(sp); }
+      else if (qzFaticaDi(sp.kMin || 0.075) !== altro.f) sp.kMin = kMin;   // cambiata la fatica: si aggiorna (altrimenti resta il valore preciso di prima)
       delete sp.nascosto; return sp.id;
     }
     const sp = pf.sport.find(x => x.id === s);
