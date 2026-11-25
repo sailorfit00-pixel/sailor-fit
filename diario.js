@@ -1144,7 +1144,7 @@ const PIATTI_COMPOSTI = {
     { P: "Seitan", C: "Riso basmati cotto", F: "Olio EVO", V: ["Fagiolini", 200] },
     { P: "Tempeh", C: "Patate lesse", F: "Olio EVO", V: ["Zucchine", 200] },
     // altri piatti di legumi e vegetali: chi è vegano non mangia lo stesso piatto ogni giorno
-    { P: "Pasta di legumi cotta", F: "Olio EVO", V: ["Zucchine", 200] },
+    { C: "Pasta di legumi cotta", F: "Olio EVO", V: ["Zucchine", 200] },   // è un carboidrato (con molte proteine): la porzione segue la quota del pasto
     { P: "Fagioli borlotti cotti", C: "Riso integrale cotto", F: "Olio EVO", V: ["Cavolo nero", 150] },
     { P: "Edamame", C: "Riso basmati cotto", F: "Olio EVO", V: ["Carote", 150] },
     { P: "Tofu", C: "Patata dolce", F: "Olio EVO", V: ["Broccoli", 200] },
@@ -1156,7 +1156,7 @@ const PIATTI_COMPOSTI = {
 // quantità massime sensate dei carboidrati nei piatti composti (niente «9 gallette» o mezzo chilo di pane)
 const GRAMMI_MAX_CARBO = { "Gallette di riso": 45, "Gallette di mais": 45, "Gallette di quinoa": 45, "Gallette di grano saraceno": 45,   // 5 gallette: senza pane né avena (celiaci) la colazione deve poter crescere
   "Pane integrale": 120, "Pane bianco": 120, "Pane di segale": 120,
-  "Banana": 200, "Mela": 250, "Datteri": 60, "Fiocchi d'avena": 90, "Riso integrale cotto": 300, "Riso basmati cotto": 300, "Quinoa cotta": 300, "Couscous cotto": 300, "Patate lesse": 450 };
+  "Banana": 200, "Mela": 250, "Datteri": 60, "Fiocchi d'avena": 90, "Riso integrale cotto": 300, "Riso basmati cotto": 300, "Quinoa cotta": 300, "Couscous cotto": 300, "Patate lesse": 450, "Pasta di legumi cotta": 330 };
 function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = () => 0) {   // usi(base): quante volte quel piatto è già nella settimana
   const A = window.ALIMENTI || {};
   const pre = preWorkout(data, pasto);
@@ -1474,12 +1474,19 @@ function pianificaSettimana(dataRif, soloData, opz = {}) {   // soloData: compil
         if (conosco) punti += Math.min(1.5, 0.5 * ing.filter(g => !abit.set.has(g.nome) && !abit.set.has(g.nome.toLowerCase())).length);   // alimenti che di solito non mangi: meno probabili
         return { x, punti: punti + (hashStr(d + s + x.r.nome + (opz.seme || "")) % 100) / 400 };
       }).sort((a, b) => a.punti - b.punti)[0];
-      if (!scelta) {   // nessuna ricetta sta nei limiti: un piatto con singoli alimenti sul tuo obiettivo
+      // il piatto composto non va oltre il 120% della quota del pasto (niente cene da 830 kcal su 3 pasti): il resto lo recuperano gli altri pasti
+      const qP = quotaPasto(d, s) * targetData(d).kcal;
+      const componi = () => {
         const prot = new Set(gOggi.flatMap(x => (x.ingredienti || []).map(g => g.nome)));
-        // il piatto composto non va oltre il 120% della quota del pasto (niente cene da 830 kcal su 3 pasti): il resto lo recuperano gli altri pasti
-        const qP = quotaPasto(d, s) * targetData(d).kcal, fC = qP > 0 && Tp.kcal > qP * 1.2 ? qP * 1.2 / Tp.kcal : 1;
+        const fC = qP > 0 && Tp.kcal > qP * 1.2 ? qP * 1.2 / Tp.kcal : 1;
         const Tc = fC < 1 ? { kcal: Tp.kcal * fC, proteine: Tp.proteine * fC, carboidrati: Tp.carboidrati * fC, grassi: Tp.grassi * fC } : Tp;
-        const c = piattoComposto(d, s, Tc, t => prot.has(t.P) || (opz.escludi && opz.escludi.has(t.P)), (usate["§" + s] || []).length + (opz.seme || 0), (b) => (usate["§b|" + chiaveComp(s) + "|" + b] || []).length);
+        return piattoComposto(d, s, Tc, t => prot.has(t.P) || (opz.escludi && opz.escludi.has(t.P)), (usate["§" + s] || []).length + (opz.seme || 0), (b) => (usate["§b|" + chiaveComp(s) + "|" + b] || []).length);
+      };
+      // la ricetta migliore è molto più piccola del pasto (una cheesecake da 260 kcal per una colazione da 400): se un piatto composto ci sta molto meglio, quello
+      let alt = null;
+      if (scelta && qP > 0 && scelta.x.tot.kcal < qP * 0.78) { const c = componi(); if (c && c.sopra <= 1 && Math.abs(c.tot.kcal - qP) < Math.abs(scelta.x.tot.kcal - qP) - qP * 0.08) alt = c; }
+      if (!scelta || alt) {   // nessuna ricetta sta nei limiti (o è troppo piccola): un piatto con singoli alimenti sul tuo obiettivo
+        const c = alt || componi();
         if (!c) return;
         c.piatto.auto = true; const g = giornoDiario(d); g.pasti.push(c.piatto); scriviGiorno(d, g);
         (usate["§" + s] ||= []).push(i); (usate["§b|" + chiaveComp(s) + "|" + c.base] ||= []).push(i); messe++; (aggiunti[d] ||= new Set()).add(s); return;
