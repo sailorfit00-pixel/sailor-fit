@@ -1705,8 +1705,9 @@ function mosseProteine(data, p, m, scritto) {
       out.push({ key: `${p}|por|${r.rif[0]}|${r.rif[1]}|${nuova}`, testa: `Porta <b>${esc(r.nome.toLowerCase())}</b> da ${Math.round(r.qta)} a <b>${nuova} g</b>`, d: extra.d, _p: Math.abs(extra.d.proteine - need) - 3 });
     }); } catch (e) {}
   }
+  const giaNelPasto = new Set(scritto ? ingredientiPastoTutti(data, p).map(r => r.nome) : []);   // ciò che c'è già si porta a più grammi (sopra), non si «aggiunge» una seconda volta
   (FONTI_PROT_PASTO[tipoFontiPasto(data, p)] || []).forEach(([nome, massimo]) => {
-    if (!A[nome] || (TONNO_SCATOLA.test(nome) && !tonnoOk(data))) return;
+    if (!A[nome] || giaNelPasto.has(nome) || (TONNO_SCATOLA.test(nome) && !tonnoOk(data))) return;
     const r = grammiCheCi(nome, need * 100 / A[nome][1], massimo, m); if (!r || r.d.proteine < Math.min(need * 0.5, 8)) return;
     out.push({ key: `${p}|agg|${nome}|${r.g}`, testa: `Aggiungi <b>${r.g} g di ${esc(nome.toLowerCase())}</b>`, d: r.d, _p: Math.abs(r.d.proteine - need) + (TONNO_SCATOLA.test(nome) ? 6 : 0) });   // tonno: mai in testa
   });
@@ -1874,6 +1875,8 @@ function cosaAggiungereHTML() {
     if (!mosse.length) mosse = mp ? mosseProteine(data, p, m, scritto).filter(x => !(spuntino && kcalPasto + Math.max(0, x.d.kcal) > 320)) : [];   // mancano proteine: solo fonti di proteine, in ogni pasto che resta
     if (!mosse.length) mosse = scritto ? mosseCosaAggiungere(data, p, m).filter(x => !(spuntino && kcalPasto + Math.max(0, x.d.kcal) > 320)) : ideeCosaAggiungere(data, p, m, usate, basiC, basiP);
     if (!piccolo && !scritto && !mp && m.carboidrati > 15 && !sopra) mosse = mosse.concat(mosseCarbo(data, p, m).filter(x => !(spuntino && x.d.kcal > 320)));   // pasto vuoto e carboidrati che mancano: anche singoli alimenti, non solo ricette intere
+    // pasto già scritto a cui mancano anche i carboidrati: oltre alle proteine, «porta le patate / il riso / il pane a…» (in seconda posizione, così si vede subito)
+    if (scritto && mp && !sopra && m.carboidrati > 15) { const pc = mosseCarbo(data, p, m, true).filter(x => String(x.key).includes("|por|") && !mosse.some(y => y.key === x.key)); if (pc.length) mosse.splice(Math.min(1, mosse.length), 0, pc[0]); }
     if (!scritto && sopra) mosse = mosseLeggere(data, p, m).concat(mosse);                // grassi o carboidrati sopra: un pasto vuoto può essere leggero
     if (poche && p === ultimo) mosse = piccoliCompletamenti(data, p, mReale).concat(mosse);   // con poche kcal: quantità piccole che colmano quello che manca, nell'ultimo pasto
     mosse = mosse.filter((x, i, a) => a.findIndex(y => y.key === x.key) === i);
