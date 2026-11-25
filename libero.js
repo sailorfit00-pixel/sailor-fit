@@ -2057,8 +2057,14 @@ function vociSpesaDaFrase(testo) {
   return t.replace(/[.!?;]/g, ",").split(/,|\s(?:e|ed|poi|più|piu)\s/)
     .map(x => x.trim().replace(/^(?:(?:il|lo|la|i|gli|le|un|uno|una|del|dello|della|dei|degli|delle|qualche|un po' di|un po di|po' di|di)\s+|l'|un'|dell')+/, "").trim())
     .filter(x => x.length >= 2)
-    .map(x => typeof nomeVoceSpesa === "function" ? nomeVoceSpesa(x) : x.charAt(0).toUpperCase() + x.slice(1))
+    .map(x => { const noto = vocePerSpesa(x); return noto || (typeof nomeVoceSpesa === "function" ? nomeVoceSpesa(x) : x.charAt(0).toUpperCase() + x.slice(1)); })
     .filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i);
+}
+// «l'olio» detto a voce → la voce che c'è già nella lista o nella dispensa («Olio EVO»), così non ne nasce una seconda
+function vocePerSpesa(x) {
+  let noti = []; try { noti = [...new Set(Object.keys(statSpesa().st).map(nomeSpesa).concat(leggiExtraSpesa()))]; } catch (e) { return null; }
+  const n = norm(x).replace(/i$|e$/, ""); if (n.length < 3) return null;
+  return noti.find(v => norm(v) === norm(x)) || noti.find(v => new RegExp("^" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[a-z]?\\b").test(norm(v))) || null;
 }
 let _vociSpesaDetta = [];
 function apriConfermaSpesa(testo) {
@@ -2346,6 +2352,57 @@ function comandoAllenamento(testo) {
   return true;
 }
 
+// 8) CALORIE DEI GIORNI: «imposta martedì e mercoledì 1800 calorie, giovedì e venerdì 1200», «sabato 2000 kcal», «1500 calorie domani»
+// Come il pannello del giorno in Settimana: anteprima, poi «Compensa negli altri giorni» oppure «Cambia anche il totale».
+// I giorni della settimana: in Settimana quella che stai guardando, altrimenti il prossimo (oggi compreso). I giorni passati non si cambiano.
+const KCAL_COMANDO = /\b(?:calorie|kcal|chilocalorie)\b/;
+function comandoKcalGiorni(testo) {
+  const t = fraseDetta(testo);
+  if (!KCAL_COMANDO.test(t) && !/\b(?:imposta|metti)\b.*\b\d{3,4}\b/.test(t)) return false;
+  const giorni = giorniNellaFrase(t);
+  const numeri = []; { const re = /\b(\d{1,2}[.\s]\d{3}|\d{3,4})\b/g; let m; while ((m = re.exec(t))) { const v = parseInt(m[1].replace(/[.\s]/g, ""), 10); if (v >= 800 && v <= 6000) numeri.push({ i: m.index, v }); } }
+  if (!giorni.length || !numeri.length) return false;
+  // ogni numero va ai giorni detti prima di lui (dopo il numero precedente); se prima non ce n'erano, a quelli che lo seguono
+  const ev = giorni.map(g => ({ i: g.i, g })).concat(numeri.map(n => ({ i: n.i, n }))).sort((a, b) => a.i - b.i);
+  const scelte = []; let attesa = [], numAttesa = null;
+  ev.forEach(e => {
+    if (e.g) { if (numAttesa !== null) scelte.push({ g: e.g, v: numAttesa }); else attesa.push(e.g); return; }
+    if (attesa.length) { attesa.forEach(g => scelte.push({ g, v: e.n.v })); attesa = []; numAttesa = null; } else numAttesa = e.n.v;
+  });
+  if (!scelte.length) return false;
+  // le date: in Settimana i giorni della settimana che guardi, altrimenti i prossimi
+  const inSett = document.body.dataset.tab === "settimana" || (typeof vistaHome !== "undefined" && vistaHome === "settimana");
+  const lunVista = inSett ? addGiorniISO(addGiorniISO(oggiISO(), -indiceSettimana(oggiISO())), (typeof offsetSettHome !== "undefined" ? offsetSettHome : 0) * 7) : null;
+  const oggi = oggiISO(), righe = [], passati = [];
+  scelte.forEach(({ g, v }) => {
+    const data = g.wd !== undefined && lunVista && !g.mod ? addGiorniISO(lunVista, g.wd) : dataDelGiorno(g, 1);
+    if (data < oggi) { passati.push(data); return; }
+    const k = righe.findIndex(r => r.data === data); if (k >= 0) righe.splice(k, 1);   // lo stesso giorno detto due volte: vale l'ultimo
+    righe.push({ data, voluto: v });
+  });
+  if (!righe.length) { avviso("I giorni passati non si cambiano"); return true; }
+  righe.sort((a, b) => a.data.localeCompare(b.data));
+  righe.forEach(r => { const p = pianoSettimana(r.data), i = p.date.indexOf(r.data); r.prima = p.target[i]; r.lim = limitiGiorno(p.base[i]); r.v = limita(r.voluto, r.lim); });
+  const nomeG = (d) => `${NOMI_GIORNI[indiceSettimana(d)]} ${fmtData(d)}`;
+  editCtx = null; liberoCtx = null;
+  openModal(`<h3 class="modal-title">🔥 Calorie dei giorni</h3>
+    <div class="voce-mancano">${righe.map(r => `<div class="voce-manca"><span>${esc(nomeG(r.data))}</span><b>${kIt(r.v)} kcal</b><small>previste ${kIt(r.prima)} kcal${r.v !== r.voluto ? ` · ${kIt(r.voluto)} ${r.voluto < r.v ? `è sotto il tuo metabolismo basale: metto ${kIt(r.v)}` : `è troppo (al massimo +50%): metto ${kIt(r.v)}`}` : ""}</small></div>`).join("")}</div>
+    ${passati.length ? `<p class="hint">${passati.map(nomeG).join(", ")}: già passato, non si cambia.</p>` : ""}
+    <p class="hint">Compensando, gli altri giorni della settimana si adattano e il totale resta uguale. Altrimenti cambia anche il totale della settimana.</p>
+    <div class="bsp-azioni"><button class="btn-sec" data-voce-kcal="compensa">Compensa negli altri giorni</button><button class="btn" data-voce-kcal="totale">Cambia anche il totale</button></div>`);
+  document.querySelectorAll("[data-voce-kcal]").forEach(b => b.addEventListener("click", () => {
+    const modo = b.dataset.voceKcal;
+    righe.forEach(r => {
+      const p = pianoSettimana(r.data), i = p.date.indexOf(r.data), d = r.v - p.target[i];
+      if (modo === "totale" && d) { const bs = leggiBudgetSett(); bs.settimane[p.date[0]] = p.budget + d; salvaBudgetSett(bs); }
+      const p2 = pianoSettimana(r.data); impostaSpostamento(r.data, r.v - p2.base[p2.date.indexOf(r.data)]);
+    });
+    giornoSelSett = null; closeModal(true); aggiornaSettimana();
+    avviso(`✓ ${righe.map(r => `${NOMI_GIORNI[indiceSettimana(r.data)].toLowerCase()} ${kIt(r.v)}`).join(" · ")}`);
+  }));
+  return true;
+}
+
 function inviaDettato(testo) {
   document.querySelectorAll(".detta-velo").forEach(v => v.remove());   // sicurezza: niente «Ti ascolto…» sopra la scelta del pasto
   testo = String(testo || "").trim();
@@ -2353,6 +2410,7 @@ function inviaDettato(testo) {
   // l'ordine conta: «quanto mi manca?» è una domanda, non la spesa; «peso 61» prima degli sport («pesi»)
   if (comandoDomanda(testo)) return;
   if (comandoPeso(testo)) return;
+  if (comandoKcalGiorni(testo)) return;
   if (SPESA_COMANDO.test(fraseDetta(testo))) { apriConfermaSpesa(testo); return; }
   if (comandoSostituisci(testo)) return;
   const cp = comandoCopia(testo); if (cp) { eseguiCopia(cp); return; }
@@ -2398,6 +2456,8 @@ const COMANDI_VOCALI = [
     ["quanto mi manca?", "quante proteine mi mancano?", "quanti carboidrati mi restano?", "a che punto sono?"]],
   ["💡", "Idee e consigli", "Con un pasto: quel pasto con le sue idee. Senza: i consigli furbi della giornata.",
     ["cosa mangio a cena?", "cosa preparo a pranzo?", "idee per la merenda", "cosa aggiungo?", "cosa mi consigli?"]],
+  ["🔥", "Calorie dei giorni", "Cambia le calorie di uno o più giorni: poi scegli se compensare negli altri giorni o cambiare il totale della settimana. In Settimana valgono i giorni della settimana che stai guardando. Mai sotto il metabolismo basale.",
+    ["imposta martedì e mercoledì 1800 calorie, giovedì e venerdì 1200", "sabato 2000 kcal", "domani 1500 calorie", "metti 1600 calorie a lunedì prossimo"]],
   ["🏋️", "Allenamento", "Si apre la scheda Allenamenti del giorno già compilata: controlli e tocchi ✓ Salva. Lo sport deve essere tra i tuoi (Profilo).",
     ["oggi ho fatto un'ora di CrossFit", "ho corso 6 km", "45 minuti di pesi e mezz'ora di camminata", "domani alle 7 di sera CrossFit", "mi alleno alle 18", "domani riposo", "oggi niente allenamento"]],
 ];

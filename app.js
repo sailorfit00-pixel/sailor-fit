@@ -1426,7 +1426,11 @@ function spesaHTML() {
     const [nome0, g0] = u.fonti.length === 1 ? u.fonti[0] : [u.nome, u.g];   // una fonte sola: etichetta di sempre ("~200 g da crudo")
     return Object.assign({ nome: u.nome, giorni: u.giorni }, compraSpesa(u.nome, nome0, g0));
   });
-  leggiExtraSpesa().forEach(nome => { if (!voci.some(v => v.nome.toLowerCase() === nome.toLowerCase())) voci.push({ nome, giorni: -1, info: "aggiunto da te", extra: true }); });
+  leggiExtraSpesa().forEach(nome => {
+    const v = voci.find(x => x.nome.toLowerCase() === nome.toLowerCase());
+    if (!v) voci.push({ nome, giorni: -1, info: "aggiunto da te", extra: true });
+    else if (v.controllare) { v.controllare = false; v.extra = true; v.info = "finito"; }   // dalla dispensa: l'hai segnato tu come finito, va comprato
+  });
   // da dove viene la lista
   const fino = stat.modo === "piano" && stat.giorni.length ? stat.giorni[stat.giorni.length - 1] : null;
   const intro = !voci.length ? `<li class="hint">🛒 Si riempie con i pasti: quelli pianificati nei prossimi 7 giorni oppure, se non ne hai, quelli che hai scritto nelle ultime 2 settimane</li>`
@@ -1441,7 +1445,11 @@ function spesaHTML() {
     return `<li class="reparto-h">${rep}</li>` + g.map(v => voceSpesaHTML(v.nome, false, v.info, v.extra, v.q)).join("");
   }).join("");
   // ne serve poco o dura mesi (spezie, salse, lievito, frutta secca…): di solito ce l'hai, basta controllare
-  if (daControllare.length) html += `<li class="reparto-h">🫙 Da controllare se c'è</li>` + daControllare.sort((a, b) => a.nome.localeCompare(b.nome)).map(v => voceSpesaHTML(v.nome, false, "", false)).join("");
+  // olio, salse, miele, spezie, lievito…: si usano poco per volta e durano mesi. Non sono in lista: una riga chiusa «In dispensa»;
+  // se uno è finito lo tocchi (o dici «ho finito l'olio») e va tra le cose da comprare
+  if (daControllare.length) html += `<li class="spesa-dispensa"><details><summary><span>🫙 In dispensa</span><small>${daControllare.length} · di solito ce l'hai</small></summary>
+    <p class="campo-nota">Si usano poco per volta e durano mesi, quindi non li metto in lista. Se uno è finito, toccalo: va tra le cose da comprare.</p>
+    <div class="spesa-disp-lista">${daControllare.sort((a, b) => a.nome.localeCompare(b.nome)).map(v => `<button class="spesa-disp" data-spesa-disp="${esc(v.nome)}">＋ ${esc(v.nome)}</button>`).join("")}</div></details></li>`;
   const giaPresi = voci.filter(v => presi.has(v.nome)).concat([...presi].filter(n => !voci.some(v => v.nome === n)).map(nome => ({ nome })))
     .sort((a, b) => a.nome.localeCompare(b.nome));
   if (giaPresi.length) html += `<li class="reparto-h presi-h">✓ Già presi</li>` + giaPresi.map(v => voceSpesaHTML(v.nome, true, "", v.extra)).join("");
@@ -2943,6 +2951,8 @@ document.addEventListener("DOMContentLoaded", () => {
       avviso("Lista pronta per la nuova spesa", "Annulla", () => { salvaPresi(new Set(presiPrima)); salvaExtraSpesa(extraPrima); renderSpesa(); });
       return;
     }
+    const sdisp = e.target.closest("[data-spesa-disp]");   // dalla dispensa: è finito, va comprato
+    if (sdisp) { const n = sdisp.dataset.spesaDisp, ex = leggiExtraSpesa(); if (!ex.includes(n)) { ex.push(n); salvaExtraSpesa(ex); } const pr = leggiPresi(); pr.delete(n); salvaPresi(pr); renderSpesa(); avviso(`In lista: ${n.toLowerCase()}`); return; }
     const sg = e.target.closest("[data-spesa-sugg]");
     if (sg) { aggiungiVoceSpesa(sg.dataset.spesaSugg || ""); return; }
     const sd = e.target.closest("[data-spesa-del]");

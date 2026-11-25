@@ -2285,3 +2285,16 @@ body.tastiera .qz-backup { display: none; }
 .cv-nota b { color: var(--text); }
 .cv-es { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 6px; }
 .cv-es li { padding: 8px 12px; border-radius: 10px; background: var(--lilla-bg); color: var(--text); font-size: 15px; }
+/* Lista della spesa: la dispensa (olio, salse, miele…) è una riga chiusa; «Nuova spesa» staccato dalla nota sotto */
+.spesa-dispensa { list-style: none; margin-top: 14px; }
+.spesa-dispensa details { border-radius: 14px; background: var(--card2); padding: 0 14px; }
+.spesa-dispensa summary { display: flex; align-items: baseline; gap: 8px; padding: 12px 0; cursor: pointer; list-style: none; font-weight: 600; }
+.spesa-dispensa summary::-webkit-details-marker { display: none; }
+.spesa-dispensa summary small { color: var(--muted); font-weight: 400; font-size: 13px; }
+.spesa-dispensa summary::after { content: "›"; margin-left: auto; color: var(--muted); font-size: 20px; transition: transform .15s; }
+.spesa-dispensa details[open] summary::after { transform: rotate(90deg); }
+.spesa-dispensa .campo-nota { margin: 0 0 10px; }
+.spesa-disp-lista { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 14px; }
+.spesa-disp { padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(var(--lilla-rgb), .3); background: var(--lilla-bg); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+.spesa-reset { margin-bottom: 12px; }
+.spesa-reset + .campo-nota { margin-top: 12px; }
