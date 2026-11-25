@@ -43,31 +43,54 @@ const fmtOra = (h) => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padSt
 const oraDa = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] + +m[2] / 60 : null; };
 // il pre-workout con il tuo orario abituale: lo spuntino che mangi per ultimo prima di allenarti,
 // se tra lui e l'allenamento non c'è un pasto principale (alle 15 con lo spuntino alle 14 → lo spuntino; alle 7:30 con lo spuntino alle 11 → nessuno)
+// La colazione è il pre-workout se ti alleni entro un'ora e mezza da quando la fai (colazione alle 6:30, allenamento alle 7): leggera e digeribile
+const PRE_COLAZIONE_ORE = 1.5;
 function spuntinoPreDa(pasti, orari, h) {
   const prima = pasti.filter(p => orari[p] < h).sort((a, b) => orari[a] - orari[b]);
   const ultimo = prima[prima.length - 1];
+  if (ultimo === "colazione" && h - orari.colazione <= PRE_COLAZIONE_ORE) return "colazione";
   return ultimo === "mattina" || ultimo === "spuntino" ? ultimo : null;
 }
-// quale spuntino è il pre-workout quel giorno: "mattina", "spuntino" o null
-const slotPre = (data) => {
-  if (!conSport(data)) return null;
-  const pf = typeof leggiProfilo === "function" ? leggiProfilo() : {};
-  if (typeof pf.allenOra === "number" && !giornoDiario(data).orario) return spuntinoPreDa(momentiGiorno(data), orariPasti(), pf.allenOra);
-  return orarioAllen(data) === "sera" ? "spuntino" : "mattina";   // senza orario abituale (o cambiato in Oggi): la regola di sempre
-};
-const preSera = (data) => slotPre(data) === "spuntino";     // il pre-workout è lo spuntino del pomeriggio
-const preMattina = (data) => slotPre(data) === "mattina";   // il pre-workout è lo spuntino della mattina
+// Gli allenamenti di un giorno, con l'ora di ciascuno: quella scelta in Oggi per quel giorno, altrimenti l'ora abituale dello sport (Profilo),
+// altrimenti l'orario abituale di prima (uno per tutti). Due sport a meno di un'ora e mezza l'uno dall'altro sono un allenamento solo.
+// La camminata non conta (non cambia i pasti). Senza nessun orario: null (vale la regola di sempre, mattina/sera).
+const STESSO_ALLEN_ORE = 1.5;
+function sessioniAllen(data) {
+  if (!conSport(data)) return [];
+  const g = giornoDiario(data), pf = typeof leggiProfilo === "function" ? leggiProfilo() : {};
+  const ids = sportDelTipo(g.tipo).filter(id => id !== "camminata");
+  const ore = ids.map(id => { const sp = (pf.sport || []).find(x => x.id === id) || {}, h = g.ore && typeof g.ore[id] === "number" ? g.ore[id] : g.orario ? null : typeof sp.ora === "number" ? sp.ora : typeof pf.allenOra === "number" ? pf.allenOra : null; return { id, h }; });   // (g.orario: mattina/sera scelto in Oggi con le versioni di prima)
+  if (ore.every(x => x.h === null)) return null;
+  const dflt = ore.find(x => x.h !== null).h;
+  const lista = ore.map(x => x.h === null ? { id: x.id, h: dflt } : x).sort((a, b) => a.h - b.h), out = [];
+  lista.forEach(x => { const u = out[out.length - 1]; if (u && x.h - u.fine <= STESSO_ALLEN_ORE) { u.ids.push(x.id); u.fine = x.h; } else out.push({ ids: [x.id], h: x.h, fine: x.h }); });
+  return out;
+}
+// i pasti prima degli allenamenti di quel giorno (uno per allenamento: "colazione", "mattina", "spuntino"), e quelli dopo
+function pastiPre(data) {
+  if (!conSport(data)) return [];
+  const s = sessioniAllen(data);
+  if (s === null) return [orarioAllen(data) === "sera" ? "spuntino" : "mattina"];   // senza orari: la regola di sempre
+  const m = momentiGiorno(data), o = orariPasti();
+  return [...new Set(s.map(x => spuntinoPreDa(m, o, x.h)).filter(Boolean))];
+}
+function pastiPost(data) {
+  if (!conSport(data)) return [];
+  const s = sessioniAllen(data);
+  if (s === null) return [orarioAllen(data) === "sera" ? "cena" : "pranzo"];
+  const m = momentiGiorno(data), o = orariPasti(), pre = pastiPre(data);
+  return [...new Set(s.map(x => m.find(p => o[p] >= x.h)).filter(p => p && !pre.includes(p)))];   // un pasto che è già il «prima» dell'allenamento dopo resta leggero
+}
+// compatibilità: il primo pre-workout del giorno
+const slotPre = (data) => pastiPre(data)[0] || null;
+const preSera = (data) => pastiPre(data).includes("spuntino");      // il pre-workout è lo spuntino del pomeriggio
+const preMattina = (data) => pastiPre(data).includes("mattina");    // il pre-workout è lo spuntino della mattina
+const preColazione = (data) => pastiPre(data).includes("colazione");   // ti alleni subito dopo colazione
 // il pasto prima dell'allenamento (più carboidrati, pochi grassi, ricette pre-workout)
-const preWorkout = (data, pasto) => (pasto === "spuntino" && preSera(data)) || (pasto === "mattina" && preMattina(data));
-// il pasto subito dopo l'allenamento: la cena (allenamento di sera) o il pranzo (di mattina)
-// il pasto subito dopo l'allenamento: con il tuo orario abituale, il primo dei tuoi pasti che viene dopo (alle 7:30 è la colazione);
-// senza orario (o se quel giorno l'hai cambiato in Oggi) la regola di sempre: cena la sera, pranzo la mattina
-const pastoPost = (data) => {
-  if (!conSport(data)) return null;
-  const pf = typeof leggiProfilo === "function" ? leggiProfilo() : {};
-  if (typeof pf.allenOra === "number" && !giornoDiario(data).orario) { const o = orariPasti(); return momentiGiorno(data).find(p => o[p] >= pf.allenOra) || null; }   // allenamento dopo l'ultimo pasto: nessun pasto «dopo»
-  return orarioAllen(data) === "sera" ? "cena" : "pranzo";
-};
+const preWorkout = (data, pasto) => (pasto === "spuntino" && preSera(data)) || (pasto === "mattina" && preMattina(data)) || (pasto === "colazione" && preColazione(data));
+// il pasto subito dopo l'allenamento: il primo dei tuoi pasti che viene dopo; senza orari la regola di sempre (cena la sera, pranzo la mattina)
+const pastoPost = (data) => pastiPost(data)[0] || null;
+const postWorkout = (data, pasto) => pastiPost(data).includes(pasto);
 // i pasti di un giorno: nei giorni di riposo il pre-workout non c'è
 // (resta solo se quel giorno c'è già qualcosa salvato lì, es. i vecchi spuntini del pomeriggio)
 function momentiTutti(data) {
@@ -90,7 +113,7 @@ function salvaDiario(d) { localStorage.setItem("mp_diario", JSON.stringify(d)); 
 function giornoDiario(data) {
   const g0 = leggiDiarioSolaLettura()[data];
   const d = g0 ? JSON.parse(JSON.stringify(g0)) : {};
-  return { tipo: d.tipo || tipoDefault(data), pasti: d.pasti || [], ...(d.orario ? { orario: d.orario } : {}), ...(Array.isArray(d.mangiati) && d.mangiati.length ? { mangiati: d.mangiati } : {}) };
+  return { tipo: d.tipo || tipoDefault(data), pasti: d.pasti || [], ...(d.orario ? { orario: d.orario } : {}), ...(d.ore && typeof d.ore === "object" ? { ore: d.ore } : {}), ...(Array.isArray(d.mangiati) && d.mangiati.length ? { mangiati: d.mangiati } : {}) };
 }
 function scriviGiorno(data, g) { const ora = Date.now(); (g.pasti || []).forEach(p => { if (!p.ts) p.ts = ora; });   // quando è stato aggiunto: serve a mostrare per primo l'ultimo arrivato
   const d = leggiDiario(); d[data] = g; salvaDiario(d); }
@@ -118,9 +141,18 @@ function quotaPasto(data, pasto) {
   return (quotaBase(data, pasto) || 0) / m.reduce((s, p) => s + quotaBase(data, p), 0);
 }
 function quotaBase(data, p) {
-  const scambia = (p === "mattina" || p === "spuntino") && typeof preMattina === "function" && preMattina(data);
-  return scambia ? QUOTA_PASTO[p === "mattina" ? "spuntino" : "mattina"] : QUOTA_PASTO[p];
+  const scambia = (p === "mattina" || p === "spuntino") && typeof preMattina === "function" && preMattina(data) && !preSera(data);   // (con due allenamenti, mattina e pomeriggio, sono pre-workout tutti e due)
+  const q = scambia ? QUOTA_PASTO[p === "mattina" ? "spuntino" : "mattina"] : QUOTA_PASTO[p];
+  // colazione subito prima dell'allenamento: più leggera, e quello che toglie va al pasto dopo (che deve farti recuperare)
+  if (q && (p === "colazione" || p === "mattina" || p === "pranzo") && typeof preColazione === "function" && preColazione(data)) {
+    if (p === "colazione") return q - SPOSTA_PRE_COLAZIONE;
+    const post = pastoPost(data);
+    if (post === "mattina") { if (p === "mattina" || (p === "pranzo" && momentiGiorno(data).includes("pranzo"))) return q + SPOSTA_PRE_COLAZIONE / 2; }   // dopo c'è uno spuntino: metà a lui, metà al pranzo (uno spuntino da 500 kcal non è uno spuntino)
+    else if (p === post) return q + SPOSTA_PRE_COLAZIONE;
+  }
+  return q;
 }
+const SPOSTA_PRE_COLAZIONE = 0.08;
 // Il pre-workout prende più carboidrati e pochi grassi: si digerisce meglio prima di allenarsi.
 // (quello che non prende passa agli altri pasti)
 const PESO_MACRO_PRE = { carboidrati: 1.3, grassi: 0.4 };
@@ -779,6 +811,7 @@ function ricetteInCasa(data, pasto, n = 3) {
     .sort((a, b) => a.p - b.p)
     .slice(0, n);
 }
+const PESANTI_PRE = /Semi di|Mandorle|Noci|Nocciole|Pistacchi|Anacardi|Burro|Avocado|Frutta secca|Granola|Pancetta|Salsiccia|Formaggio|Mascarpone|Panna/;
 // Ricette del ricettario che, adattate, si avvicinano di più all'obiettivo del pasto
 function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
   const T = escludiIdx !== null && escludiIdx !== undefined ? targetPastoDiario(data, pasto, escludiIdx) : targetResiduoPasto(data, pasto);   // aggiungendo a un pasto già scritto contano solo le kcal che restano a quel pasto
@@ -787,8 +820,9 @@ function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
   const basiOggi = giornoDiario(data).pasti.map(p => rilevaBaseProt(p)).filter(Boolean);
   const viste = new Set();
   return ricette
-    .filter(r => r.pasto === (pasto === "mattina" ? "spuntino" : pasto) && !viste.has(r.nome) && viste.add(r.nome))
-    .filter((r, i, arr) => !preWorkout(data, pasto) ? (pasto === "mattina" ? !r.preworkout : true) : (!arr.some(x => x.preworkout) || r.preworkout))
+    .filter(r => (r.pasto === (pasto === "mattina" ? "spuntino" : pasto) || (pasto === "colazione" && r.pasto === "spuntino" && r.preworkout && preColazione(data))) && !viste.has(r.nome) && viste.add(r.nome))
+    .filter((r, i, arr) => pasto === "colazione" ? !preColazione(data) || r.preworkout || !PESANTI_PRE.test(((r._orig || r).ingredienti || []).map(x => x.nome).join("|"))   // prima di allenarti: niente semi, frutta secca, burri, avocado
+      : !preWorkout(data, pasto) ? (pasto === "mattina" ? !r.preworkout : true) : (!arr.some(x => x.preworkout) || r.preworkout))
     .filter(r => !ricettaEsclusa(r))
     .map(r => {
       const ps = porzioneSuMisura(r, T);
@@ -1894,11 +1928,21 @@ function barraProgressoHTML(nome, cls, val, tot, pct) {
     <div class="prog-bar"><span class="${cls.replace("dot-", "mb-")}${sopra ? " sopra" : ""}" style="width:${w}%"></span></div>
   </div>`;
 }
+document.addEventListener("change", (e) => {   // Oggi: l'ora di uno sport, solo per quel giorno
+  if (!sceltaAllen || !sceltaAllen.ore || !e.target.matches || !e.target.matches("[data-allen-ora-sport]")) return;
+  const h = oraDa(e.target.value); if (h === null) delete sceltaAllen.ore[e.target.dataset.allenOraSport]; else sceltaAllen.ore[e.target.dataset.allenOraSport] = h;
+});
 // -------- Scelta degli sport di un giorno (o di un giorno della settimana tipo) --------
-let sceltaAllenOrario = null;
+let sceltaAllenOre = null;   // le ore scelte per gli sport del giorno (passano al salvataggio)
+// l'ora di ogni sport in quel giorno: quella scelta in Oggi, altrimenti la sua ora abituale (Profilo), altrimenti l'orario abituale di prima
+function oreSportGiorno(data) {
+  const g = giornoDiario(data), pf = leggiProfilo(), out = {};
+  pf.sport.forEach(sp => { const h = g.ore && typeof g.ore[sp.id] === "number" ? g.ore[sp.id] : typeof sp.ora === "number" ? sp.ora : typeof pf.allenOra === "number" ? pf.allenOra : null; if (h !== null) out[sp.id] = h; });
+  return out;
+}
 let sceltaAllen = null; // { titolo, sel: Set di id sport, salva(chiave), dopo() }
 function apriSceltaAllenamenti(titolo, chiave, salva, dopo, data) {
-  sceltaAllen = { titolo, sel: new Set(sportDelTipo(chiave)), salva, dopo, data, orario: data ? orarioAllen(data) : null };
+  sceltaAllen = { titolo, sel: new Set(sportDelTipo(chiave)), salva, dopo, data, ore: data ? oreSportGiorno(data) : null };
   editCtx = null;
   openModal(sceltaAllenHTML());
 }
@@ -1911,9 +1955,8 @@ function sceltaAllenHTML() {
         <span class="sb-ico">${sp.icona}</span><b>${esc(sp.nome)}</b><small>~${kcalSport(sp)} kcal</small></button>`).join("")}
       <button class="sport-btn ${c.sel.size ? "" : "on"}" data-allen-riposo><span class="sb-ico">😴</span><b>Riposo</b><small>niente sport</small></button>
     </div>
-    ${c.sel.size && c.orario ? `<p class="hint">A che ora ti alleni?</p><div class="chips">
-      <button class="chip ${c.orario === "mattina" ? "attivo" : ""}" data-allen-orario="mattina">☀️ Mattina</button>
-      <button class="chip ${c.orario === "sera" ? "attivo" : ""}" data-allen-orario="sera">🌙 Pomeriggio / sera</button></div>` : ""}
+    ${c.ore && [...c.sel].some(id => id !== "camminata") ? `<p class="hint">A che ora, più o meno? Serve a capire quale pasto viene prima e quale dopo.</p>
+      <div class="allen-ore">${leggiProfilo().sport.filter(sp => c.sel.has(sp.id) && sp.id !== "camminata").map(sp => `<label class="pf-ora-sport"><span>${sp.icona} ${esc(sp.nome)}</span><input class="qta-input" type="time" step="900" data-allen-ora-sport="${sp.id}" value="${typeof c.ore[sp.id] === "number" ? fmtOra(c.ore[sp.id]).padStart(5, "0") : ""}"></label>`).join("")}</div>` : ""}
     <div class="allen-anteprima">Obiettivo del giorno: <b>${info.target.kcal} kcal</b> · P ${info.target.proteine} · C ${info.target.carboidrati} · G ${info.target.grassi} g</div>
     <button class="btn-link link-ricette" data-azione="profilo">Aggiungi o modifica gli sport (Profilo) ›</button>
     <div class="lib-footer"><button class="btn lib-salva" data-allen-salva>✓ Salva</button></div>`;
@@ -2129,7 +2172,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sa) {
       const d = sa.dataset.scegliAllenData;
       apriSceltaAllenamenti(`Allenamenti · ${d === oggiISO() ? "oggi" : fmtGiornoLungo(d)}`, giornoDiario(d).tipo,
-        (k) => { const gg = giornoDiario(d); gg.tipo = k; if (sceltaAllenOrario) gg.orario = sceltaAllenOrario; scriviGiorno(d, gg); }, () => { closeModal(); renderOggi(); }, d);
+        (k) => { const gg = giornoDiario(d); gg.tipo = k;
+          if (sceltaAllenOre) { const ids = sportDelTipo(k), ore = {}; ids.forEach(id => { if (typeof sceltaAllenOre[id] === "number") ore[id] = sceltaAllenOre[id]; }); if (Object.keys(ore).length) { gg.ore = ore; delete gg.orario; } else delete gg.ore; }   // le ore di quel giorno
+          scriviGiorno(d, gg); }, () => { closeModal(); renderOggi(); }, d);
       return;
     }
     const sh = e.target.closest("[data-sett-home]");
@@ -2224,10 +2269,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!sceltaAllen) return;
     const sp = e.target.closest("[data-allen-sport]");
     if (sp) { const id = sp.dataset.allenSport; sceltaAllen.sel.has(id) ? sceltaAllen.sel.delete(id) : sceltaAllen.sel.add(id); document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); return; }
-    const ao = e.target.closest("[data-allen-orario]");
-    if (ao) { sceltaAllen.orario = ao.dataset.allenOrario; document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); return; }
+
     if (e.target.closest("[data-allen-riposo]")) { sceltaAllen.sel.clear(); document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); return; }
-    if (e.target.closest("[data-allen-salva]")) { const c = sceltaAllen; sceltaAllen = null; sceltaAllenOrario = c.orario; c.salva(chiaveTipo([...c.sel])); c.dopo(); riadattaDopo(dataDiario); }
+    if (e.target.closest("[data-allen-salva]")) { const c = sceltaAllen; sceltaAllen = null; sceltaAllenOre = c.ore; c.salva(chiaveTipo([...c.sel])); c.dopo(); riadattaDopo(dataDiario); }
   });
 
   // Dentro l'editor: scelta del pasto e idee dal ricettario

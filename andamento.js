@@ -132,6 +132,12 @@ const IDEE_PROTEINE = {
 const IDEE_GRASSI = [["un filo d'olio", "Olio EVO"], ["avocado", "Avocado"], ["frutta secca", "Mandorle"], ["semi", "Semi di zucca"]];
 const IDEE_CARBO = [["pane", "Pane integrale"], ["riso", "Riso basmati cotto"], ["frutta", "Banana"], ["patate", "Patate lesse"]];
 const IDEE_FIBRE = [["verdura", "Zucchine"], ["legumi", "Lenticchie cotte"], ["frutta", "Mela"], ["cereali integrali", "Pane integrale"], ["riso integrale", "Riso integrale cotto"]];
+// il nome di un pasto nel periodo: la merenda è «pre-workout» solo se lo era nella maggior parte dei giorni
+function nomePastoPeriodo(p, giorni) {
+  if (p !== "spuntino" && p !== "mattina") return nomePasto(p);
+  const pre = giorni.filter(g => typeof preWorkout === "function" && preWorkout(g.data, p)).length;
+  return pre > giorni.length / 2 ? "pre-workout" : p === "spuntino" ? "merenda" : "spuntino";
+}
 function analisi(giorni, pesiPeriodo) {
   const out = []; // { liv: "ok"|"warn"|"info", testo, peso }
   const passati = giorni.filter(g => !g.futuro);
@@ -164,7 +170,7 @@ function analisi(giorni, pesiPeriodo) {
       return { p, gap: media(compl.map(g => g.T.proteine * quotaPasto(g.data, p))) - media(val), val: media(val) };
     }).sort((a, b) => b.gap - a.gap)[0];
     const idea = ideeCibi(IDEE_PROTEINE[perSlot.p] || IDEE_PROTEINE.pranzo);
-    out.push({ liv: "warn", peso: 9, testo: `Proteine sotto l'obiettivo in <b>${protBasse.length} giorni su ${compl.length}</b>. Il pasto più povero è <b>${nomePasto(perSlot.p)}</b> (media ${Math.round(perSlot.val)} g)${idea ? `: prova ad aggiungere ${idea}` : ""}.` });
+    out.push({ liv: "warn", peso: 9, testo: `Proteine sotto l'obiettivo in <b>${protBasse.length} giorni su ${compl.length}</b>. Il pasto più povero è <b>${nomePastoPeriodo(perSlot.p, compl)}</b> (media ${Math.round(perSlot.val)} g)${idea ? `: prova ad aggiungere ${idea}` : ""}.` });
   } else out.push({ liv: "ok", peso: 5, testo: `Proteine centrate in <b>${compl.length - protBasse.length} giorni su ${compl.length}</b>: ottimo per proteggere i muscoli.` });
 
   // 4. pasto che sfora di più la sua quota
@@ -172,8 +178,23 @@ function analisi(giorni, pesiPeriodo) {
     const vals = compl.map(g => sommaMacro(g.pasti.filter(x => x.pasto === p)).kcal);
     return { p, extra: media(vals) - media(compl.map(g => g.T.kcal * quotaPasto(g.data, p))) };
   }).sort((a, b) => b.extra - a.extra)[0];
-  if (sfora.extra > 120 && diffK > 0)
-    out.push({ liv: "warn", peso: 7, testo: `Il pasto che sfora di più è <b>${nomePasto(sfora.p)}</b>: in media <b>+${Math.round(sfora.extra)} kcal</b> rispetto alla sua quota. Lì conviene ridurre carboidrati o condimenti.` });
+  if (sfora.extra > 120 && diffK > 0) {
+    // gli alimenti che pesano di più in quel pasto (kcal al giorno, in media): così si sa cosa ridurre
+    const per = {}; compl.forEach(g => g.pasti.filter(x => x.pasto === sfora.p).forEach(x => (x.ingredienti || []).forEach(i => { const q = grammiIng(i); if (!(q > 0) || !(window.ALIMENTI || {})[i.nome]) return; per[i.nome] = (per[i.nome] || 0) + macroAlimento(i.nome, q).kcal; })));
+    const top = Object.entries(per).map(([n, k]) => [n, k / compl.length]).sort((a, b) => b[1] - a[1]).slice(0, 2).filter(([, k]) => k >= 40);
+    const grasso = top.length && (() => { const a = (window.ALIMENTI || {})[top[0][0]]; return a && a[3] * 9 > a[0] * 0.5; })();
+    const chi = top.map(([n, k]) => `<b>${esc(n.toLowerCase())}</b> (~${Math.round(k)} kcal al giorno)`).join(" e ");
+    out.push({ liv: "warn", peso: 7, testo: `Il pasto che sfora di più è <b>${nomePastoPeriodo(sfora.p, compl)}</b>: in media <b>+${Math.round(sfora.extra)} kcal</b> rispetto alla sua quota.${chi ? ` Pesano soprattutto ${chi}.` : ""} ${grasso ? "Sono alimenti sani ma molto calorici: ne basta circa la metà, ed è meglio pesarli." : "Lì conviene ridurre le porzioni, o pesarle per qualche giorno."}` });
+  }
+
+  // 4b. alcol: calorie che non saziano e frenano il dimagrimento (spesso non ci si pensa)
+  const ALCOL = /^(Vino|Birra|Spritz|Prosecco|Gin|Vodka|Rum|Mojito|Negroni|Aperol|Amaro|Limoncello|Whisky|Champagne|Spumante|Sangria|Cocktail)/;
+  const alc = {}; compl.forEach(g => g.pasti.forEach(x => (x.ingredienti || []).forEach(i => { if (!ALCOL.test(i.nome) || /Ginseng/.test(i.nome)) return; const q = grammiIng(i); if (q > 0) alc[i.nome] = (alc[i.nome] || 0) + macroAlimento(i.nome, q).kcal; })));
+  const kAlc = Object.values(alc).reduce((a, b) => a + b, 0) / compl.length;
+  if (kAlc >= 40) {
+    const nomiA = Object.entries(alc).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([n]) => esc(n.toLowerCase())).join(" e ");
+    out.push({ liv: "warn", peso: 7, testo: `Dall'alcol (${nomiA}) arrivano in media <b>${Math.round(kAlc)} kcal al giorno</b>, ~${Math.round(kAlc * 7 / 50) * 50} a settimana. Sono calorie che non saziano e rallentano il dimagrimento: tienile per le occasioni.` });
+  }
 
   // 5. effetto weekend
   const fine = compl.filter(g => indiceSettimana(g.data) >= 5), feriali = compl.filter(g => indiceSettimana(g.data) < 5);
@@ -274,7 +295,7 @@ function analisiGiorno(g) {
     if (t.proteine < T.proteine * 0.85) {
       const povero = ORDINE_TEMPO.map(p => ({ p, prot: sommaMacro(g.pasti.filter(x => x.pasto === p)).proteine, q: T.proteine * quotaPasto(g.data, p) }))
         .sort((a, b) => (b.q - b.prot) - (a.q - a.prot))[0];
-      out.push({ liv: "warn", testo: `Proteine <b>${Math.round(t.proteine)} g</b> su ${T.proteine}: ne mancano ${Math.round(T.proteine - t.proteine)} g. Il pasto più povero è <b>${nomePasto(povero.p)}</b> (${Math.round(povero.prot)} g).` });
+      out.push({ liv: "warn", testo: `Proteine <b>${Math.round(t.proteine)} g</b> su ${T.proteine}: ne mancano ${Math.round(T.proteine - t.proteine)} g. Il pasto più povero è <b>${nomePasto(povero.p, g.data)}</b> (${Math.round(povero.prot)} g).` });
     } else out.push({ liv: "ok", testo: `Proteine centrate (${Math.round(t.proteine)} g).` });
   }
   // grassi: la fonte principale

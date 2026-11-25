@@ -200,6 +200,7 @@ function applicaPersonalizzazione() {
   const nome = pf.nomeApp || "Sailor Fit", t = document.getElementById("titolo-app");
   if (t) { t.textContent = `${pf.iconaApp || "🌙"} ${nome}`; t.classList.toggle("lungo", nome.length > 13); t.classList.toggle("lunghissimo", nome.length > 19); }   // nome lungo: carattere più piccolo, sempre su una riga
   document.title = nome;
+  const mt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (mt) mt.setAttribute("content", nome);   // il nome sotto l'icona della schermata Home (iPhone)
   const s = document.getElementById("saluto");
   if (s) {
     const h = new Date().getHours(), ciao = h < 5 ? "Buonanotte" : h < 13 ? "Buongiorno" : h < 18 ? "Buon pomeriggio" : "Buonasera";
@@ -256,6 +257,16 @@ const fmtMin = (m) => m >= 60 && m % 60 === 0 ? `${m / 60} h` : m > 60 ? `${Math
 const etichettaDurata = (sp, v) => sp.perKm ? `${fmtKm(durataSport(sp, v))} km` : fmtMin(durataSport(sp, v));
 const arr50 = (x) => Math.round(x / 50) * 50;
 let _cacheTipi = {}, _cacheChiaveProfilo = "";
+// Peso su cui si calcolano proteine e grassi. Fino a un indice di massa corporea di 27 è il tuo peso; oltre, conta solo una parte
+// dei chili in più (peso «ideale» a IMC 22 + 40% della differenza): le proteine servono ai muscoli, non al grasso,
+// e calcolarle sul peso intero le farebbe diventare troppe rispetto alle calorie (es. 135 g su 1450 kcal).
+function pesoRiferimento(pf) {
+  const kg = +pf.peso || 0, m = (+pf.altezza || 0) / 100;
+  if (!kg || m < 1) return kg;
+  if (kg / (m * m) <= 27) return kg;
+  const ideale = 22 * m * m;
+  return Math.round((ideale + 0.4 * (kg - ideale)) * 10) / 10;
+}
 // Obiettivo, fabbisogno, nome e icone di un tipo di giornata, dal profilo
 function tipoInfo(chiave) {
   const pf = leggiProfilo();
@@ -272,8 +283,9 @@ function tipoInfo(chiave) {
   const kcal = pf.kcalMan > 0
     ? Math.max(pf.bmr, arr50(pf.kcalMan + allen * pf.recupero / 100))
     : Math.max(pf.bmr, arr50(base * (1 - pf.deficit / 100) + allen * pf.recupero / 100));
-  const proteine = pf.protMan > 0 ? Math.round(pf.protMan) : Math.round(pf.peso * pf.protKg / 5) * 5;
-  const grassi = pf.grassiMan > 0 ? Math.round(pf.grassiMan) : Math.round(pf.peso * pf.grassiKg);
+  const kgM = pesoRiferimento(pf);   // con qualche chilo in più proteine e grassi si calcolano su un peso di riferimento
+  const proteine = pf.protMan > 0 ? Math.round(pf.protMan) : Math.round(kgM * pf.protKg / 5) * 5;
+  const grassi = pf.grassiMan > 0 ? Math.round(pf.grassiMan) : Math.round(kgM * pf.grassiKg);
   const carboidrati = Math.max(50, Math.round((kcal - proteine * 4 - grassi * 9) / 4 / 5) * 5);
   return (_cacheTipi[k] = {
     chiave: k,
@@ -2116,10 +2128,34 @@ function apriMenu() {
     </div>
   `);
 }
+// Profilo: a che ora ti alleni, sport per sport (un'ora indicativa). Sotto ogni sport: quale pasto viene prima e quale dopo.
+function orariSportHTML(pf) {
+  const usati = [...new Set(leggiTipi().flatMap(t => sportDelTipo(t)))], sport = pf.sport.filter(sp => usati.includes(sp.id) && sp.id !== "camminata");
+  if (!usati.length) return `<p class="hint">Nella tua settimana tipo non ci sono allenamenti.</p>`;
+  if (!sport.length) return `<p class="hint">La camminata è un'attività leggera: i pasti restano quelli di sempre (niente pre-workout). Le sue calorie si aggiungono alla giornata.</p>`;
+  const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_TEMPO;
+  const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena" };
+  const oraDi = (sp) => typeof sp.ora === "number" ? sp.ora : typeof pf.allenOra === "number" ? pf.allenOra : null;
+  const riga = (sp) => { const h = oraDi(sp); let t = "";
+    if (h !== null) { const pre = spuntinoPreDa(scelti, o, h), dopo = scelti.find(p => o[p] >= h);
+      t = `${pre ? `Prima ${art[pre]} (pre-workout, più leggera)` : "Nessuno spuntino subito prima"}, ${dopo && dopo !== pre ? `dopo ${art[dopo]}.` : "dopo non ci sono altri pasti."}`; }
+    return `<div class="pf-ora-sport"><span>${sp.icona} ${esc(sp.nome)}</span><input class="qta-input" type="time" step="900" data-sport-ora="${sp.id}" value="${h !== null ? fmtOra(h).padStart(5, "0") : ""}">${t ? `<small>${t}</small>` : ""}</div>`; };
+  const qualcuno = sport.some(sp => oraDi(sp) !== null);
+  return `<label class="wiz-l">A che ora ti alleni, di solito</label>
+    <p class="campo-nota">Basta un'ora indicativa per ogni sport: serve a capire quale pasto viene prima (più leggero) e quale dopo (per recuperare). Se un giorno cambia, lo cambi in Oggi toccando lo sport del giorno.</p>
+    ${sport.map(riga).join("")}
+    ${qualcuno ? `<button class="btn-link" data-allen-ora-togli>✕ Nessun orario</button>` : `<p class="hint">Senza orario l'app considera l'allenamento di sera (il sabato di mattina).</p>`}`;
+}
+document.addEventListener("change", (e) => {   // Profilo: l'ora di uno sport
+  if (!e.target.matches || !e.target.matches("[data-sport-ora]")) return;
+  const pf = leggiProfilo(), sp = pf.sport.find(x => x.id === e.target.dataset.sportOra), h = oraDa(e.target.value); if (!sp) return;
+  if (h === null) delete sp.ora; else sp.ora = h;
+  salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi();
+});
 // Il questionario iniziale (una domanda alla volta) è in benvenuto.js
 document.addEventListener("click", (e) => {
   if (e.target.closest && e.target.closest("[data-allen-ora-togli]")) {   // Profilo: togli l'orario abituale di allenamento
-    const pf = leggiProfilo(); delete pf.allenOra; delete pf.allenOrario; salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi();
+    const pf = leggiProfilo(); delete pf.allenOra; delete pf.allenOrario; pf.sport.forEach(sp => delete sp.ora); salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi();
   }
 });
 // Profilo: a che ora ti alleni di solito (un orario unico; vuoto = nessuno)
@@ -2197,7 +2233,7 @@ function apriProfilo() {
     <h3 class="modal-title">👤 Profilo</h3>
     <div id="form-profilo">
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
-        <input class="qta-input wiz-full" type="number" ${k === "deficit" ? 'min="-20"' : 'inputmode="decimal" min="0"'} step="${st}" data-profilo="${k}" value="${pf[k]}">${k === "bmr" ? `
+        <input class="qta-input wiz-full" type="number" ${k === "deficit" ? 'min="-20"' : 'inputmode="decimal" min="0"'} step="${st}" data-profilo="${k}" value="${pf[k]}">${k === "protKg" && pesoRiferimento(pf) < pf.peso ? `<p class="campo-nota">Proteine e grassi si calcolano su ${String(Math.round(pesoRiferimento(pf))).replace(".", ",")} kg invece di ${String(pf.peso).replace(".", ",")}: servono ai muscoli, e sul peso intero diventerebbero troppe.</p>` : ""}${k === "bmr" ? `
         <button class="btn-link bmr-link" data-bmr-apri>Non lo sai? Calcolalo ›</button><div id="bmr-calc" hidden></div>` : ""}`).join("")}
       <h4>Obiettivi impostati da te <em>(facoltativo)</em></h4>
       <p class="campo-nota">Lascia vuoto per il calcolo automatico. Le calorie sono quelle di un giorno di riposo: se le scrivi, il Deficit non si usa e lo sport aggiunge solo la quota «Allenamento reintegrato» (0% = stesso obiettivo ogni giorno). I carboidrati sono quello che resta.</p>
@@ -2223,16 +2259,7 @@ function apriProfilo() {
     ${(() => { const o = orariPasti(), hh = (h) => fmtOra(h).padStart(5, "0");
       return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].map(([k, l]) =>
         `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
-    <label class="wiz-l">Di solito ti alleni alle</label>
-    <div class="pf-ora"><input class="qta-input" type="time" step="900" data-allen-ora value="${typeof pf.allenOra === "number" ? fmtOra(pf.allenOra).padStart(5, "0") : ""}">
-      ${typeof pf.allenOra === "number" || pf.allenOrario ? `<button class="btn-link" data-allen-ora-togli>✕ Nessun orario</button>` : ""}</div>
-    <p class="hint">${typeof pf.allenOra === "number" && leggiTipi().some(t => sportDelTipo(t).length) && leggiTipi().every(t => sportDelTipo(t).every(id => id === "camminata"))
-        ? `Camminata alle ${fmtOra(pf.allenOra)}: è un'attività leggera, i pasti restano quelli di sempre (niente pre-workout). Le calorie della camminata si aggiungono alla giornata.`
-      : typeof pf.allenOra === "number" ? (() => { const o = orariPasti(), scelti = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti : ORDINE_TEMPO;
-        const dopo = scelti.find(p => o[p] >= pf.allenOra), sp = spuntinoPreDa(scelti, o, pf.allenOra), prima = sp ? (sp === "mattina" ? "lo spuntino" : "la merenda") : null;
-        const art = { colazione: "la colazione", mattina: "lo spuntino", pranzo: "il pranzo", spuntino: "la merenda", cena: "la cena" };
-        return `Allenamento alle ${fmtOra(pf.allenOra)}: ${prima ? `prima ${prima} (pre-workout), ` : ""}${dopo ? `il pasto dopo è ${art[dopo]}.` : "dopo non ci sono altri pasti."}`; })()
-      : pf.allenOrario ? `Ora: sempre di ${pf.allenOrario === "mattina" ? "mattina" : "pomeriggio/sera"}.` : leggiTipi().every(t => !sportDelTipo(t).length) ? "Nella tua settimana tipo non ci sono allenamenti." : "Senza orario l'app considera l'allenamento di sera (il sabato di mattina)."}${leggiTipi().every(t => !sportDelTipo(t).length) ? "" : " Giorno per giorno puoi sempre cambiarlo in Oggi."}</p>
+    ${orariSportHTML(pf)}
     <h4>Obiettivi che ne risultano</h4>
     <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
     <h4>Alimentazione e allergie</h4>
@@ -2241,11 +2268,12 @@ function apriProfilo() {
     <label class="wiz-l">Il nome della tua app</label>
     <div class="pers-icone">${ICONE_APP.map(i => `<button class="qz-ico ${(pf.iconaApp || "🌙") === i ? "on" : ""}" data-pers-icona="${i}">${i}</button>`).join("")}</div>
     <input class="qta-input wiz-full" type="text" maxlength="24" placeholder="Sailor Fit" data-pers="nomeApp" value="${esc(pf.nomeApp || "")}">
-    <p class="campo-nota">Compare in alto nell'app. Il nome sotto l'icona nella schermata Home lo decide il telefono quando aggiungi l'app.</p>
+    <p class="campo-nota">Compare in alto nell'app.</p>
     <label class="wiz-l">Come ti chiami? <em>(facoltativo)</em></label>
     <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Per salutarti in alto" data-pers="nome" value="${esc(pf.nome || "")}">
     <label class="wiz-l">Colore</label>
     <div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c]) => `<button class="qz-col ${(pf.colore || "lilla") === k ? "on" : ""}" data-pers-colore="${k}" style="--c:${c}"><i></i><span>${l}</span></button>`).join("")}</div>
+    <p class="campo-nota">Su iPhone anche l'icona della schermata Home prende questo colore e il nome dell'app. Se l'hai già aggiunta, toglila e aggiungila di nuovo da Safari (Condividi → Aggiungi alla schermata Home): i tuoi dati restano.</p>
     <label class="wiz-l">Tema</label>
     <div class="chips">${[["scuro", "🌙 Scuro"], ["chiaro", "☀️ Chiaro"]].map(([k, l]) => `<button class="chip ${(pf.tema || "scuro") === k ? "attivo" : ""}" data-pers-tema="${k}">${l}</button>`).join("")}</div>
     <button class="btn-sec block" data-azione="rifai-questionario">📝 Rifai il questionario iniziale</button>

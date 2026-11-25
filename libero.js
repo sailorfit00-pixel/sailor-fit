@@ -542,7 +542,7 @@ const POST_PROT_KG = 0.4, POST_CARBO_KG = 0.5;   // minimi del post-workout, in 
 // pre = pasto prima dell'allenamento (spuntino del pomeriggio, o di metà mattina se ti alleni al mattino); post = pasto dopo
 function contestoAllenamento(c) {
   const pre = typeof preWorkout === "function" && preWorkout(c.data, c.pasto);
-  const post = typeof pastoPost === "function" && pastoPost(c.data) === c.pasto;
+  const post = typeof postWorkout === "function" && postWorkout(c.data, c.pasto);
   return { pre: !!pre, post: !!post };
 }
 const grassiAlimento = (nome, qta) => { const a = (window.ALIMENTI || {})[nome]; return a ? a[3] * (+qta || 0) / 100 : 0; };

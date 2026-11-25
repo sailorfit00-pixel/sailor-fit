@@ -27,6 +27,37 @@
       // tema chiaro: il colore scelto si usa nella versione scura (il lilla chiaro su bianco non si leggerebbe)
       var chiaro = document.documentElement.getAttribute("data-tema") === "chiaro";
       s.setProperty("--lilla", chiaro ? c[4] : c[2]); s.setProperty("--lilla-rgb", c[3]); s.setProperty("--lilla-scuro", c[4]); s.setProperty("--lilla-bg", "rgba(" + c[3] + (chiaro ? ",.18)" : ",.12)"));
+      window.applicaIconaHome(c);
+    };
+    // L'immagine della schermata Home (la figura sulla luna) nel colore scelto: l'iPhone la prende quando fai «Aggiungi alla schermata Home».
+    // Si ridipinge solo la figura: lo sfondo scuro resta com'è. Lilla = l'immagine originale.
+    window.applicaIconaHome = function (c) {
+      var link = document.querySelector('link[rel="apple-touch-icon"]'), fav = document.querySelector('link[rel="icon"]');
+      if (!link) return;
+      if (c[0] === "lilla") { link.setAttribute("href", "apple-touch-icon.png"); if (fav) { fav.setAttribute("href", "icon.svg"); fav.setAttribute("type", "image/svg+xml"); } return; }
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var N = 180, cv = document.createElement("canvas"); cv.width = N; cv.height = N;
+          var x = cv.getContext("2d"); x.drawImage(img, 0, 0, N, N);
+          var d = x.getImageData(0, 0, N, N), p = d.data;
+          var bg = [12, 10, 22], fig = [176, 126, 203], h = c[2].replace("#", "");
+          var col = [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
+          var lum = function (v) { return 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2]; }, f = lum(fig) / lum([183, 156, 245]);   // stessa luminosità della figura lilla originale
+          var tgt = col.map(function (v) { return v * f; }), dv = [fig[0] - bg[0], fig[1] - bg[1], fig[2] - bg[2]], dd = dv[0] * dv[0] + dv[1] * dv[1] + dv[2] * dv[2];
+          for (var i = 0; i < p.length; i += 4) {
+            var t = ((p[i] - bg[0]) * dv[0] + (p[i + 1] - bg[1]) * dv[1] + (p[i + 2] - bg[2]) * dv[2]) / dd;   // quanto il punto è «figura» (0 = sfondo, 1 = figura piena, in mezzo = bordo sfumato)
+            if (t <= 0.02) continue;
+            t = Math.min(1, t);
+            for (var k = 0; k < 3; k++) p[i + k] = Math.max(0, Math.min(255, Math.round(p[i + k] + t * (tgt[k] - fig[k]))));
+          }
+          x.putImageData(d, 0, 0);
+          var url = cv.toDataURL("image/png");
+          link.setAttribute("href", url);
+          if (fav) { fav.setAttribute("href", url); fav.setAttribute("type", "image/png"); }
+        } catch (e) {}
+      };
+      img.src = "icon-512.png";
     };
     // Tema scuro (di base) o chiaro, scelto nel Profilo
     window.applicaTema = function (tema) {
@@ -34,7 +65,9 @@
       if (chiaro) document.documentElement.setAttribute("data-tema", "chiaro"); else document.documentElement.removeAttribute("data-tema");
       if (m) m.setAttribute("content", chiaro ? "#f3f5f7" : "#0f1417");
     };
-    try { var pfT = JSON.parse(localStorage.getItem("mp_profilo") || "{}"); window.applicaTema(pfT.tema); window.applicaColore(pfT.colore || "lilla"); } catch (e) {}
+    try { var pfT = JSON.parse(localStorage.getItem("mp_profilo") || "{}"); window.applicaTema(pfT.tema); window.applicaColore(pfT.colore || "lilla");
+      var mtT = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (mtT && pfT.nomeApp) mtT.setAttribute("content", pfT.nomeApp);   // il nome sotto l'icona della schermata Home
+    } catch (e) {}
   </script>
 </head>
 <body>

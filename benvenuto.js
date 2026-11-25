@@ -14,10 +14,14 @@ const QZ_SPORT = [["CrossFit", "🏋️", "crossfit"], ["Sala pesi", "💪", "pe
 const QZ_SPORT_NUOVI = { nuoto: ["Nuoto", "🏊‍♀️", 0.09], yoga: ["Yoga/Pilates", "🧘‍♀️", 0.05], padel: ["Padel/Tennis", "🎾", 0.08], squadra: ["Sport di squadra", "🏐", 0.085] };
 const QZ_PASTI = [["Colazione", "☕", "colazione"], ["Spuntino", "🍎", "mattina"], ["Pranzo", "🍝", "pranzo"], ["Merenda", "🥪", "spuntino"], ["Cena", "🍲", "cena"]];
 const QZ_GIORNI = [["Lunedì", "L", 0], ["Martedì", "M", 1], ["Mercoledì", "M", 2], ["Giovedì", "G", 3], ["Venerdì", "V", 4], ["Sabato", "S", 5], ["Domenica", "D", 6]];
-const QZ_OBIETTIVI = [["Dimagrire", "📉", "dimagrire", 15], ["Mantenere il peso", "⚖️", "mantenere", 0], ["Mettere massa", "💪", "massa", -10]];
+// [etichetta, emoji, valore, deficit %]; «definire»: taglio più morbido e più proteine, per perdere grasso tenendo i muscoli
+const QZ_OBIETTIVI = [["Dimagrire", "📉", "dimagrire", 15], ["Definire (meno grasso, più tono)", "🔥", "definire", 10], ["Mantenere il peso", "⚖️", "mantenere", 0], ["Mettere massa", "💪", "massa", -10]];
 const QZ_LAVORO = [["Seduta/o quasi tutto il giorno", "🪑", "seduto", 1.2], ["In piedi o in movimento", "🚶", "piedi", 1.35], ["Lavoro fisico", "🧱", "fisico", 1.5]];
 // la fascia scelta diventa un orario (modificabile poi nel Profilo): prima delle 14 conta come mattina
-const QZ_ORA_ALLEN = [["Mattina", "🌅", "mattina", 7.5], ["Pausa pranzo", "🍽️", "pranzo", 13], ["Pomeriggio", "☀️", "pomeriggio", 17], ["Sera", "🌙", "sera", 19]];
+// quando ti alleni, più o meno: una fascia della giornata (l'ora esatta cambia, il momento no). [etichetta, emoji, quando, ora indicativa]
+const QZ_ORA_ALLEN = [["Presto", "🌅", "prima delle 8", 7], ["Mattina", "☀️", "dalle 8 a mezzogiorno", 11], ["Pausa pranzo", "🍽️", "tra le 12 e le 14", 13], ["Pomeriggio", "🌤️", "dalle 14 alle 18", 17], ["Sera", "🌙", "dopo le 18", 19]];
+// la fascia di un'ora già salvata (rifacendo il questionario): la più vicina
+const qzFasciaDi = (h) => typeof h === "number" ? QZ_ORA_ALLEN.reduce((b, f) => Math.abs(f[3] - h) < Math.abs(b[3] - h) ? f : b)[3] : null;
 const QZ_DIETA = [["Vegetariana", "🥕", "vegetariana"], ["Vegana", "🌱", "vegana"]];
 const QZ_NESSUNO = "nessuno";
 
@@ -33,7 +37,12 @@ const QZ = [
   { k: "lavoro", t: "u", e: "💼", q: "Com'è la tua giornata?", o: QZ_LAVORO, nota: "Senza contare lo sport: serve a stimare quanto consumi ogni giorno." },
   { k: "sport", t: "m", e: "🏃‍♀️", q: "Che sport fai?", o: QZ_SPORT, excl: QZ_NESSUNO, req: 1 },
   { k: "giorni", t: "m", e: "📅", q: "In quali giorni ti alleni di solito?", o: QZ_GIORNI.map(([l, , v]) => [l, "", v]), salta: senzaSport, nota: "Poi potrai scegliere lo sport giorno per giorno nel Profilo." },
-  { k: "oraAllen", t: "ora", e: "🕒", q: "A che ora ti alleni di solito?", salta: senzaSport, nota: "Scrivi l'ora o tocca una fascia. Serve a capire quale pasto viene prima e quale dopo l'allenamento." },
+  { k: "settimana", t: "settimana", e: "🗓️", q: "Cosa fai ogni giorno?", salta: (R) => senzaSport(R) || (R.sport || []).length < 2 || !(R.giorni || []).length,
+    nota: "Se in un giorno fai due allenamenti (es. equitazione e sala pesi), tocca tutti e due." },
+  { k: "kmCorsa", t: "n", e: "🏃", q: "Quanti km corri di solito?", un: "km", ph: "5", min: 1, max: 60, dec: 1, salta: (R) => senzaSport(R) || !(R.sport || []).includes("corsa"),
+    nota: "Servono a calcolare quanto consumi. Giorno per giorno puoi cambiarli in Oggi." },
+  { k: "oraAllen", t: "ora", e: "🕒", q: "Quando ti alleni, di solito?", salta: senzaSport,
+    nota: "Non serve l'ora esatta, basta il momento della giornata. Serve ad adattare i pasti: prima dell'allenamento uno più leggero, con i carboidrati che danno energia; dopo, proteine e carboidrati per recuperare. Se un giorno cambia, lo sistemi in Oggi." },
   { k: "pasti", t: "m", e: "🍽️", q: "Quali pasti fai ogni giorno?", o: QZ_PASTI, req: 1 },
   { k: "orari", t: "orari", e: "⏰", q: "A che ora mangi, più o meno?", nota: "Servono a sapere qual è il prossimo pasto e quando un pasto è passato." },
   { k: "dieta", t: "u", e: "🥗", q: "Segui un'alimentazione particolare?", o: QZ_DIETA, opz: 1, nota: "Se no, vai avanti. Tocca di nuovo per togliere la scelta." },
@@ -58,13 +67,17 @@ function qzRisposteAttuali() {
   const pf = leggiProfilo(), tipi = leggiTipi(), o = orariPasti();
   const sport = [...new Set(tipi.flatMap(t => sportDelTipo(t)))];
   const daSport = (id) => QZ_SPORT.some(x => x[2] === id) ? id : Object.keys(QZ_SPORT_NUOVI).find(k => slug(QZ_SPORT_NUOVI[k][0]) === id);
-  const ob = pf.deficit > 0 ? "dimagrire" : pf.deficit < 0 ? "massa" : "mantenere";
+  const obS = QZ_OBIETTIVI.find(x => x[2] === pf.obiettivo && x[3] === pf.deficit);   // l'obiettivo scelto, se il deficit è ancora quello
+  const ob = obS ? obS[2] : pf.deficit > 0 ? "dimagrire" : pf.deficit < 0 ? "massa" : "mantenere";
   const lav = (QZ_LAVORO.find(x => x[3] === (pf.fattoreAttivita || 1.2)) || QZ_LAVORO[0])[2];
   const e = pf.esclusioni || {};
   return {
     nome: pf.nome || "", sesso: pf.sesso || "", eta: pf.eta || "", altezza: pf.altezza || "", peso: pf.peso || "", obiettivo: ob, lavoro: lav,
     sport: sport.length ? sport.map(daSport).filter(Boolean) : [QZ_NESSUNO],
     giorni: tipi.map((t, i) => sportDelTipo(t).length ? i : -1).filter(i => i >= 0),
+    settimana: Object.fromEntries(tipi.map((t, i) => [i, sportDelTipo(t).map(daSport).filter(Boolean)]).filter(([, l]) => l.length)),
+    kmCorsa: (pf.sport.find(sp => sp.id === "corsa") || {}).km || "",
+    oreSport: Object.fromEntries(pf.sport.filter(sp => typeof sp.ora === "number").map(sp => [daSport(sp.id), sp.ora]).filter(([x]) => x)),
     oraAllen: typeof pf.allenOra === "number" ? pf.allenOra : pf.allenOrario === "mattina" ? 7.5 : pf.allenOrario === "sera" ? 19 : "",   // l'ora esatta: rifacendo il questionario non cambia
     pasti: Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_TEMPO.slice(),
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, o[p]])),
@@ -85,6 +98,14 @@ function apriQuestionario(rifai) {
 // la persona nuova: al posto della vecchia schermata unica
 function apriBenvenuto() { apriQuestionario(false); }
 
+// la settimana del questionario: per ogni giorno scelto gli sport che fai; di partenza uno a turno (come prima), poi li cambi tu
+function qzSettimanaPronta() {
+  const R = qz.R, sp = (R.sport || []).filter(x => x !== QZ_NESSUNO), giorni = (R.giorni || []).slice().sort((a, b) => a - b);
+  if (!R.settimana || typeof R.settimana !== "object") R.settimana = {};
+  giorni.forEach((g, j) => { const l = (R.settimana[g] || []).filter(x => sp.includes(x)); R.settimana[g] = l.length || R.settimana[g] ? l : (sp.length ? [sp[j % sp.length]] : []); });
+}
+// gli sport a cui chiedere l'ora (la camminata no: non cambia i pasti)
+const qzSportConOra = (R) => senzaSport(R) ? [] : (R.sport || []).filter(x => x !== QZ_NESSUNO && x !== "camminata");
 function qzValido(q) {
   const v = qz.R[q.k];
   if (q.opz) return true;
@@ -92,7 +113,8 @@ function qzValido(q) {
   if (q.t === "t") return String(v || "").trim() !== "";
   if (q.t === "u") return !!v;
   if (q.t === "m") return !q.req || (v || []).length > 0;
-  if (q.t === "ora") return typeof v === "number";
+  if (q.t === "ora") { const sp = qzSportConOra(qz.R); return sp.length > 1 ? sp.every(x => typeof (qz.R.oreSport || {})[x] === "number") : typeof v === "number"; }
+  if (q.t === "settimana") { qzSettimanaPronta(); return (qz.R.giorni || []).every(g => (qz.R.settimana[g] || []).length > 0); }
   if (q.t === "orari") { const s = ORDINE_TEMPO.filter(p => (qz.R.pasti || []).includes(p)).map(p => qz.R.orari[p]); return s.every(h => typeof h === "number") && s.every((h, i) => !i || h > s[i - 1]); }
   if (q.t === "nomeApp") return String(qz.R.nomeApp || "").trim() !== "";
   return true;
@@ -101,8 +123,11 @@ function qzValido(q) {
 // camminata e yoga/pilates sono attività leggere: non servono le proteine di chi fa pesi o CrossFit
 const QZ_SPORT_LEGGERI = ["camminata", "yoga"];
 function qzMacroKg(R) {
-  const giorni = senzaSport(R) ? 0 : (R.giorni || []).length, leggeri = !senzaSport(R) && R.sport.every(s => QZ_SPORT_LEGGERI.includes(s));
-  return { protKg: giorni === 0 ? 1.3 : leggeri ? 1.4 : giorni <= 2 ? 1.6 : 1.8, grassiKg: 0.8 };
+  const leggeri = !senzaSport(R) && R.sport.every(s => QZ_SPORT_LEGGERI.includes(s));
+  // contano i giorni con un allenamento vero: una camminata breve non chiede più proteine
+  const giorni = senzaSport(R) ? 0 : leggeri ? (R.giorni || []).length : (R.giorni || []).filter(g => { const l = R.settimana && R.settimana[g]; return !l || !l.length || l.some(s => !QZ_SPORT_LEGGERI.includes(s)); }).length;
+  const protKg = giorni === 0 ? 1.3 : leggeri ? 1.4 : giorni <= 3 ? 1.6 : 1.8;   // tre allenamenti a settimana (o meno) non chiedono le proteine di chi si allena tutti i giorni
+  return { protKg: R.obiettivo === "definire" && giorni > 0 ? Math.max(protKg, 2) : protKg, grassiKg: 0.8 };   // per definire servono più proteine, a tenere i muscoli
 }
 // stima dei primi obiettivi con le risposte (stessa formula di tipoInfo, per un giorno di riposo)
 function qzStima() {
@@ -110,9 +135,9 @@ function qzStima() {
   const bmr = basaleMifflin({ uomo: R.sesso === "uomo", eta: +R.eta, cm: +R.altezza, kg });
   const fatt = (QZ_LAVORO.find(x => x[2] === R.lavoro) || QZ_LAVORO[0])[3], def = (QZ_OBIETTIVI.find(x => x[2] === R.obiettivo) || QZ_OBIETTIVI[0])[3];
   const pf = qz.rifai ? leggiProfilo() : {};
-  const mk = qzMacroKg(R), protKg = qz.rifai ? pf.protKg : mk.protKg, grassiKg = qz.rifai ? pf.grassiKg : mk.grassiKg;
+  const mk = qzMacroKg(R), protKg = qz.rifai ? pf.protKg : mk.protKg, grassiKg = qz.rifai ? pf.grassiKg : mk.grassiKg, kgM = pesoRiferimento({ peso: kg, altezza: +R.altezza });
   const kcal = pf.kcalMan > 0 ? Math.max(bmr, pf.kcalMan) : Math.max(bmr, Math.round(bmr * fatt * (1 - def / 100) / 50) * 50);
-  const proteine = pf.protMan > 0 ? Math.round(pf.protMan) : Math.round(kg * protKg / 5) * 5, grassi = pf.grassiMan > 0 ? Math.round(pf.grassiMan) : Math.round(kg * grassiKg);
+  const proteine = pf.protMan > 0 ? Math.round(pf.protMan) : Math.round(kgM * protKg / 5) * 5, grassi = pf.grassiMan > 0 ? Math.round(pf.grassiMan) : Math.round(kgM * grassiKg);
   return { bmr, kcal, proteine, grassi, carboidrati: Math.max(50, Math.round((kcal - proteine * 4 - grassi * 9) / 20) * 5) };
 }
 
@@ -132,9 +157,19 @@ function qzRender() {
     h += `<div class="qz-sc ${q.k === "giorni" ? "qz-giorni" : ""}">${q.o.map((o, i) => `<button class="qz-b ${sel.includes(o[2]) ? "on" : ""}" data-qz-o="${i}">${o[1] ? `<span class="qz-e">${o[1]}</span>` : ""}<span>${esc(o[0])}</span></button>`).join("")}</div>`;
     if (q.altro) h += `<input class="qz-inp qz-altro" id="qz-altro" type="text" placeholder="${esc(q.altroPh || "Altro")}" value="${esc(R[q.altro] || "")}">`;
     if (q.t === "m") h += `<p class="qz-pic">Puoi sceglierne più di uno</p>`;
+  } else if (q.t === "ora" && qzSportConOra(R).length > 1) {   // più sport: il momento di ciascuno (anche nello stesso giorno, es. CrossFit la mattina ed equitazione il pomeriggio)
+    const os = R.oreSport || {};
+    h += `<p class="qz-perche">${esc(q.nota)}</p><div class="qz-sett">${qzSportConOra(R).map(x => { const o = QZ_SPORT.find(y => y[2] === x) || [x, "", x], f = qzFasciaDi(os[x]);
+      return `<div class="qz-sett-r"><b>${o[1]} ${esc(o[0])}</b><div class="qz-sett-s">${QZ_ORA_ALLEN.map(([l, e, , h0]) => `<button class="qz-b qz-mini ${f === h0 ? "on" : ""}" data-qz-fasciasport="${x}|${h0}"><span class="qz-e">${e}</span><span>${l}</span></button>`).join("")}</div></div>`; }).join("")}</div>
+      <p class="qz-pic">${QZ_ORA_ALLEN.map(([l, , q]) => `${l}: ${q}`).join(" · ")}</p>`;
   } else if (q.t === "ora") {
-    h += `<div class="qz-ora"><span>🕒 Ore</span><input type="time" step="900" data-qz-oraallen value="${typeof v === "number" ? fmtOra(v).padStart(5, "0") : ""}"></div>
-      <div class="qz-sc qz-giorni" style="margin-top:10px">${QZ_ORA_ALLEN.map(([l, e, , h0]) => `<button class="qz-b ${v === h0 ? "on" : ""}" data-qz-fascia="${h0}"><span class="qz-e">${e}</span><span>${l} · ${fmtOra(h0)}</span></button>`).join("")}</div>`;
+    const f = qzFasciaDi(v);
+    h += `<p class="qz-perche">${esc(q.nota)}</p><div class="qz-sc">${QZ_ORA_ALLEN.map(([l, e, q, h0]) => `<button class="qz-b ${f === h0 ? "on" : ""}" data-qz-fascia="${h0}"><span class="qz-e">${e}</span><span>${l}<small class="qz-sub">${q}</small></span></button>`).join("")}</div>`;
+  } else if (q.t === "settimana") {
+    qzSettimanaPronta();
+    const sp = (R.sport || []).filter(x => x !== QZ_NESSUNO).map(x => QZ_SPORT.find(o => o[2] === x)).filter(Boolean);
+    h += `<div class="qz-sett">${(R.giorni || []).slice().sort((a, b) => a - b).map(g => `<div class="qz-sett-r"><b>${QZ_GIORNI[g][0]}</b><div class="qz-sett-s">${sp.map(([l, e, x]) => `<button class="qz-b qz-mini ${(R.settimana[g] || []).includes(x) ? "on" : ""}" data-qz-sett="${g}|${x}"><span class="qz-e">${e}</span><span>${esc(l)}</span></button>`).join("")}</div></div>`).join("")}</div>`;
+    if (!qzValido(q)) h += `<p class="qz-pic qz-err">Scegli almeno uno sport per ogni giorno.</p>`;
   } else if (q.t === "orari") {
     const scelti = QZ_PASTI.filter(p => (R.pasti || []).includes(p[2]));
     h += `<div class="qz-orari">${scelti.map(([l, e, k]) => `<label class="qz-ora"><span>${e} ${l}</span><input type="time" step="900" data-qz-ora="${k}" value="${fmtOra(R.orari[k]).padStart(5, "0")}"></label>`).join("")}</div>`;
@@ -155,7 +190,7 @@ function qzRender() {
       <p class="qz-pic">${senzaSport(R) ? "" : "Nei giorni di allenamento un po' di più, in base allo sport. "}Sono stime da cui partire: potrai cambiare tutto nel Profilo.</p>
       ${qz.rifai ? `<p class="qz-pic">Il diario non cambia. Si aggiornano profilo, settimana tipo, orari e cibi esclusi.</p>` : ""}</div>`;
   }
-  if (q.nota) h += `<p class="qz-pic">${esc(q.nota)}</p>`;
+  if (q.nota && q.t !== "ora") h += `<p class="qz-pic">${esc(q.nota)}</p>`;
   if (qz.step === 0 && !qz.rifai) h += `<button class="btn-link qz-backup" data-azione="ripristina">Hai già usato l'app? Ripristina un backup ›</button>`;
   const ultimo = q.t === "riepilogo";
   h += `<div class="qz-foot"><button class="btn block" id="qz-avanti" ${qzValido(q) ? "" : "disabled"}>${ultimo ? "✓ Inizia" : q.opz && !v ? "Salta →" : "Avanti →"}</button></div>`;
@@ -183,6 +218,13 @@ document.addEventListener("input", (e) => {
     qzSalva(); return;
   }
   if (e.target.id === "qz-nome-app") { qz.R.nomeApp = e.target.value; const a = document.querySelector(".qz-anteprima"); if (a) a.textContent = `${qz.R.iconaApp} ${qz.R.nomeApp || "Sailor Fit"}`; qzSalva(); qzAggiornaBtn(); }
+});
+document.addEventListener("change", (e) => {   // l'ora di uno sport (questionario con più sport)
+  if (!qz || !e.target.matches || !e.target.matches("[data-qz-orasport]")) return;
+  const h = oraDa(e.target.value), os = qz.R.oreSport = qz.R.oreSport || {};
+  if (h === null) delete os[e.target.dataset.qzOrasport]; else os[e.target.dataset.qzOrasport] = h;
+  const tutte = Object.values(os); if (tutte.length) qz.R.oraAllen = Math.min(...tutte);   // l'orario «abituale» di riserva: il primo della giornata
+  qzSalva(); qzAggiornaBtn();
 });
 document.addEventListener("change", (e) => {   // orario di allenamento scritto a mano
   if (!qz || !e.target.matches || !e.target.matches("[data-qz-oraallen]")) return;
@@ -214,6 +256,10 @@ document.addEventListener("click", (e) => {
     }
     qzSalva(); qzRender(); return;
   }
+  const st = e.target.closest("[data-qz-sett]");   // un giorno della settimana: tocca gli sport che fai (anche due)
+  if (st) { const [g, x] = st.dataset.qzSett.split("|"), l = qz.R.settimana[g] || [], i = l.indexOf(x); if (i > -1) l.splice(i, 1); else l.push(x); qz.R.settimana[g] = l; qzSalva(); qzRender(); return; }
+  const fs = e.target.closest("[data-qz-fasciasport]");   // il momento di uno sport (più sport)
+  if (fs) { const [x, h0] = fs.dataset.qzFasciasport.split("|"), os = qz.R.oreSport = qz.R.oreSport || {}; os[x] = +h0; qz.R.oraAllen = Math.min(...Object.values(os)); qzSalva(); qzRender(); return; }
   const fa = e.target.closest("[data-qz-fascia]");   // fascia oraria: compila l'ora con un tocco
   if (fa) { qz.R.oraAllen = +fa.dataset.qzFascia; qzSalva(); qzRender(); return; }
   const col = e.target.closest("[data-qz-colore]");
@@ -242,6 +288,7 @@ function qzFine() {
       altri: String(R.nonMangioAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3),
       allergieAltre: String(R.allergieAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3) },
     colore: R.colore || "lilla", iconaApp: R.iconaApp || "🌙", nomeApp: String(R.nomeApp || "").trim() || "Sailor Fit",
+    obiettivo: R.obiettivo || "dimagrire",
   });
   if (R.dieta) pf.esclusioni.dieta = R.dieta;
   ["altri", "allergieAltre", "allergie", "nonMangio"].forEach(k => { if (!pf.esclusioni[k].length) delete pf.esclusioni[k]; });
@@ -250,7 +297,9 @@ function qzFine() {
   if (nuovo) Object.assign(pf, qzMacroKg(R), { recupero: 80 });   // chi rifà il questionario tiene i suoi macro
   // sport: quelli scelti si vedono (anche se erano stati tolti), quelli nuovi si aggiungono; per una persona nuova gli altri si nascondono
   const scelti = senzaSport(R) ? [] : R.sport.filter(x => x !== QZ_NESSUNO);
+  const idDi = {};
   const ids = scelti.map(s => {
+    const id = (() => {
     if (QZ_SPORT_NUOVI[s]) {
       const [nome, icona, kMin] = QZ_SPORT_NUOVI[s];
       let sp = pf.sport.find(x => x.nome.toLowerCase() === nome.toLowerCase());
@@ -261,12 +310,19 @@ function qzFine() {
     if (sp) { delete sp.nascosto; return sp.id; }
     const def = SPORT_DEFAULT.find(x => x.id === s); if (def) { pf.sport.push(Object.assign({}, def)); return def.id; }
     return null;
+    })();
+    if (id) idDi[s] = id;   // sport del questionario → sport dell'app
+    return id;
   }).filter(Boolean);
   if (nuovo) pf.sport.forEach(sp => { if (!ids.includes(sp.id)) sp.nascosto = true; });
+  const km = parseFloat(String(R.kmCorsa ?? "").replace(",", ".")), corsa = pf.sport.find(sp => sp.id === "corsa");
+  if (corsa && km > 0) { corsa.km = Math.round(km * 10) / 10; corsa.ultimo = corsa.km; }   // la tua corsa di solito
+  if (qzSportConOra(R).length > 1 && R.oreSport) Object.entries(R.oreSport).forEach(([x, h]) => { const sp = pf.sport.find(y => y.id === idDi[x]); if (sp && typeof h === "number") sp.ora = h; });   // l'ora di ogni sport
   salvaProfilo(pf);
   // settimana tipo: gli sport scelti a turno nei giorni di allenamento
   const giorni = senzaSport(R) ? [] : (R.giorni || []).slice().sort((a, b) => a - b);
   const tipi = Array(7).fill("riposo"); giorni.forEach((g, j) => { if (ids.length) tipi[g] = ids[j % ids.length]; });
+  if (R.settimana && ids.length > 1) giorni.forEach(g => { const l = (R.settimana[g] || []).map(s => idDi[s]).filter(Boolean); if (l.length) tipi[g] = chiaveTipo(l); });   // anche due sport nello stesso giorno
   salvaTipi(tipi);
   // il peso di oggi entra anche tra le pesate (se oggi non ce n'è già una)
   const pesi = leggiPesi(); if (kg > 0 && !pesi.some(p => p.data === oggiISO())) { pesi.push({ data: oggiISO(), kg }); salvaPesi(pesi); }

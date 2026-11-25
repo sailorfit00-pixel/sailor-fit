@@ -1969,6 +1969,13 @@ button.ant-fit.on { border-style: solid; background: rgba(var(--lilla-rgb),.20);
 .qz-b .qz-e { font-size: 22px; flex: 0 0 auto; line-height: 1; }
 .qz-b.on { background: var(--lilla); border-color: var(--lilla); color: var(--k-1a1426); font-weight: 700; }
 .qz-b.on::after { content: "✓"; margin-left: auto; font-size: 18px; }
+/* questionario: gli sport di ogni giorno (anche due) */
+.qz-sett { display: grid; gap: 12px; }
+.qz-sett-r b { display: block; font-size: 14px; color: var(--muted); margin: 0 0 6px 2px; }
+.qz-sett-s { display: flex; flex-wrap: wrap; gap: 8px; }
+.qz-b.qz-mini { width: auto; min-height: 44px; padding: 8px 12px; gap: 8px; font-size: 15px; border-radius: 14px; }
+.qz-b.qz-mini .qz-e { font-size: 18px; }
+.qz-b.qz-mini.on::after { margin-left: 4px; font-size: 14px; }
 .qz-u { display: flex; align-items: center; gap: 12px; }
 .qz-u b { font-size: 17px; font-weight: 500; color: var(--muted); }
 .qz-inp { width: 100%; font: inherit; font-size: 20px; font-weight: 500; padding: 15px 16px; border-radius: 16px; border: 2px solid rgba(var(--ink-rgb),.08); background: var(--card2); color: var(--text); }
@@ -2102,3 +2109,14 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 .topbar .saluto { flex: 1 1000 auto; margin-left: auto; text-align: right; max-width: none; }
 /* nome molto lungo su un telefono stretto: il saluto lascia il posto al nome (che così si legge tutto) */
 @media (max-width: 420px) { .topbar h1.lunghissimo ~ .saluto { display: none; } }
+
+/* Profilo: l'ora di ogni sport, con sotto il pasto prima e quello dopo */
+.pf-ora-sport { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; margin: 8px 0; }
+.pf-ora-sport > span { font-weight: 600; }
+.pf-ora-sport input { width: 112px; }
+.pf-ora-sport small { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+
+/* questionario: sotto la fascia, quando (es. «dalle 14 alle 18») */
+.qz-b .qz-sub { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.qz-b.on .qz-sub { color: inherit; opacity: .8; }
+.qz-perche { margin: -4px 0 16px; padding: 10px 12px; border-radius: 14px; background: var(--lilla-bg); font-size: 14px; line-height: 1.45; color: var(--text); }
