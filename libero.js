@@ -861,8 +861,17 @@ function consiglioFurboHTML(c, m, fitMosse = []) {
     if (furbiScartati.has(testa)) return null;
     if (typeof alimentoEscluso === "function" && ((a.tipo === "cambia" && alimentoEscluso(a.a)) || (a.tipo !== "pezzi" && a.tipo !== "porta" && a.n && alimentoEscluso(a.n)))) return null;   // cibi che hai escluso nel Profilo
     if (giaFit && ((a.tipo === "cambia" && giaFit.has(`cambia|${a.r.nome}|${a.a}`)) || (a.tipo === "porta" && giaFit.has(`porta|${a.r.nome}|${a.nuova}`)))) return null;   // già proposto in «Più fit»
-    return { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}>${testa}</button>` };   // solo la mossa: il box si tocca per applicarla
+    return { testa, html: `<button class="var-furbo lib-furbo" data-furbo-k="${esc(testa)}" ${attr}>${testa}${cenaDopoHTML(a.d)}</button>` };   // solo la mossa: il box si tocca per applicarla
   };
+  // una mossa che aggiunge carboidrati prima di cena dice quanti ne lasci alla cena (e quanto riso sono), così scegli sapendolo
+  function cenaDopoHTML(d) {
+    if (!d || !(d.carboidrati >= 8) || d.carboidrati * 4 < 0.35 * Math.max(1, d.kcal) || typeof carboCenaDopo !== "function") return "";   // solo mosse fatte soprattutto di carboidrati (riso, pane, patate…), non le mandorle
+    const piu = {}; MACRO_K.forEach(k => { piu[k] = ((m || {})[k] || 0) + (d[k] || 0); });
+    let x = null; try { x = carboCenaDopo(c.data, c.pasto, escludiDi(c), piu); } catch (err) { return ""; }
+    if (x == null) return "";
+    const A = window.ALIMENTI || {}, riso = A["Riso basmati cotto"] ? Math.round(x / (A["Riso basmati cotto"][2] / 100) / 10) * 10 : 0;
+    return `<small class="furbo-cena">a cena restano ~${Math.max(0, Math.round(x))} g di carboidrati${riso >= 30 ? ` (≈ ${riso} g di riso)` : ""}</small>`;
+  }
   // fino a tre idee (con ↻ per altre); nei pasti principali in più la verdura, se manca
   const tutte = righeFit.concat(e ? e.scelte.map(a => ({ a, r: riga(a) })).filter(x => x.r) : []);
   const altre = tutte.filter(x => x.a.tipo !== "verdura"), verd = tutte.find(x => x.a.tipo === "verdura");
@@ -1139,9 +1148,9 @@ function applicaPiuFit(c, quando) {
   if (annulla) avviso("✓ Ricetta aggiornata", "Annulla", () => { annulla(); if (liberoCtx && liberoCtx.anteprima === nome) { liberoCtx.fitApplicato = null; rirenderLibero(); } });
 }
 // aggiunge la ricetta dell'anteprima (normale o più fit) al pasto e torna al pasto
-function aggiungiDaAnteprima(c) {
+function aggiungiDaAnteprima(c) {   // (finali: un pizzico di sale da 0 g resta, ciò che hai tolto col cestino no)
   const a = anteprimaRicetta(c, c.anteprima), stato = c.fitApplicato, mosse = c.fitMosse;
-  const finali = a ? anteprimaItemsModificati(c, a).filter(x => +x.qta > 0) : [], kFinale = a ? a.ps.k : null, nomeFinale = a ? a.ps.nome : null, mod = c.antQta || {}, cambiato = Object.keys(mod).length || Object.keys(c.antUni || {}).length || (a && a.ps.kMisura != null && a.ps.k !== a.ps.kMisura) || finali.some((x, i) => a && a.items[i] && Math.abs(x.qta - a.items[i].qta) > 0.5);   // anche se i pezzi interi hanno cambiato un po' i grammi
+  const tolti0 = c.antQta || {}, tuttiAnt = a ? anteprimaItemsModificati(c, a) : [], finali = tuttiAnt.filter((x, i) => +x.qta > 0 || (+x.qta === 0 && tolti0[i] === undefined && a.items[i] && !(+a.items[i].qta > 0))), kFinale = a ? a.ps.k : null, nomeFinale = a ? a.ps.nome : null, mod = c.antQta || {}, cambiato = Object.keys(mod).length || Object.keys(c.antUni || {}).length || (a && a.ps.kMisura != null && a.ps.k !== a.ps.kMisura) || finali.some((x, i) => a && a.items[i] && Math.abs(x.qta - a.items[i].qta) > 0.5);   // anche se i pezzi interi hanno cambiato un po' i grammi
   c.anteprima = null; c.fitApplicato = null; c.fitMosse = null; c.confermaFit = false; c.antQta = null; c.antK = null; c.antUni = null;
   if (!a) { rirenderLibero(); return; }
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();
@@ -1154,13 +1163,17 @@ function aggiungiDaAnteprima(c) {
   if (cambiato && finali.length) {   // porzioni e quantità scelte nell'anteprima vincono su quelle calcolate
     const g = giornoDiario(c.data), p = g.pasti[i];
     if (p) {
-      p.ingredienti = finali.map(x => Object.assign({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.nome }, x.u && x.u !== "g" ? { vis: x.u } : {}));   // vis = l'unità con cui l'hai scelta (pz, cucchiai…)
+      const nomiAnt = new Set(tuttiAnt.map(x => x.nome)), ingrPrima = p.ingredienti;
+      p.ingredienti = finali.map(x => Object.assign({ nome: x.nome, qta: +x.qta, unita: "g", lock: true, cercato: x.nome }, x.u && x.u !== "g" ? { vis: x.u } : {}))   // vis = l'unità con cui l'hai scelta (pz, cucchiai…)
+        .concat((p.ingredienti || []).filter(i => !nomiAnt.has(i.nome)));   // ciò che l'anteprima non mostra resta: la ricetta è ancora intera, col contatore delle porzioni
       if (kFinale) { p.nPezzi = kFinale; if (nomeFinale) p.nome = nomeFinale; }
+      if ((ingrPrima || []).some(i => !p.ingredienti.some(x => x.nome === i.nome)) && typeof rinominaLibero === "function") rinominaLibero(p, ingrPrima);   // tolto col cestino un ingrediente del nome: «(senza salmone)»
       aggiornaMacro(p); scriviGiorno(c.data, g);
     }
   }
   if (typeof renderOggi === "function") renderOggi();
   c._firma0 = undefined;   // appena aggiunto: non è una modifica da salvare
+  if (typeof apriRicettaNuova === "function") apriRicettaNuova(c, i);
   ricaricaViva(c);
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
   avviso(stato ? "✓ Aggiunta, più fit" : "✓ Aggiunta");
@@ -1279,7 +1292,7 @@ function liberoHTML() {
         <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu && !inGrammi ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${avvT && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}${bloccato ? "" : frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
-      </div>${!bloccato && (aperta || c.ultimoAgg === it.nome) ? presetHTML(k) : ""}${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
+      </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${!bloccato && aperta ? presetHTML(k) : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
     </div>`;
   };
   const parti = [];
@@ -1322,8 +1335,8 @@ function liberoHTML() {
   return `
     <h3 class="modal-title"><span class="mt-testo">${c.titolo()}</span></h3>
     ${bloccato ? "" : `<div class="lib-box">
-    ${c.intestazione()}
     ${campoAggiungiHTML(c)}
+    ${c.intestazione()}
     </div>`}
     ${ignoto}
     ${c.items.length ? `
@@ -1697,7 +1710,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!liberoCtx) return;
     const c = liberoCtx;
     const au = e.target.closest && e.target.closest("[data-ant-unita]");   // unità dell'anteprima: g ⇄ pz…, la quantità resta la stessa
-    if (au && c.anteprima) { const k = +au.dataset.antUnita, a = anteprimaRicetta(c, c.anteprima), cur = a && anteprimaItemsModificati(c, a)[k]; if (cur) { (c.antUni = c.antUni || {})[k] = au.value; salvaUnitaPreferita(cur.nome, au.value); (c.antQta = c.antQta || {})[k] = qtaPezziInteri(cur.nome, au.value, +cur.qta); rirenderLibero(); } return; }
+    if (au && c.anteprima) { const k = +au.dataset.antUnita, a = anteprimaRicetta(c, c.anteprima), cur = a && anteprimaItemsModificati(c, a)[k]; if (cur) { (c.antUni = c.antUni || {})[k] = au.value; salvaUnitaPreferita(cur.nome, au.value); (c.antQta = c.antQta || {})[k] = qtaPezziInteri(cur.nome, au.value, +cur.qta); dopoMenu(au, () => rirenderLibero()); } return; }
     const q = e.target.closest("[data-lib-qta]");
     if (q) {
       const it = c.items[+q.dataset.libQta];
@@ -1708,10 +1721,22 @@ document.addEventListener("DOMContentLoaded", () => {
       ricalcolaLibero(); rirenderLibero(); return;
     }
     const us = e.target.closest("[data-lib-unita-sel]");
-    if (us) { const it = c.items[+us.dataset.libUnitaSel]; it.unita = us.value; salvaUnitaPreferita(it.nome, us.value); rirenderLibero(); return; }
+    if (us) {
+      const it = c.items[+us.dataset.libUnitaSel]; it.unita = us.value; salvaUnitaPreferita(it.nome, us.value);
+      const pz = (window.PESO_PZ || {})[it.nome];
+      if (us.value === "pz" && pz && +it.qta > 0) { it.qta = Math.max(0.5, Math.round(it.qta / pz * 2) / 2) * pz; it.lock = true; ricalcolaLibero(); }   // in pezzi: interi o mezzi (3,4 pz → 3,5)
+      dopoMenu(us, () => rirenderLibero()); return;
+    }
     const alt = e.target.closest("[data-lib-alt]");
-    if (alt) { const it = c.items[+alt.dataset.libAlt]; it.nome = alt.value; if (!it.lock) it.qta = 0; ricalcolaLibero(); rirenderLibero(); }
+    if (alt) { const it = c.items[+alt.dataset.libAlt]; it.nome = alt.value; if (!it.lock) it.qta = 0; ricalcolaLibero(); dopoMenu(alt, () => rirenderLibero()); }
   });
+  // Su iPhone il menu a tendina si sta ancora chiudendo quando arriva la scelta: ridisegnare il pannello in quell'istante
+  // (il menu sparisce da sotto il dito) può far ricaricare la pagina. Prima si chiude il menu, poi si ridisegna.
+  function dopoMenu(sel, fn) {
+    const cc = liberoCtx;
+    try { sel.blur(); } catch (e) {}
+    setTimeout(() => { if (liberoCtx === cc) fn(); }, 120);
+  }
   mc.addEventListener("focusin", (e) => { if (liberoCtx && e.target.dataset && e.target.dataset.libNome !== undefined) { const t = e.target; setTimeout(() => t.select(), 0); } });
   mc.addEventListener("focusout", (e) => { // se esci dal campo senza scegliere, torna il nome di prima
     const t = e.target;
@@ -1761,6 +1786,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const ar = e.target.closest("[data-autoc-ricetta], [data-ignoto-ricetta]");
+    if (ar && liberoCtx && liberoCtx.vivo) {   // la ricetta si apre prima in anteprima: scegli quante porzioni e le quantità, poi «Aggiungi» la mette nel pasto
+      const cc = liberoCtx, inp = document.getElementById("lib-input");
+      if (inp) { inp.value = ""; inp.blur(); }
+      cc.anteprima = ar.dataset.autocRicetta || ar.dataset.ignotoRicetta; cc.fitApplicato = null; cc.antQta = {}; cc.antK = null; cc.antUni = null;
+      rirenderLibero(); const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0; return;
+    }
     if (ar && liberoCtx && typeof usaRicettaNellEditor === "function") { usaRicettaNellEditor(ar.dataset.autocRicetta || ar.dataset.ignotoRicetta); return; }
     const av = e.target.closest("[data-autoc]");
     if (av && liberoCtx) {

@@ -844,7 +844,7 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 /* 2. aggiungi: riquadro con bordo lilla */
 .lib-box { border: 1px solid rgba(var(--lilla-rgb),.45); background: var(--lilla-bg); border-radius: var(--r-l); padding: 12px 12px 14px; }
 .lib-box .pm-agg { margin: 0 0 6px; color: var(--lilla); }
-.lib-box .lib-obiettivo { margin-top: 0; }
+.lib-box .lib-obiettivo { margin-top: 12px; }   /* sotto la barra di ricerca: aggiungendo il primo alimento la barra non si sposta */
 .lib-box .lib-add { margin-top: 8px; }
 /* 3. suggerimenti: righe leggere con un ＋ */
 .modal .sugg-ricette .riga-ricetta { position: relative; background: none; border: 1px solid var(--line2); padding-right: 52px; }
@@ -1188,7 +1188,8 @@ body[data-tab="oggi"] #tab-oggi, body[data-tab="settimana"] #tab-settimana, body
 .cosa-testa { display: flex; align-items: center; justify-content: space-between; }
 .cosa-ic { display: flex; align-items: center; gap: 10px; }
 .cosa-ic b { font-size: 20px; color: var(--muted); line-height: 1; }
-.cosa-altre { background: var(--card2); border: 1px solid var(--lilla); color: var(--lilla); display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 26px; padding: 0; border-radius: 999px; cursor: pointer; }
+.cosa-altre { background: var(--card2); border: 1px solid var(--lilla); color: var(--lilla); display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 36px; padding: 0; border-radius: 999px; cursor: pointer; flex: 0 0 auto; }
+.cosa-altre svg { width: 19px; height: 19px; }
 .cosa-altre:active { background: var(--lilla-bg); }
 
 /* gli avvisi stanno sotto i pasti (la lista dei pasti ha già 10 px di distanza tra gli elementi) */
@@ -1905,6 +1906,7 @@ button.ant-fit.on { border-style: solid; background: rgba(var(--lilla-rgb),.20);
 /* testata del pasto vuoto come quella del pasto pieno */
 .lib-obiettivo.pm-tot { margin: 0 0 4px; }
 .lib-ob-macro { justify-content: flex-start; margin: 0 0 12px; }
+.lib-box .lib-obiettivo.pm-tot { margin-top: 16px; }   /* sotto la barra di ricerca */
 .cosa-sez { font-size: 13px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); margin: 10px 0 2px; }
 /* «Salva pasto» / «Salva modifiche»: in una barra scura fissa in fondo al pannello (il tasto non galleggia sul contenuto) */
 .modal .lib-conferma { position: static; box-shadow: none; margin: 0; width: 100%; }

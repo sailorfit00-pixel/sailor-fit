@@ -125,6 +125,35 @@ function quotaBase(data, p) {
 // (quello che non prende passa agli altri pasti)
 const PESO_MACRO_PRE = { carboidrati: 1.3, grassi: 0.4 };
 const pesoMacro = (data, pasto, k) => preWorkout(data, pasto) ? (PESO_MACRO_PRE[k] || 1) : 1;
+// Quanto spetta a «pasto» di ciò che manca (manca), insieme ai pasti che restano (restanti).
+// Ogni pasto ha la sua parte normale della giornata. Se prima hai mangiato meno del previsto, l'avanzo va soprattutto alla cena
+// (la sera è quando la fame si sente di più): così il pranzo non si «mangia» i carboidrati della cena.
+// Se invece prima hai mangiato di più, si toglie a tutti in proporzione, come prima.
+let PESO_AVANZO_CENA = 3;
+function ripartisciMancante(data, pasto, restanti, manca) {
+  const tutti = momentiGiorno(data), gruppo = [pasto, ...restanti], T = targetData(data), r = {};
+  MACRO_K.forEach(k => {
+    const w = (p) => (quotaBase(data, p) || (p === pasto ? 0.2 : 0)) * pesoMacro(data, p, k);
+    const sommaTutti = tutti.reduce((s, p) => s + w(p), 0) || 1, sommaGruppo = gruppo.reduce((s, p) => s + w(p), 0) || 1;
+    const normale = (p) => (T[k] || 0) * w(p) / sommaTutti;   // la parte del pasto in una giornata «da manuale»
+    const avanzo = manca[k] - gruppo.reduce((s, p) => s + normale(p), 0);
+    if (avanzo <= 0 || _compilaGiorni > 0 || !restanti.includes("cena") && pasto !== "cena") { r[k] = Math.max(0, Math.round(manca[k] * w(pasto) / sommaGruppo)); return; }
+    const wa = (p) => w(p) * (p === "cena" ? PESO_AVANZO_CENA : 1), sommaA = gruppo.reduce((s, p) => s + wa(p), 0) || 1;
+    r[k] = Math.max(0, Math.round(normale(pasto) + avanzo * wa(pasto) / sommaA));
+  });
+  return r;
+}
+// Carboidrati che restano alla cena se in questo pasto ne aggiungi «piu» (per l'avviso nei consigli furbi); null se la cena non c'è o è già fatta
+function carboCenaDopo(data, pasto, escludiIdx, piu) {
+  if (pasto === "cena" || !momentiGiorno(data).includes("cena")) return null;
+  const g = giornoDiario(data), fatti = new Set(g.pasti.filter((_, k) => !esclusoIdx(escludiIdx, k)).map(p => p.pasto));
+  if (fatti.has("cena")) return null;
+  const saltato = (p) => data === oggiISO() && pastoPassato(data, p);
+  const manca = mancaData(data, escludiIdx), dopo = {};
+  MACRO_K.forEach(k => { dopo[k] = (manca[k] || 0) - ((piu && piu[k]) || 0); });
+  const restanti = momentiGiorno(data).filter(p => p !== pasto && p !== "cena" && !fatti.has(p) && !saltato(p));
+  return ripartisciMancante(data, "cena", restanti, dopo).carboidrati;
+}
 // Obiettivo di un pasto = quota di ciò che manca, divisa tra i pasti non ancora mangiati
 function targetPastoDiario(data, pasto, escludiIdx = null) {
   const g = giornoDiario(data);
@@ -133,12 +162,7 @@ function targetPastoDiario(data, pasto, escludiIdx = null) {
   // un pasto di oggi già passato e vuoto è saltato: la sua quota va ai pasti che restano (non "ruba" calorie)
   const saltato = (p) => data === oggiISO() && pastoPassato(data, p);
   const restanti = momentiGiorno(data).filter(p => p !== pasto && !fatti.has(p) && !saltato(p));
-  const r = {};
-  MACRO_K.forEach(k => {
-    const w = (quotaBase(data, pasto) || 0.2) * pesoMacro(data, pasto, k);
-    const quota = w / (w + restanti.reduce((s, p) => s + quotaBase(data, p) * pesoMacro(data, p, k), 0));
-    r[k] = Math.max(0, Math.round(manca[k] * quota));
-  });
+  const r = ripartisciMancante(data, pasto, restanti, manca);
   // le kcal seguono i macro del pasto (per il pre-workout cambiano un po')
   if (pesoMacro(data, pasto, "grassi") !== 1) r.kcal = Math.min(Math.round(r.proteine * 4 + r.carboidrati * 4 + r.grassi * 9), Math.max(0, manca.kcal));   // mai più di ciò che resta davvero nella giornata
   return r;
@@ -208,6 +232,8 @@ function rinominaLibero(p, prima) {
     if (r) {
       const conta = (lista) => (lista || []).filter(i => i.unita !== "q.b." && A[i.nome] && grammiIng(i) > 0).map(i => i.nome);   // q.b. e alimenti sconosciuti non contano
       let nome = String(p.nome || "").replace(/\s*\(con [^)]*\)\s*$/, "");
+      const senza = ((nome.match(/\s*\(senza ([^)]*)\)\s*$/) || [])[1] || "").split(", ").filter(Boolean);   // ingredienti del nome già tolti
+      nome = nome.replace(/\s*\(senza [^)]*\)\s*$/, "");
       if (!nome.trim() || /^✍️/.test(nome)) nome = r.nome;   // piatti rinominati con l'elenco degli ingredienti dalle versioni vecchie: torna il nome della ricetta
       if (prima && typeof ingredienteNelNome === "function") {
         const vecchi = conta(prima), nuovi = conta(p.ingredienti), sNuovi = new Set(nuovi), sVecchi = new Set(vecchi);
@@ -215,9 +241,13 @@ function rinominaLibero(p, prima) {
         const coppie = vecchi.length === nuovi.length ? vecchi.map((v, k) => [v, nuovi[k]]).filter(([v, n]) => v !== n && !sNuovi.has(v) && !sVecchi.has(n)) : [];
         const sostituiti = new Set(coppie.map(x => x[0]));
         const tolti = vecchi.filter(v => !sNuovi.has(v) && !sostituiti.has(v));
-        if (tolti.some(v => ingredienteNelNome(nome, v))) { delete p.ricetta; delete p.nPezzi; }
-        else coppie.forEach(([v, n]) => { const x = nomeConSostituzione(nome, v, n); if (x) nome = x; });
+        // tolto un ingrediente del nome: resta la ricetta (il riquadro resta aperto per altre modifiche) e il nome lo dice, «(senza broccoli)»
+        tolti.filter(v => ingredienteNelNome(nome, v)).forEach(v => { const t = v.toLowerCase(); if (!senza.includes(t)) senza.push(t); });
+        coppie.forEach(([v, n]) => { const x = nomeConSostituzione(nome, v, n); if (x) nome = x; });
       }
+      const ancora = new Set((p.ingredienti || []).map(i => String(i.nome).toLowerCase()));
+      const senzaOra = senza.filter(t => !ancora.has(t));   // rimesso? allora non è più «senza»
+      if (senzaOra.length) nome += ` (senza ${senzaOra.join(", ")})`;
       if (p.ricetta) {
         const base = new Set(((r._orig || r).ingredienti || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));
         const att = new Set((p.ingredienti || []).filter(i => i.unita !== "q.b." && A[i.nome]).map(i => i.nome));
@@ -402,6 +432,7 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
       }
       // ricette: i gruppi si riconoscono dall'ordine tra i piatti-ricetta del momento
       const ric = gg.pasti.filter(p => p.pasto === c.pasto && p.ricetta);
+      const apertiTs = new Set(ric.filter((p, n) => c.gruppiAperti && c.gruppiAperti.has(n)).map(p => p.ts));   // le ricette aperte restano aperte anche se cambiano posto o nome
       ric.forEach((p, n) => {
         const righe = c.items.filter(x => x.grp === n && +x.qta > 0 && A[x.nome]).map(riga);
         if (!righe.length) { gg.pasti.splice(gg.pasti.indexOf(p), 1); cambiato = true; struttura = true; return; }
@@ -421,7 +452,10 @@ function apriPastoDiario(data, idx = null, pastoIniz = null) {
         unisciPastiLiberi(data, c.pasto);
         const r = caricaItemiVivi(data, c.pasto);
         c.items = r.items; c.gruppi = r.gruppi; c._ult = JSON.stringify(c.items);
-        if (c.gruppiAperti) c.gruppiAperti.clear();   // le ricette hanno cambiato posto: si richiudono
+        if (c.gruppiAperti) {   // le ricette possono aver cambiato posto: resta aperta quella che lo era (la si riconosce dall'ora in cui è stata aggiunta)
+          c.gruppiAperti.clear();
+          giornoDiario(data).pasti.filter(p => p.pasto === c.pasto && p.ricetta).forEach((p, n) => { if (p.ts && apertiTs.has(p.ts)) c.gruppiAperti.add(n); });
+        }
       } else c.gruppi = caricaItemiVivi(data, c.pasto).gruppi;   // le intestazioni seguono lo stato (il contatore porzioni c'è solo se la ricetta è intatta)
     },
     intestazione: () => liberoCtx.items.length ? "" : liberoCtx.obiettivo(),   // con delle righe la riga "ti restano" sta sotto il risultato
@@ -556,12 +590,19 @@ function ingredientiRicettaInGrammi(r, target) { return porzioneSuMisura(r, targ
 // Sceglie un'idea dal ricettario: il pasto viene aggiunto subito
 // Tocco sulla ricetta: se si conta a pezzi (pancake, girelle, fette…) si apre il pasto con il selettore dei pezzi,
 // così scegli quanti mangiarne PRIMA di aggiungerlo. Il ＋ aggiunge subito; le ricette senza pezzi si aggiungono subito.
+// la ricetta appena aggiunta si vede già aperta, con i suoi ingredienti (senza un secondo tocco)
+function apriRicettaNuova(c, i) {
+  if (!c || !c.gruppiAperti || i < 0) return;
+  c.gruppiAperti.add(giornoDiario(c.data).pasti.slice(0, i).filter(p => p.pasto === c.pasto && p.ricetta).length);
+}
 function usaRicettaNellEditor(nomeRicetta) {
   const c = liberoCtx;
   if (!c || !c.vivo) return;
   if (c.bozza && typeof salvaBozzaAperta === "function") salvaBozzaAperta();   // prima si salva la bozza: ricaricando dal diario le righe non confermate andrebbero perse
   const snapUsa = JSON.stringify(giornoDiario(c.data));
-  if (aggiungiRicettaIn(c.data, c.pasto, nomeRicetta) < 0) return;   // la ricetta entra nel pasto: le sue righe compaiono nell'elenco
+  const iNuova = aggiungiRicettaIn(c.data, c.pasto, nomeRicetta);
+  if (iNuova < 0) return;   // la ricetta entra nel pasto: le sue righe compaiono nell'elenco
+  apriRicettaNuova(c, iNuova);
   renderOggi(); ricaricaViva(c);
   mostraToast("Aggiunto", "Annulla", () => { if (liberoCtx !== c) return; scriviGiorno(c.data, JSON.parse(snapUsa)); renderOggi(); ricaricaViva(c); });
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
@@ -1436,7 +1477,14 @@ function alimentiAbituali() {
 // -------- Settimana già pronta --------
 // Riempie i momenti ancora vuoti dei giorni da oggi a domenica con le ricette: porzioni su misura, così ogni giornata torna con i macro;
 // varietà (poche ripetizioni nella settimana, base di carboidrati e proteine diverse nello stesso giorno) e preferenza per ciò che hai in casa
-function pianificaSettimana(dataRif, soloData, opz = {}) {   // soloData: compila un giorno solo (il resto della settimana serve per la varietà)
+// «Compila» costruisce già giornate bilanciate: lì l'avanzo non si sposta sulla cena (vale quando registri tu, o quando compili un pasto solo)
+let _compilaGiorni = 0;
+function pianificaSettimana(dataRif, soloData, opz = {}) {
+  if (opz.soloSlot) return pianificaSettimanaVera(dataRif, soloData, opz);
+  _compilaGiorni++;
+  try { return pianificaSettimanaVera(dataRif, soloData, opz); } finally { _compilaGiorni--; }
+}
+function pianificaSettimanaVera(dataRif, soloData, opz = {}) {   // soloData: compila un giorno solo (il resto della settimana serve per la varietà)
   const p = pianoSettimana(dataRif), oggi = oggiISO(), giorni = p.date.filter(d => d >= oggi && (!soloData || d === soloData));
   const prima = {}; giorni.forEach(d => { prima[d] = JSON.stringify(leggiDiario()[d] || null); });
   const incasa = new Set((typeof leggiInCasa === "function" ? leggiInCasa() : []).map(x => x.toLowerCase()));
