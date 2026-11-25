@@ -2298,3 +2298,9 @@ body.tastiera .qz-backup { display: none; }
 .spesa-disp { padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(var(--lilla-rgb), .3); background: var(--lilla-bg); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
 .spesa-reset { margin-bottom: 12px; }
 .spesa-reset + .campo-nota { margin-top: 12px; }
+/* Profilo → I tuoi sport: colonne fisse (icona · nome · minuti · unità · kcal · cestino), così i riquadri dei minuti sono tutti allineati
+   (prima si spostavano con la lunghezza di «km»/«min» e delle kcal) */
+.sport-riga:not(.nuovo) { display: grid; grid-template-columns: 26px minmax(0, 1fr) 50px 28px 74px 36px; align-items: center; column-gap: 5px; }
+.sport-riga:not(.nuovo) .sr-dur { width: 50px; }
+.sport-riga:not(.nuovo) > em:not(.sr-kcal) { text-align: left; }
+.sport-riga:not(.nuovo) .sr-kcal { margin-left: 0; text-align: right; }
