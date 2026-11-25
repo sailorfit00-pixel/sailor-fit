@@ -2120,3 +2120,26 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 .qz-b .qz-sub { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 .qz-b.on .qz-sub { color: inherit; opacity: .8; }
 .qz-perche { margin: -4px 0 16px; padding: 10px 12px; border-radius: 14px; background: var(--lilla-bg); font-size: 14px; line-height: 1.45; color: var(--text); }
+
+/* Alimento singolo nel pasto: tutto su una riga (nome · quantità · cestino), il nome in grassetto così si vede subito.
+   Le scelte rapide sono più discrete: l'occhio va prima all'alimento. */
+.lib-riga.riga-titolo .lib-nome-txt { font-weight: 700; }
+.lib-preset { gap: 4px; padding: 2px 0 10px; }
+.lib-preset-b { min-height: 32px; border-color: transparent; background: rgba(var(--ink-rgb), .04); font-size: 13.5px; font-weight: 500; color: var(--muted); }
+.lib-preset-b small { font-size: 11.5px; }
+.lib-preset-b.on { background: rgba(var(--ink-rgb), .08); border-color: transparent; color: var(--text); font-weight: 700; }
+.pm-blocco .lib-preset { padding: 2px 12px 10px; }
+/* dentro un piatto aperto (alimento o ricetta) nessuna linea: le linee separano solo un piatto dall'altro */
+.pm-sezione .pm-dett, .pm-sezione .lib-voce .pm-dett, .pm-sezione .pm-ricetta .pm-dett { border-top: 0; margin-top: 4px; padding-top: 4px; }
+/* alimenti scelti ma non ancora aggiunti al pasto: quantità, scelte rapide e ✓ Aggiungi */
+.pm-nuovi { margin: 6px 0 18px; }
+.pm-nuovi .pm-tot { margin-bottom: 8px; }
+.pm-nuovi-ok { margin-top: 2px; }
+/* piatto intero da aggiungere (Ripeti, mangiati di recente): nome · kcal · cestino, sotto le porzioni */
+.pm-nuovo-piatto { margin: 0 0 12px; }
+.pnp-testa { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.pnp-testa b { flex: 1 1 auto; min-width: 0; font-size: 15px; }
+.pnp-testa .pr-kcal { flex: 0 0 auto; color: var(--muted); }
+.pm-nuovo-piatto .pm-contatore { margin: 2px 0 0; }
+/* nel pasto le idee si toccano per aprirle (anteprima): niente ＋ */
+.lib-corpo .sugg-ricette .riga-ricetta::after { display: none; }

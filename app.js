@@ -1675,6 +1675,16 @@ function ripristinaProfiloPrima() {
   [["mp_profilo", _profiloPrima.profilo], ["mp_tipi", _profiloPrima.tipi]].forEach(([k, v]) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
   calcolaTarget(); applicaPersonalizzazione(); if (typeof renderOggi === "function") renderOggi();
 }
+function chiediSalvataggioPasto(c, nuovi) {
+  openModal(`<h3 class="modal-title">Salvare il pasto?</h3><p class="hint">${nuovi ? "Hai scelto qualcosa ma non l'hai ancora aggiunto" : "Hai cambiato qualcosa e non l'hai ancora salvato"}.</p>
+    <div class="wiz-nav"><button class="btn-sec danger" data-pasto-nonsalvare>Non salvare</button><button class="btn" data-pasto-salva>✓ Salva</button></div>`);
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest || typeof liberoCtx === "undefined" || !liberoCtx) return;
+  const c = liberoCtx;
+  if (e.target.closest("[data-pasto-salva]")) { vibra(); if (typeof confermaNuovi === "function") confermaNuovi(c); if (typeof fotoPasto === "function") fotoPasto(c); closeModal(true); if (typeof renderOggi === "function") renderOggi(); avviso("✓ Pasto salvato"); return; }
+  if (e.target.closest("[data-pasto-nonsalvare]")) { if (typeof tornaAllaFoto === "function") tornaAllaFoto(c); closeModal(true); if (typeof renderOggi === "function") renderOggi(); avviso("Modifiche non salvate"); return; }
+});
 function chiediSalvataggioProfilo() {
   openModal(`<h3 class="modal-title">Salvare le modifiche al Profilo?</h3><p class="hint">Hai cambiato qualcosa e non l'hai ancora salvato.</p>
     <div class="wiz-nav"><button class="btn-sec danger" data-pf-nonsalvare>Non salvare</button><button class="btn" data-pf-salva>✓ Salva</button></div>`);
@@ -1690,6 +1700,15 @@ function closeModal(forza) {
   if (!forza && document.getElementById("form-profilo")) {
     if (profiloModificato()) { chiediSalvataggioProfilo(); return; }
     _profiloPrima = null;
+  }
+  // ✕ (o tocco fuori) sulla domanda «Salvare il pasto?»: si torna al pasto, niente si perde
+  if (!forza && typeof liberoCtx !== "undefined" && liberoCtx && liberoCtx.vivo && document.querySelector("#modal-content [data-pasto-salva]")) {
+    rirenderLibero(); const sh = document.querySelector("#modal .modal-sheet"); if (sh) sh.classList.add("foglio-pieno"); return;
+  }
+  // chiudendo un pasto con modifiche non salvate (o alimenti scelti ma non aggiunti): prima si chiede
+  if (!forza && typeof liberoCtx !== "undefined" && liberoCtx && liberoCtx.vivo && !document.getElementById("modal").hidden && document.querySelector("#modal-content .lib-corpo")) {
+    const c = liberoCtx, nuovi = c.items.some(x => x.nuovo) || (c.piattiNuovi || []).length;
+    if (nuovi || (typeof pastoDaSalvare === "function" && pastoDaSalvare(c))) { chiediSalvataggioPasto(c, nuovi); return; }
   }
   if (typeof fermaFotocamera === "function") fermaFotocamera();
   if (typeof sceltaAllen !== "undefined") sceltaAllen = null;
@@ -2152,6 +2171,19 @@ document.addEventListener("change", (e) => {   // Profilo: l'ora di uno sport
   if (h === null) delete sp.ora; else sp.ora = h;
   salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi();
 });
+// Vibrazione breve quando confermi (✓ Aggiungi, ✓ Salva). Si spegne nel Profilo.
+// Android: la vibrazione del telefono. iPhone (Safari non la permette ai siti): il piccolo «tic» tattile di un interruttore,
+// che iOS 18 fa sentire quando l'interruttore cambia; va chiamata subito dentro un tocco.
+function vibra(forte) {
+  try {
+    if (leggiProfilo().vibrazione === false) return;
+    if (navigator.vibrate) { navigator.vibrate(forte ? [25, 60, 25] : 18); return; }
+    const l = document.createElement("label"), i = document.createElement("input");
+    i.type = "checkbox"; i.setAttribute("switch", ""); l.setAttribute("aria-hidden", "true"); l.style.display = "none";
+    l.appendChild(i); document.body.appendChild(l); l.click(); if (forte) setTimeout(() => { try { l.click(); } catch (e) {} }, 90);
+    setTimeout(() => l.remove(), 200);
+  } catch (e) {}
+}
 // Il questionario iniziale (una domanda alla volta) è in benvenuto.js
 document.addEventListener("click", (e) => {
   if (e.target.closest && e.target.closest("[data-allen-ora-togli]")) {   // Profilo: togli l'orario abituale di allenamento
@@ -2276,6 +2308,9 @@ function apriProfilo() {
     <p class="campo-nota">Su iPhone anche l'icona della schermata Home prende questo colore e il nome dell'app. Se l'hai già aggiunta, toglila e aggiungila di nuovo da Safari (Condividi → Aggiungi alla schermata Home): i tuoi dati restano.</p>
     <label class="wiz-l">Tema</label>
     <div class="chips">${[["scuro", "🌙 Scuro"], ["chiaro", "☀️ Chiaro"]].map(([k, l]) => `<button class="chip ${(pf.tema || "scuro") === k ? "attivo" : ""}" data-pers-tema="${k}">${l}</button>`).join("")}</div>
+    <label class="wiz-l">Vibrazione</label>
+    <div class="chips">${[["si", "📳 Sì"], ["no", "🔕 No"]].map(([k, l]) => `<button class="chip ${(pf.vibrazione === false ? "no" : "si") === k ? "attivo" : ""}" data-pers-vibra="${k}">${l}</button>`).join("")}</div>
+    <p class="campo-nota">Una piccola vibrazione quando tocchi «✓ Aggiungi» o «✓ Salva». Su iPhone è leggera e c'è solo sui modelli recenti.</p>
     <button class="btn-sec block" data-azione="rifai-questionario">📝 Rifai il questionario iniziale</button>
     <div class="barra-salva due" id="pf-barra" ${profiloModificato() ? "" : "hidden"}><button class="btn-sec" data-pf-annulla>Annulla</button><button class="btn" data-pf-salva>✓ Salva</button></div>
 `);
@@ -2296,9 +2331,9 @@ function esclusioniHTML(pf) {
 // Profilo: tocchi su cibi esclusi, icona e colore; testi del nome
 document.addEventListener("click", (e) => {
   if (!e.target.closest || !e.target.closest("#modal-content")) return;
-  const es = e.target.closest("[data-escl]"), ic = e.target.closest("[data-pers-icona]"), co = e.target.closest("[data-pers-colore]"), te = e.target.closest("[data-pers-tema]");
+  const es = e.target.closest("[data-escl]"), ic = e.target.closest("[data-pers-icona]"), co = e.target.closest("[data-pers-colore]"), te = e.target.closest("[data-pers-tema]"), vb = e.target.closest("[data-pers-vibra]");
   const ea = e.target.closest("[data-escl-aggiungi]"), et = e.target.closest("[data-escl-togli]");
-  if (!es && !ic && !co && !te && !ea && !et) return;
+  if (!es && !ic && !co && !te && !ea && !et && !vb) return;
   const pf = leggiProfilo();
   if (ea || et) {   // allergie e cibi scritti a mano
     const x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {});
@@ -2319,6 +2354,7 @@ document.addEventListener("click", (e) => {
   if (ic) pf.iconaApp = ic.dataset.persIcona;
   if (co) pf.colore = co.dataset.persColore;
   if (te) { if (te.dataset.persTema === "chiaro") pf.tema = "chiaro"; else delete pf.tema; }   // di base scuro
+  if (vb) { if (vb.dataset.persVibra === "no") pf.vibrazione = false; else delete pf.vibrazione; }   // di base sì
   { const x = pf.esclusioni;   // niente escluso: il profilo torna esattamente com'era (anche per la barra «Salva»)
     if (x) { ["allergie", "nonMangio", "altri", "allergieAltre"].forEach(k => { if (Array.isArray(x[k]) && !x[k].length) delete x[k]; }); if (!Object.keys(x).length) delete pf.esclusioni; } }
   salvaProfilo(pf); applicaPersonalizzazione(); riapriProfilo();
