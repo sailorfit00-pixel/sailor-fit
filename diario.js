@@ -1961,6 +1961,14 @@ function barraProgressoHTML(nome, cls, val, tot, pct) {
     <div class="prog-bar"><span class="${cls.replace("dot-", "mb-")}${sopra ? " sopra" : ""}" style="width:${w}%"></span></div>
   </div>`;
 }
+document.addEventListener("change", (e) => {   // quanto dura uno sport quel giorno (o nella settimana tipo): l'obiettivo del giorno si aggiorna
+  if (!sceltaAllen || !e.target.matches || !e.target.matches("[data-allen-dur]")) return;
+  const id = e.target.dataset.allenDur, sp = leggiProfilo().sport.find(x => x.id === id), v = parseFloat(String(e.target.value).replace(",", "."));
+  if (!sp) return;
+  if (!(v > 0) || v === durataSport(sp)) delete sceltaAllen.dur[id]; else sceltaAllen.dur[id] = sp.perKm ? Math.round(v * 10) / 10 : Math.round(v);   // uguale al solito: non serve scriverla
+  const sh = document.querySelector("#modal .modal-sheet"), sc = sh ? sh.scrollTop : 0;
+  document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); if (sh) sh.scrollTop = sc;
+});
 document.addEventListener("change", (e) => {   // Oggi: l'ora di uno sport, solo per quel giorno
   if (!sceltaAllen || !sceltaAllen.ore || !e.target.matches || !e.target.matches("[data-allen-ora-sport]")) return;
   const h = oraDa(e.target.value); if (h === null) delete sceltaAllen.ore[e.target.dataset.allenOraSport]; else sceltaAllen.ore[e.target.dataset.allenOraSport] = h;
@@ -1975,21 +1983,22 @@ function oreSportGiorno(data) {
 }
 let sceltaAllen = null; // { titolo, sel: Set di id sport, salva(chiave), dopo() }
 function apriSceltaAllenamenti(titolo, chiave, salva, dopo, data) {
-  sceltaAllen = { titolo, sel: new Set(sportDelTipo(chiave)), salva, dopo, data, ore: data ? oreSportGiorno(data) : null };
+  sceltaAllen = { titolo, sel: new Set(sportDelTipo(chiave)), salva, dopo, data, ore: data ? oreSportGiorno(data) : null, dur: durateDelTipo(chiave) };   // dur: quanto dura ogni sport quel giorno (se diverso dal solito)
   editCtx = null;
   openModal(sceltaAllenHTML());
 }
 function sceltaAllenHTML() {
   const c = sceltaAllen;
-  const info = TIPI_GIORNATA[chiaveTipo([...c.sel])];
+  const info = TIPI_GIORNATA[chiaveTipo([...c.sel], c.dur)];
   return `<h3 class="modal-title">${esc(c.titolo)}</h3>
     <div class="sport-griglia">
       ${leggiProfilo().sport.filter(sp => !sp.nascosto || c.sel.has(sp.id)).map(sp => `<button class="sport-btn ${c.sel.has(sp.id) ? "on" : ""}" data-allen-sport="${sp.id}">
         <span class="sb-ico">${sp.icona}</span><b>${esc(sp.nome)}</b><small>~${kcalSport(sp)} kcal</small></button>`).join("")}
       <button class="sport-btn ${c.sel.size ? "" : "on"}" data-allen-riposo><span class="sb-ico">😴</span><b>Riposo</b><small>niente sport</small></button>
     </div>
-    ${c.ore && [...c.sel].some(id => id !== "camminata") ? `<p class="hint">A che ora, più o meno? Serve a capire quale pasto viene prima e quale dopo.</p>
-      <div class="allen-ore">${leggiProfilo().sport.filter(sp => c.sel.has(sp.id) && sp.id !== "camminata").map(sp => `<label class="pf-ora-sport"><span>${sp.icona} ${esc(sp.nome)}</span><input class="qta-input" type="time" step="900" data-allen-ora-sport="${sp.id}" value="${typeof c.ore[sp.id] === "number" ? fmtOra(c.ore[sp.id]).padStart(5, "0") : ""}"></label>`).join("")}</div>` : ""}
+    ${c.sel.size ? `<p class="hint">${c.ore ? "Quanto dura e a che ora, più o meno: servono a calcolare le calorie e a capire quale pasto viene prima e quale dopo." : "Quanto dura, di solito: serve a calcolare le calorie del giorno."}</p>
+      <div class="allen-ore">${leggiProfilo().sport.filter(sp => c.sel.has(sp.id)).map(sp => { const v = durataSport(sp, c.dur[sp.id]);
+        return `<div class="allen-riga"><span>${sp.icona} ${esc(sp.nome)}</span><label class="allen-dur"><input class="qta-input" type="text" inputmode="decimal" autocomplete="off" data-allen-dur="${sp.id}" value="${sp.perKm ? fmtKm(v) : v}"><em>${sp.perKm ? "km" : "min"}</em></label>${c.ore && sp.id !== "camminata" ? `<input class="qta-input" type="time" step="900" data-allen-ora-sport="${sp.id}" value="${typeof c.ore[sp.id] === "number" ? fmtOra(c.ore[sp.id]).padStart(5, "0") : ""}">` : c.ore ? "<i></i>" : ""}</div>`; }).join("")}</div>` : ""}
     <div class="allen-anteprima">Obiettivo del giorno: <b>${info.target.kcal} kcal</b> · P ${info.target.proteine} · C ${info.target.carboidrati} · G ${info.target.grassi} g</div>
     <button class="btn-link link-ricette" data-azione="profilo">Aggiungi o modifica gli sport (Profilo) ›</button>
     <div class="lib-footer"><button class="btn lib-salva" data-allen-salva>✓ Salva</button></div>`;
@@ -2304,7 +2313,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sp) { const id = sp.dataset.allenSport; sceltaAllen.sel.has(id) ? sceltaAllen.sel.delete(id) : sceltaAllen.sel.add(id); document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); return; }
 
     if (e.target.closest("[data-allen-riposo]")) { sceltaAllen.sel.clear(); document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); return; }
-    if (e.target.closest("[data-allen-salva]")) { const c = sceltaAllen; sceltaAllen = null; sceltaAllenOre = c.ore; c.salva(chiaveTipo([...c.sel])); c.dopo(); riadattaDopo(dataDiario); }
+    if (e.target.closest("[data-allen-salva]")) { const c = sceltaAllen; sceltaAllen = null; sceltaAllenOre = c.ore; const dur = {}; c.sel.forEach(id => { if (c.dur[id]) dur[id] = c.dur[id]; }); c.salva(chiaveTipo([...c.sel], dur)); c.dopo(); riadattaDopo(dataDiario); }
   });
 
   // Dentro l'editor: scelta del pasto e idee dal ricettario

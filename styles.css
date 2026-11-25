@@ -2146,3 +2146,14 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 /* lista della spesa: da dove viene e «Nuova spesa» */
 .spesa-fonte { margin: 2px 0 8px; }
 .spesa-reset { margin-top: 18px; }
+
+/* scelta degli sport di un giorno: per ogni sport quanto dura (e a che ora) */
+.allen-riga { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; margin: 8px 0; }
+.allen-riga > span { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.allen-dur { display: flex; align-items: center; gap: 4px; }
+.allen-dur input { width: 64px; text-align: center; }
+.allen-dur em { font-style: normal; color: var(--muted); font-size: 13px; }
+.allen-riga input[type="time"] { width: 104px; }
+.qz-dur { display: flex; align-items: center; gap: 6px; }
+.qz-dur input { width: 72px; font: inherit; font-size: 18px; background: transparent; border: 0; color: var(--text); text-align: right; }
+.qz-dur b { font-weight: 500; color: var(--muted); font-size: 15px; }

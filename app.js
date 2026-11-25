@@ -1337,9 +1337,15 @@ function consumiPerAlimento(giorniISO) {
 // La lista della spesa: se nei prossimi 7 giorni hai pasti pianificati, è quello che serve per quei pasti;
 // altrimenti quello che mangi di solito (oggi e i 13 giorni prima, ridotto a una settimana)
 function giorniPiano() {
-  const d = typeof leggiDiario === "function" ? leggiDiario() : {}, oggi = oggiISO(), out = [];
-  for (let k = 0; k < 7; k++) { const x = addGiorniISO(oggi, k); if (d[x] && (d[x].pasti || []).length) out.push(x); }
-  return out.some(x => x > oggi) ? out : [];   // basta un giorno pianificato da domani in poi
+  // la spesa si fa per la settimana pianificata: 7 giorni a partire dal primo giorno pianificato da domani in poi
+  // (pianificata la settimana prossima di giovedì → da lunedì a domenica, non solo lunedì e martedì). Se il piano parte domani conta anche oggi.
+  const d = typeof leggiDiario === "function" ? leggiDiario() : {}, oggi = oggiISO(), conPasti = (x) => d[x] && (d[x].pasti || []).length;
+  let inizio = null;
+  for (let k = 1; k <= 14 && !inizio; k++) { const x = addGiorniISO(oggi, k); if (conPasti(x)) inizio = x; }
+  if (!inizio) return [];
+  if (inizio === addGiorniISO(oggi, 1) && conPasti(oggi)) inizio = oggi;
+  const out = []; for (let k = 0; k < 7; k++) { const x = addGiorniISO(inizio, k); if (conPasti(x)) out.push(x); }
+  return out;
 }
 function statSpesa() {
   const piano = giorniPiano();
@@ -1414,7 +1420,7 @@ function spesaHTML() {
   // da dove viene la lista
   const fino = stat.modo === "piano" && stat.giorni.length ? stat.giorni[stat.giorni.length - 1] : null;
   const intro = !voci.length ? `<li class="hint">🛒 Si riempie con i pasti: quelli pianificati nei prossimi 7 giorni oppure, se non ne hai, quelli che hai scritto nelle ultime 2 settimane</li>`
-    : stat.modo === "piano" ? `<li class="hint spesa-fonte">📅 Per i pasti pianificati: ${stat.giorni.length} ${stat.giorni.length === 1 ? "giorno" : "giorni"}, fino a ${typeof fmtGiornoLungo === "function" ? esc(fmtGiornoLungo(fino)) : fino}</li>`
+    : stat.modo === "piano" ? `<li class="hint spesa-fonte">📅 Per i pasti pianificati: ${stat.giorni.length} ${stat.giorni.length === 1 ? "giorno" : "giorni"}, ${stat.giorni[0] === oggiISO() ? "da oggi" : `da ${typeof fmtGiornoLungo === "function" ? esc(fmtGiornoLungo(stat.giorni[0]).toLowerCase()) : stat.giorni[0]}`} a ${typeof fmtGiornoLungo === "function" ? esc(fmtGiornoLungo(fino).toLowerCase()) : fino}</li>`
     : `<li class="hint spesa-fonte">🛒 Da quello che mangi di solito (ultime 2 settimane). Se pianifichi i prossimi giorni, la lista segue il piano.</li>`;
   const gruppi = {}, daControllare = [];
   voci.filter(v => !presi.has(v.nome)).forEach(v => { if (!v.extra && v.controllare) daControllare.push(v); else (gruppi[repartoDi(v.nome)] ||= []).push(v); });
