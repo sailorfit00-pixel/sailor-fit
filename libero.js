@@ -1949,25 +1949,59 @@ document.addEventListener("DOMContentLoaded", () => {
 //  Dove il telefono non lo permette (o con un tocco breve) si apre un campo: lì si usa il 🎤 della tastiera.
 // =============================================================
 // il pasto detto nella frase (e la frase senza quelle parole); null se non c'è
-function pastoDaFrase(testo) {
-  let t = " " + String(testo || "").toLowerCase().replace(/[’`]/g, "'") + " ";
-  const momenti = typeof momentiGiorno === "function" ? momentiGiorno(dataDetta()) : ORDINE_TEMPO;
-  const sera = typeof nomeSera === "function" ? norm(nomeSera()) : "";
-  const regole = [
-    ["sera", /\b(?:(?:a|per|il|lo|nel(?:lo)?)\s+)?(?:dopo\s*cena|dopocena)\b/],
-    ["colazione", /\b(?:(?:a|per|la|nella|alla)\s+)?colazione\b/],
-    ["pranzo", /\b(?:(?:a|per|il|nel|al)\s+)?pranzo\b/],
-    ["spuntino", /\b(?:(?:a|per|la|nella|alla|il|nel|al)\s+)?(?:merenda|pre[- ]?workout|prima dell'allenamento)\b/],
-    ["mattina", /\b(?:(?:a|per|lo|nello|allo|come)\s+)?spuntino(?:\s+(?:di\s+|della\s+|a\s+|del(?:la)?\s+)?(?:metà\s+)?mattin[ao])?(?![a-zà-ù])/],
-    ["cena", /\b(?:(?:a|per|la|nella|alla)\s+)?cena\b/],
+// I pasti come si dicono a voce (le stesse regole per tutti i comandi):
+// «merenda», «spuntino di/del pomeriggio», «spuntino pomeridiano», «pre-workout» → la merenda · «spuntino di metà mattina», «spuntino mattutino» → lo spuntino della mattina
+// «dopo cena», «spuntino serale», «spuntino di sera» → quello dopo cena · «spuntino» da solo → quello che hai (se ne hai uno solo), altrimenti quello del momento
+const FINE_P = "(?![a-zà-ù])";
+function regolePasti(data) {
+  const sera = typeof nomeSera === "function" ? norm(nomeSera()) : "", momenti = typeof momentiGiorno === "function" ? momentiGiorno(data) : ORDINE_TEMPO;
+  const pre = (art) => `\\b(?:(?:${art})\\s+)?`;
+  const r = [
+    ["sera", new RegExp(pre("a|per|il|lo|nel|nello|come") + "(?:dopo\\s*cena|dopocena|spuntino\\s+(?:serale|notturno|(?:di|della|la)\\s+(?:sera|notte)|(?:di\\s+)?dopo\\s*cena))" + FINE_P, "g")],
+    ["spuntino", new RegExp(pre("a|per|la|lo|nella|nello|alla|allo|il|nel|al|come") + "(?:merenda|pre[- ]?workout|prima dell'allenamento|spuntino\\s+(?:(?:di|del|nel|al|a|il|nel)\\s+)?(?:pomeriggio|pomeridiano)|spuntino\\s+(?:delle|alle)\\s+(?:1[4-8]|quattro|cinque|sei)|spuntino\\s+pre[- ]?(?:workout|allenamento))" + FINE_P, "g")],
+    ["mattina", new RegExp(pre("a|per|lo|nello|allo|come") + "spuntino\\s+(?:(?:di|della|a|del|delle)\\s+)?(?:metà\\s+|meta\\s+)?(?:mattin[ao]|mattutino|mattinata|(?:delle|alle)\\s+(?:9|10|11|dieci|undici))" + FINE_P, "g")],
+    ["colazione", new RegExp(pre("a|per|la|nella|alla") + "colazione" + FINE_P, "g")],
+    ["pranzo", new RegExp(pre("a|per|il|nel|al") + "pranzo" + FINE_P, "g")],
+    ["cena", new RegExp(pre("a|per|la|nella|alla") + "cena" + FINE_P, "g")],
+    ["?spuntino", new RegExp(pre("a|per|lo|nello|allo|come|uno") + "spuntino" + FINE_P, "g")],
   ];
-  if (sera && sera.length >= 4 && momenti.includes("sera")) regole.unshift(["sera", new RegExp("\\b(?:(?:a|per|nel(?:la|lo)?)\\s+)?" + sera.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b")]);
-  for (const [p, re] of regole) {
-    if (!re.test(t)) continue;
-    if (p === "sera" && !momenti.includes("sera")) continue;
-    return { pasto: p, resto: t.replace(re, " ").replace(/\s+/g, " ").trim() };
+  if (sera && sera.length >= 4 && momenti.includes("sera")) r.unshift(["sera", new RegExp(pre("a|per|nel|nella|nello") + sera.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + FINE_P, "g")]);
+  return r;
+}
+// «spuntino» senza dire quale: se ne hai uno solo è quello; altrimenti (oggi) dopo pranzo è la merenda, dopo cena quello serale
+function spuntinoGenerico(data) {
+  const m = typeof momentiGiorno === "function" ? momentiGiorno(data) : ORDINE_TEMPO, haM = m.includes("mattina"), haP = m.includes("spuntino");
+  if (haM && !haP) return "mattina";
+  if (haP && !haM) return "spuntino";
+  if (data === oggiISO() && typeof orariPasti === "function") {
+    const o = orariPasti(), d = new Date(), h = d.getHours() + d.getMinutes() / 60;
+    if (m.includes("sera") && typeof o.cena === "number" && h >= o.cena + 0.5) return "sera";
+    if (typeof o.pranzo === "number" && h >= o.pranzo) return "spuntino";
   }
-  return { pasto: null, resto: t.trim() };
+  return "mattina";
+}
+// tutti i pasti nominati nella frase, in ordine: [{ i: posizione, l: lunghezza, p: pasto }]
+function trovaPasti(t, data) {
+  const out = [], presi = [], momenti = typeof momentiGiorno === "function" ? momentiGiorno(data) : ORDINE_TEMPO;
+  regolePasti(data).forEach(([p, re]) => {
+    re.lastIndex = 0; let m;
+    while ((m = re.exec(t))) {
+      const a = m.index, b = a + m[0].length;
+      if (presi.some(([x, y]) => a < y && b > x)) continue;
+      const pp = p === "?spuntino" ? spuntinoGenerico(data) : p;
+      if (pp === "sera" && !momenti.includes("sera")) continue;
+      const art = (m[0].match(/^\s*(a|per|il|lo|la|nel|nello|nella|alla|allo|al|come|uno)\s+/) || [])[1] || "";   // l'articolo detto prima del pasto («a pranzo», «il pranzo»)
+      presi.push([a, b]); out.push({ i: a, l: m[0].length, p: pp, art });
+    }
+  });
+  return out.sort((x, y) => x.i - y.i);
+}
+// il pasto detto nella frase (e la frase senza quelle parole); null se non c'è
+function pastoDaFrase(testo, data) {
+  const t = " " + String(testo || "").toLowerCase().replace(/[’`]/g, "'") + " ";
+  const p = trovaPasti(t, data || dataDetta())[0];
+  if (!p) return { pasto: null, resto: t.trim() };
+  return { pasto: p.p, resto: (t.slice(0, p.i) + " " + t.slice(p.i + p.l)).replace(/\s+/g, " ").trim() };
 }
 // il giorno su cui si detta: quello aperto in Oggi, altrimenti oggi
 const dataDetta = () => document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" ? dataDiario : oggiISO();
@@ -2002,12 +2036,8 @@ function dataDelGiorno(g, verso) {
   if (g.mod === "scorso" && d === 0) d = -7;
   return addGiorniISO(oggi, d);
 }
-// i pasti nominati nella frase, in ordine (merenda = spuntino del pomeriggio, spuntino = metà mattina, come in pastoDaFrase)
-function pastiNellaFrase(t) {
-  const out = [], re = /\b(colazione|pranzo|dopo\s*cena|dopocena|cena|merenda|pre[- ]?workout|spuntino)\b/g; let m;
-  while ((m = re.exec(t))) out.push({ i: m.index, p: /dopo/.test(m[1]) ? "sera" : m[1] === "merenda" || /workout/.test(m[1]) ? "spuntino" : m[1] === "spuntino" ? "mattina" : m[1] });
-  return out;
-}
+// i pasti nominati nella frase, in ordine (con le stesse regole di pastoDaFrase: «spuntino di pomeriggio» = merenda)
+const pastiNellaFrase = (t, data) => trovaPasti(t, data || dataDetta());
 // la frase senza i giorni (e la parola che li introduce: «per domani», «di lunedì prossimo»)
 function togliGiorni(t, giorni) {
   let r = t;
@@ -2078,7 +2108,7 @@ function comandoCopia(testo) {
   // ogni pasto va col giorno più vicino nella frase: «ieri a pranzo … oggi a cena»
   // «il pranzo di ieri», «la cena di lunedì» → origine; «a cena», «per pranzo» → destinazione (ma «ieri a pranzo» è il pranzo di ieri: va col giorno appena prima)
   pasti.forEach(p => {
-    const prima = t.slice(0, p.i);
+    const prima = t.slice(0, p.i) + (p.art ? " " + p.art : "");
     if (/(?:il|lo|la|del|della|dello|di|quello|quella|stess[oa])\s*$/.test(prima)) { p.ruolo = "src"; return; }
     const m = prima.match(/(?:a|ad|al|alla|per|come|nel|nella)\s*$/);
     if (m) { const resto = prima.slice(0, prima.length - m[0].length).trimEnd(), g = giorni.find(x => Math.abs(x.i + x.l - resto.length) <= 1); p.ruolo = g ? (g === dst ? "dst" : "src") : "dst"; return; }
@@ -2181,7 +2211,9 @@ function comandoSostituisci(testo) {
   const giorni = giorniNellaFrase(t), pasti = pastiNellaFrase(t);
   const data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta(), pasto = pasti.length ? pasti[0].p : null;
   // via giorni e pasti (con le parole che li introducono), restano solo i due alimenti
-  t = togliGiorni(t, giorni).replace(/\b(?:a|al|alla|per|nel|nella|del|della|di|dal|dalla|in)?\s*(?:colazione|pranzo|dopo\s*cena|dopocena|cena|merenda|pre[- ]?workout|spuntino)\b/g, " ").replace(/\s+/g, " ").trim();
+  t = togliGiorni(t, giorni);
+  pastiNellaFrase(t, data).sort((a, b) => b.i - a.i).forEach(p => { t = t.slice(0, p.i).replace(/\b(?:del|della|dello|di|dal|dalla|in)\s*$/, "") + " " + t.slice(p.i + p.l); });
+  t = t.replace(/\s+/g, " ").trim();
   if ((m = t.match(/\b(?:sostituisci|sostituire|sostituiscimi|cambia|cambiami|cambiare|scambia|rimpiazza)\s+(.+?)\s+(?:con|in)\s+(.+)$/))) { x = m[1]; y = m[2]; }
   else if ((m = t.match(/\b(?:metti|mettimi|usa)\s+(.+?)\s+al posto\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { y = m[1]; x = m[2]; }
   else if ((m = t.match(/^(?:metti|mettimi|usa)?\s*(.+?)\s+invece\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { y = m[1]; x = m[2]; }
@@ -2329,7 +2361,7 @@ function inviaDettato(testo) {
   const t0 = fraseDetta(testo), giorni = giorniNellaFrase(t0);
   const data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta();
   if (giorni.length) testo = togliGiorni(t0, giorni) || testo;
-  const { pasto, resto } = pastoDaFrase(testo);
+  const { pasto, resto } = pastoDaFrase(testo, data);
   if (pasto && resto) { apriPastoConDettato(pasto, resto, data); return; }
   // il pasto non l'hai detto: si sceglie con un tocco
   const momenti = momentiGiorno(data);
@@ -2348,6 +2380,43 @@ function apriPastoConDettato(pasto, testo, dataScelta) {
   aggiungiDaParlato(testo);
   rirenderLibero();
 }
+// ---------- Altro → «Comandi vocali»: cosa si può dire a 🎤 Detta ----------
+const COMANDI_VOCALI = [
+  ["🍽️", "Scrivere un pasto", "Di' il pasto e cosa hai mangiato: si apre il pasto con gli alimenti da confermare. Le quantità che non dici sono adatte ai tuoi obiettivi.",
+    ["a pranzo 150 g di riso e un'insalata", "a colazione yogurt greco e un cappuccino", "spuntino di pomeriggio una banana", "a cena pollo e zucchine"]],
+  ["📅", "Un altro giorno", "Di' anche il giorno: si scrive in quel giorno.",
+    ["domani a pranzo riso basmati e tonno", "giovedì a cena 150 g di pollo e zucchine", "dopodomani a colazione yogurt greco", "lunedì prossimo a pranzo pasta al pomodoro"]],
+  ["📋", "Copiare un pasto", "I piatti finiscono in «Da aggiungere» del pasto di destinazione: li controlli e tocchi ✓ Aggiungi.",
+    ["rifai il pranzo di ieri anche oggi", "ripeti la colazione di ieri", "copia la cena di lunedì su giovedì", "copia il pranzo di oggi anche a cena", "metti domani lo stesso pranzo di oggi", "rifai come ieri a cena"]],
+  ["🔄", "Sostituire un alimento", "Carne, pesce, uova e latticini: stesse proteine. Il resto: stesse calorie. Se dici i grammi valgono quelli. Funziona sui pasti già scritti.",
+    ["sostituisci il pollo con il tacchino", "cambia il riso con le patate a cena", "metti il merluzzo al posto del pollo domani", "tacchino invece del pollo", "sostituisci il pollo con 150 g di tacchino"]],
+  ["🛒", "Lista della spesa", "Vedi le voci capite (con il cestino ne togli una), poi tocchi Aggiungi.",
+    ["aggiungi albumi alla spesa", "mi manca il pollo", "devo comprare gli albumi e le zucchine", "ho finito lo yogurt greco", "non c'è più il pane", "scrivi nella spesa detersivo piatti e carta forno"]],
+  ["⚖️", "Peso", "Vale per oggi o per i giorni passati. Vedi la differenza dall'ultima pesata, poi Salva.",
+    ["peso 61,4", "stamattina pesavo 61 e 4", "mi sono pesata 61 chili e 400", "ieri pesavo 61,8"]],
+  ["📊", "Quanto manca", "Calorie, proteine, carboidrati e grassi che restano (in rosso quelli superati).",
+    ["quanto mi manca?", "quante proteine mi mancano?", "quanti carboidrati mi restano?", "a che punto sono?"]],
+  ["💡", "Idee e consigli", "Con un pasto: quel pasto con le sue idee. Senza: i consigli furbi della giornata.",
+    ["cosa mangio a cena?", "cosa preparo a pranzo?", "idee per la merenda", "cosa aggiungo?", "cosa mi consigli?"]],
+  ["🏋️", "Allenamento", "Si apre la scheda Allenamenti del giorno già compilata: controlli e tocchi ✓ Salva. Lo sport deve essere tra i tuoi (Profilo).",
+    ["oggi ho fatto un'ora di CrossFit", "ho corso 6 km", "45 minuti di pesi e mezz'ora di camminata", "domani alle 7 di sera CrossFit", "mi alleno alle 18", "domani riposo", "oggi niente allenamento"]],
+];
+function apriComandiVocali() {
+  editCtx = null; liberoCtx = null;
+  openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Altro</button>
+    <h3 class="modal-title">🎤 Comandi vocali</h3>
+    <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla; rilascia per finire. Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
+    <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es], k) => `<details class="cv-sez"${k === 0 ? " open" : ""}>
+      <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
+      <p class="cv-nota">${esc(nota)}</p>
+      <ul class="cv-es">${es.map(x => `<li>«${esc(x)}»</li>`).join("")}</ul></details>`).join("")}</div>
+    <h4>Giorni e pasti</h4>
+    <p class="cv-nota"><b>Giorni:</b> oggi, ieri, l'altro ieri, domani, dopodomani, stamattina e stasera (= oggi), lunedì…domenica, anche con «prossimo» o «scorso». Se non lo dici vale il giorno aperto in Oggi.</p>
+    <p class="cv-nota"><b>Pasti:</b> colazione · spuntino di metà mattina (o «spuntino mattutino») · pranzo · merenda (anche «spuntino di pomeriggio», «spuntino pomeridiano», «pre-workout») · cena · dopo cena (anche «spuntino serale»). «Spuntino» da solo: se ne hai uno solo è quello, altrimenti quello del momento.</p>
+    <p class="cv-nota"><b>Sport:</b> CrossFit, pesi/palestra, funzionale, corsa, camminata, bici, nuoto, yoga/pilates, padel/tennis, ballo, equitazione, calcio/pallavolo/basket e quelli che hai aggiunto tu (per nome).</p>
+    <p class="cv-nota">Se il microfono dell'app non funziona, un tocco breve su Detta apre un campo: lì usa il 🎤 della tastiera, le frasi sono le stesse.</p>`);
+  const b = document.querySelector("[data-cv-altro]"); if (b) b.addEventListener("click", () => { closeModal(true); apriMenu(); segnaTab("altro"); });
+}
 // tocco breve, o telefono senza riconoscimento vocale: il campo dove scrivere (o dettare con la tastiera)
 function apriDettaTesto(nota) {
   editCtx = null; liberoCtx = null;
@@ -2356,7 +2425,9 @@ function apriDettaTesto(nota) {
     <div class="lib-detta"><textarea id="detta-oggi" class="qta-input" rows="3" autocomplete="off" autocapitalize="sentences" placeholder="es. a colazione 150 g di yogurt greco e un cappuccino"></textarea>
     <div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="detta-oggi-invia">Continua</button></div>
     <p class="campo-nota">Tocca il 🎤 della tastiera e parla, oppure scrivi. Di' anche il pasto («a pranzo…»); poi controlli le quantità e tocchi ✓ Aggiungi.</p>
-    <p class="campo-nota">Puoi anche dire: «domani a pranzo riso basmati e tonno» · «rifai il pranzo di ieri anche oggi» · «copia la cena di lunedì su giovedì» · «aggiungi albumi alla spesa» · «peso 61,4» · «quanto mi manca?» · «cosa mangio a cena?» · «sostituisci il pollo con il tacchino» · «oggi un'ora di CrossFit» · «domani riposo».</p></div>`);
+    <p class="campo-nota">Puoi anche dire: «domani a pranzo riso e tonno» · «rifai il pranzo di ieri» · «aggiungi albumi alla spesa» · «peso 61,4» · «quanto mi manca?» · «sostituisci il pollo con il tacchino» · «oggi un'ora di CrossFit».</p>
+    <button class="btn-link" data-detta-guida>🎤 Tutti i comandi vocali ›</button></div>`);
+  const gd = document.querySelector("[data-detta-guida]"); if (gd) gd.addEventListener("click", () => { closeModal(true); apriComandiVocali(); });
   const ta = document.getElementById("detta-oggi"); if (ta) ta.focus();
   document.getElementById("detta-oggi-invia").addEventListener("click", () => { const v = document.getElementById("detta-oggi").value; if (!v.trim()) { avviso("Scrivi o detta cosa hai mangiato"); return; } closeModal(true); inviaDettato(v); });
 }

@@ -2184,6 +2184,7 @@ function apriMenu() {
       ${voce("vai-spesa", "🛒", "Lista della spesa", "")}
       ${voce("vai-ricette", "📖", "Ricette", `${contaRicetteUniche()}`)}
       ${voce("miei-alimenti", "🥫", "I miei alimenti", `${Object.keys(alimentiTuoi()).length || ""}`)}
+      ${voce("comandi-voce", "🎤", "Comandi vocali", "cosa puoi dire a Detta")}
       ${voce("profilo", "👤", "Profilo", "")}
       ${voce("backup", "💾", "Backup", "")}
     </div>
@@ -2967,6 +2968,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "spesa-aggiungi") aggiungiVoceSpesa();
       else if (az.dataset.azione === "spesa-nuova") { salvaPresi(new Set()); renderSpesa(); }
       else if (az.dataset.azione === "vai-spesa") apriSpesa();
+      else if (az.dataset.azione === "comandi-voce") apriComandiVocali();
       else if (az.dataset.azione === "sport-aggiungi") {
         const nome = (document.getElementById("nuovo-sport-nome").value || "").trim();
         if (!nome) { avviso("Scrivi il nome dello sport."); return; }

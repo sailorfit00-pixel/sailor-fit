@@ -2273,3 +2273,15 @@ body.tastiera .qz-backup { display: none; }
 .voce-manca.chiesto b.sopra { color: var(--bad); }
 .voce-scambio { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px; background: var(--card2); font-size: 16px; margin: 4px 0 8px; }
 .voce-scambio i { font-style: normal; color: var(--lilla); font-weight: 700; }
+/* Altro → Comandi vocali */
+.cv-lista { display: grid; gap: 8px; margin: 12px 0 8px; }
+.cv-sez { border-radius: 14px; background: var(--card2); padding: 0 14px; }
+.cv-sez summary { display: flex; align-items: center; gap: 10px; padding: 13px 0; cursor: pointer; list-style: none; font-size: 16px; }
+.cv-sez summary::-webkit-details-marker { display: none; }
+.cv-sez summary::after { content: "›"; margin-left: auto; color: var(--muted); font-size: 20px; transition: transform .15s; }
+.cv-sez[open] summary::after { transform: rotate(90deg); }
+.cv-ico { font-size: 20px; }
+.cv-nota { color: var(--muted); font-size: 14px; margin: 0 0 10px; line-height: 1.45; }
+.cv-nota b { color: var(--text); }
+.cv-es { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 6px; }
+.cv-es li { padding: 8px 12px; border-radius: 10px; background: var(--lilla-bg); color: var(--text); font-size: 15px; }
