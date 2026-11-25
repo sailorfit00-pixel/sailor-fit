@@ -1475,6 +1475,13 @@ function suggerimentiSpesa() {
   const esatto = t.some(n => n.toLowerCase() === v.toLowerCase());
   box.innerHTML = (esatto ? "" : `<button class="autoc-voce" data-spesa-sugg="" >＋ Aggiungi «${esc(v)}»</button>`) + t.map(n => `<button class="autoc-voce" data-spesa-sugg="${esc(n)}">${esc(n)}</button>`).join("");
 }
+// il nome con cui una voce scritta (o detta) va in lista: l'alimento che conosco se combacia ("banna" → Banana, "albumi" → Albume), altrimenti com'è ("detersivo piatti")
+function nomeVoceSpesa(v) {
+  v = String(v || "").trim();
+  const t = typeof cercaAlimenti === "function" ? cercaAlimenti(v) : [];
+  const nome = (window.ALIMENTI || {})[v] ? v : (t[0] && (t[0].toLowerCase() === v.toLowerCase() || (typeof distanzaTesto === "function" && v.length >= 4 && distanzaTesto(norm(v), norm(t[0])) <= 2)) ? t[0] : v.charAt(0).toUpperCase() + v.slice(1));   // "banna" → Banana; "detersivo piatti" resta com'è
+  return nome;
+}
 function aggiungiVoceSpesa(scelto) {
   const inp = document.getElementById("spesa-nuova");
   if (scelto) {   // toccato un suggerimento: va in lista con quel nome esatto
@@ -1484,8 +1491,7 @@ function aggiungiVoceSpesa(scelto) {
   }
   const v = (inp && inp.value || "").trim();
   if (!v) return;
-  const t = typeof cercaAlimenti === "function" ? cercaAlimenti(v) : [];
-  const nome = (window.ALIMENTI || {})[v] ? v : (t[0] && (t[0].toLowerCase() === v.toLowerCase() || (typeof distanzaTesto === "function" && v.length >= 4 && distanzaTesto(norm(v), norm(t[0])) <= 2)) ? t[0] : v.charAt(0).toUpperCase() + v.slice(1));   // "banna" → Banana; "detersivo piatti" resta com'è
+  const nome = nomeVoceSpesa(v);
   const extra = leggiExtraSpesa();
   if (!extra.includes(nome)) { extra.push(nome); salvaExtraSpesa(extra); }
   const presi = leggiPresi(); presi.delete(nome); salvaPresi(presi);

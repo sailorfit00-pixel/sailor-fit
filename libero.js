@@ -1287,8 +1287,9 @@ function liberoHTML() {
       vals = n.map(x => [Math.round(x * gu * 10) / 10, fmtQta(x)]); suff = sigleUnita(u);
     } else {
       const b = porzioneSolita(it.nome) || 100, r = (g) => g >= 100 ? Math.round(g / 10) * 10 : Math.max(5, Math.round(g / 5) * 5);
+      // olio, frutta secca…: il contatore va di 1 g, le pillole fanno i salti
       let piccolo = false; try { piccolo = !!(window.ALIMENTI || {})[it.nome] && profiloBase(it.nome).tip <= 25; } catch (e) {}
-      vals = (piccolo ? [5, 10, 15, 20, 30] : [...new Set([0.5, 1, 1.5, 2].map(f => r(b * f)))]).map(g => [g, String(g)]);   // olio, frutta secca…: il contatore va di 1 g, le pillole fanno i salti suff = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
+      vals = (piccolo ? [5, 10, 15, 20, 30] : [...new Set([0.5, 1, 1.5, 2].map(f => r(b * f)))]).map(g => [g, String(g)]); suff = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
     }
     return `<div class="lib-preset" role="group" aria-label="Quantità rapida">${vals.map(([g, t]) => `<button class="lib-preset-b${Math.abs(g - it.qta) < 0.6 ? " on" : ""}" data-lib-preset="${k}|${g}">${t}<small> ${suff}</small></button>`).join("")}</div>`;
   };
@@ -1970,23 +1971,171 @@ function pastoDaFrase(testo) {
 }
 // il giorno su cui si detta: quello aperto in Oggi, altrimenti oggi
 const dataDetta = () => document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" ? dataDiario : oggiISO();
+
+// ---------- Comandi a voce ----------
+// 1) un altro giorno: «domani a pranzo riso basmati e tonno» → il pranzo di domani con gli alimenti da confermare (quantità adatte ai tuoi obiettivi)
+// 2) copia un pasto: «rifai il pranzo di ieri anche oggi», «copia la cena di lunedì su giovedì» → il pasto di destinazione con i piatti da confermare
+// 3) spesa: «aggiungi albumi alla spesa», «mi manca il pollo», «ho finito lo yogurt» → le voci da confermare, poi vanno nella lista
+// Ogni comando mostra prima cosa farà: niente si salva senza il tuo tocco.
+const GIORNI_DETTA = ["lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato", "domenica"];
+// i giorni nominati nella frase, in ordine: { i: posizione, l: lunghezza, rel: giorni da oggi | wd: giorno della settimana (0 = lunedì), mod: "prossimo" / "scorso" }
+function giorniNellaFrase(t) {
+  const out = [], preso = [];
+  const libero = (i, l) => !preso.some(([a, b]) => i < b && i + l > a);
+  const prova = (re, f) => { re.lastIndex = 0; let m; while ((m = re.exec(t))) { if (libero(m.index, m[0].length)) { preso.push([m.index, m.index + m[0].length]); out.push(Object.assign({ i: m.index, l: m[0].length }, f(m))); } } };
+  prova(/\b(?:l'\s*altro\s*ieri|l'altroieri|altroieri|altro\s+ieri)\b/g, () => ({ rel: -2 }));
+  prova(/\b(?:dopo\s*domani|dopodomani)\b/g, () => ({ rel: 2 }));
+  prova(/\bieri\b/g, () => ({ rel: -1 }));
+  prova(/\bdomani\b/g, () => ({ rel: 1 }));
+  prova(/\b(?:oggi|stamattina|stamani|stasera|stanotte)\b/g, () => ({ rel: 0 }));
+  prova(/\b(luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)(?:\s+(prossim[oa]|scors[oa]))?(?![a-zà-ù])/g,
+    (m) => ({ wd: GIORNI_DETTA.indexOf(norm(m[1])), mod: m[2] ? (/^prossim/.test(m[2]) ? "prossimo" : "scorso") : "" }));
+  return out.sort((a, b) => a.i - b.i);
+}
+// la data di un giorno nominato: un giorno della settimana va avanti (programmi) o indietro (copi da), «prossimo» / «scorso» decidono loro
+function dataDelGiorno(g, verso) {
+  const oggi = oggiISO();
+  if (g.rel !== undefined) return addGiorniISO(oggi, g.rel);
+  const dow = (new Date(oggi + "T12:00").getDay() + 6) % 7, v = g.mod === "prossimo" ? 1 : g.mod === "scorso" ? -1 : verso;
+  let d = v > 0 ? (g.wd - dow + 7) % 7 : -((dow - g.wd + 7) % 7);
+  if (g.mod === "prossimo" && d === 0) d = 7;
+  if (g.mod === "scorso" && d === 0) d = -7;
+  return addGiorniISO(oggi, d);
+}
+// i pasti nominati nella frase, in ordine (merenda = spuntino del pomeriggio, spuntino = metà mattina, come in pastoDaFrase)
+function pastiNellaFrase(t) {
+  const out = [], re = /\b(colazione|pranzo|dopo\s*cena|dopocena|cena|merenda|pre[- ]?workout|spuntino)\b/g; let m;
+  while ((m = re.exec(t))) out.push({ i: m.index, p: /dopo/.test(m[1]) ? "sera" : m[1] === "merenda" || /workout/.test(m[1]) ? "spuntino" : m[1] === "spuntino" ? "mattina" : m[1] });
+  return out;
+}
+// la frase senza i giorni (e la parola che li introduce: «per domani», «di lunedì prossimo»)
+function togliGiorni(t, giorni) {
+  let r = t;
+  giorni.slice().sort((a, b) => b.i - a.i).forEach(g => { r = r.slice(0, g.i).replace(/(?:\b(?:per|di|del|da|a|il|lo|entro|anche|pure)\s+)+$/, "") + " " + r.slice(g.i + g.l); });
+  return r.replace(/^\s*(?:programma(?:mi)?|pianifica|prepara(?:mi)?|prevedi|mangerò|mangero|mangio|voglio mangiare)\b/, " ").replace(/\s+/g, " ").trim();
+}
+const fraseDetta = (testo) => " " + String(testo || "").toLowerCase().replace(/[’`]/g, "'").replace(/\s+/g, " ").trim() + " ";
+
+// 3) SPESA
+const SPESA_COMANDO = /(?:^|[^a-zà-ù])(?:lista della spesa|nella spesa|alla spesa|in spesa|sulla spesa|per la spesa|nella lista|alla lista|da comprare|devo comprare|dobbiamo comprare|compra|comprami|mi manca|mi mancano|ci manca|ci mancano|manca il|manca la|manca lo|mancano i|mancano le|mancano gli|(?:è|e') finit[oa]|sono finit[ie]|ho finito|abbiamo finito|non c'è più|non ci sono più)(?![a-zà-ù])/;
+function vociSpesaDaFrase(testo) {
+  let t = fraseDetta(testo)
+    .replace(/\b(?:aggiungi|aggiungimi|metti|mettimi|scrivi|segna|segnami|inserisci|ricordami di comprare|ricordati di comprare|devo comprare|dobbiamo comprare|da comprare|comprami|compra|mi mancano|mi manca|ci mancano|ci manca|mancano|manca|ho finito|abbiamo finito|sono finit[ie]|anche|per favore|grazie)\b/g, " ")
+    .replace(/(?:non c'è più|non ci sono più|(?:è|e') finit[oaie])(?![a-zà-ù])/g, " ")
+    .replace(/\b(?:alla|nella|in|sulla|per la|sulla mia|nella mia)\s+(?:mia\s+)?(?:lista(?:\s+della\s+spesa)?|spesa)\b/g, " ")
+    .replace(/\b(?:lista della spesa|spesa)\b/g, " ");
+  return t.replace(/[.!?;]/g, ",").split(/,|\s(?:e|ed|poi|più|piu)\s/)
+    .map(x => x.trim().replace(/^(?:(?:il|lo|la|i|gli|le|un|uno|una|del|dello|della|dei|degli|delle|qualche|un po' di|un po di|po' di|di)\s+|l'|un'|dell')+/, "").trim())
+    .filter(x => x.length >= 2)
+    .map(x => typeof nomeVoceSpesa === "function" ? nomeVoceSpesa(x) : x.charAt(0).toUpperCase() + x.slice(1))
+    .filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i);
+}
+let _vociSpesaDetta = [];
+function apriConfermaSpesa(testo) {
+  _vociSpesaDetta = vociSpesaDaFrase(testo);
+  if (!_vociSpesaDetta.length) { avviso("Non ho capito cosa aggiungere alla spesa: riprova"); return true; }
+  editCtx = null; liberoCtx = null;
+  const disegna = () => {
+    const c = document.getElementById("detta-spesa"); if (!c) return;
+    c.innerHTML = _vociSpesaDetta.map((v, i) => `<li class="voce"><span>🛒 ${esc(v)}</span><button class="lib-del" data-detta-spesa-del="${i}" aria-label="Togli ${esc(v)}">${ICONA_CESTINO}</button></li>`).join("") || `<li class="hint">Niente da aggiungere</li>`;
+    const b = document.getElementById("detta-spesa-ok"); if (b) b.disabled = !_vociSpesaDetta.length;
+  };
+  openModal(`<h3 class="modal-title">🛒 Aggiungo alla lista della spesa</h3>
+    <p class="detta-frase">«${esc(testo.trim())}»</p>
+    <ul id="detta-spesa" class="detta-spesa"></ul>
+    <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="detta-spesa-ok">Aggiungi</button></div></div>`);
+  disegna();
+  document.getElementById("detta-spesa").addEventListener("click", (e) => { const b = e.target.closest("[data-detta-spesa-del]"); if (b) { _vociSpesaDetta.splice(+b.dataset.dettaSpesaDel, 1); disegna(); } });
+  document.getElementById("detta-spesa-ok").addEventListener("click", () => {
+    const extra = leggiExtraSpesa(), presi = leggiPresi();
+    _vociSpesaDetta.forEach(v => { if (!extra.some(x => x.toLowerCase() === v.toLowerCase())) extra.push(v); presi.delete(v); });
+    salvaExtraSpesa(extra); salvaPresi(presi);
+    closeModal(true);
+    avviso(`🛒 In lista: ${_vociSpesaDetta.join(", ").toLowerCase()}`);
+  });
+  return true;
+}
+
+// 2) COPIA UN PASTO
+const COPIA_COMANDO = /\b(?:copia|copiami|ricopia|duplica|rifai|rifammi|ripeti|ripetimi|riproponi|stess[oaie]|uguale|identic[oa]|quello che ho mangiato|quello che ho fatto|come (?:ieri|l'altro ieri|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica))(?![a-zà-ù])/;
+function comandoCopia(testo) {
+  const t = fraseDetta(testo);
+  if (!COPIA_COMANDO.test(t)) return null;
+  const giorni = giorniNellaFrase(t), pasti = pastiNellaFrase(t);
+  if (!giorni.length || !pasti.length) return null;
+  // chi è la destinazione: il giorno introdotto da «anche», «su», «per», «a»… ; chi è l'origine: «di», «del», «da», «mangiato»
+  const prima = (g) => t.slice(Math.max(0, g.i - 18), g.i);
+  giorni.forEach(g => { g.ruolo = /(?:anche|pure|su|per|in|a|ad|al|alla)\s*(?:per\s+|a\s+|il\s+|lo\s+|la\s+)?$/.test(prima(g)) ? "dst" : /(?:di|del|dal|da|mangiato|fatto|preso)\s*$/.test(prima(g)) ? "src" : ""; });
+  let src, dst;
+  if (giorni.length >= 2) {
+    src = giorni.find(g => g.ruolo === "src") || giorni.find(g => g.ruolo !== "dst") || giorni[0];
+    dst = giorni.find(g => g !== src && g.ruolo === "dst") || giorni.find(g => g !== src);
+  } else if (giorni[0].ruolo === "dst") dst = giorni[0];
+  else src = giorni[0];
+  const dSrc = src ? dataDelGiorno(src, -1) : dataDetta();
+  let dDst = dst ? dataDelGiorno(dst, 1) : (dataDetta() !== dSrc ? dataDetta() : oggiISO());
+  if (dst && dst.wd !== undefined && !dst.mod && dDst <= dSrc && dSrc >= oggiISO()) dDst = addGiorniISO(dDst, 7);
+  // ogni pasto va col giorno più vicino nella frase: «ieri a pranzo … oggi a cena»
+  // «il pranzo di ieri», «la cena di lunedì» → origine; «a cena», «per pranzo» → destinazione (ma «ieri a pranzo» è il pranzo di ieri: va col giorno appena prima)
+  pasti.forEach(p => {
+    const prima = t.slice(0, p.i);
+    if (/(?:il|lo|la|del|della|dello|di|quello|quella|stess[oa])\s*$/.test(prima)) { p.ruolo = "src"; return; }
+    const m = prima.match(/(?:a|ad|al|alla|per|come|nel|nella)\s*$/);
+    if (m) { const resto = prima.slice(0, prima.length - m[0].length).trimEnd(), g = giorni.find(x => Math.abs(x.i + x.l - resto.length) <= 1); p.ruolo = g ? (g === dst ? "dst" : "src") : "dst"; return; }
+    const g = giorni.reduce((b, x) => Math.abs(x.i - p.i) < Math.abs(b.i - p.i) ? x : b, giorni[0]); p.ruolo = g === dst ? "dst" : "src";
+  });
+  if (pasti.length >= 2 && pasti.every(p => p.ruolo === pasti[0].ruolo)) { pasti[0].ruolo = "src"; pasti[1].ruolo = "dst"; }
+  const pSrc = (pasti.find(p => p.ruolo === "src") || pasti[0]).p, pDst = (pasti.find(p => p.ruolo === "dst") || {}).p || pSrc;
+  return { dSrc, pSrc, dDst, pDst };
+}
+const nomeGiornoDetta = (d) => d === oggiISO() ? "oggi" : d === addGiorniISO(oggiISO(), -1) ? "ieri" : d === addGiorniISO(oggiISO(), 1) ? "domani" : fmtGiornoLungo(d).toLowerCase();
+function eseguiCopia(cp) {
+  if (cp.dSrc === cp.dDst && cp.pSrc === cp.pDst) { avviso("Dimmi su quale giorno copiarlo (es. «anche domani»)"); return; }
+  const voci = (giornoDiario(cp.dSrc).pasti || []).filter(p => p.pasto === cp.pSrc && (p.ingredienti || []).length);
+  if (!voci.length) { avviso(`${nomeGiornoDetta(cp.dSrc).replace(/^./, c => c.toUpperCase())} a ${nomePasto(cp.pSrc, cp.dSrc)} non c'è niente da copiare`); return; }
+  if (!momentiGiorno(cp.dDst).includes(cp.pDst)) { avviso(`${NomePasto(cp.pDst, cp.dDst)} non è tra i tuoi pasti`); return; }
+  if (!vaiAlGiornoDetta(cp.dDst)) return;
+  apriPastoDiario(cp.dDst, null, cp.pDst);
+  if (!liberoCtx || liberoCtx.pasto !== cp.pDst) return;
+  piattiDaAggiungere(liberoCtx, voci);   // in «Da aggiungere»: controlli e tocchi ✓ Aggiungi
+  rirenderLibero();
+  avviso(`Da ${nomePasto(cp.pSrc, cp.dSrc)} di ${nomeGiornoDetta(cp.dSrc)}: controlla e tocca ✓ Aggiungi`);
+}
+// Oggi mostra il giorno su cui stai per scrivere (domani, giovedì…)
+function vaiAlGiornoDetta(data) {
+  if (document.body.dataset.tab !== "oggi") { const t = document.getElementById("tab-oggi"); if (t) t.click(); }
+  if (typeof dataDiario !== "undefined" && dataDiario !== data) {
+    dataDiario = data; if (typeof vistaHome !== "undefined") vistaHome = "oggi";
+    if (typeof renderOggi === "function") renderOggi();
+    window.scrollTo(0, 0);
+  }
+  return true;
+}
+
 function inviaDettato(testo) {
   document.querySelectorAll(".detta-velo").forEach(v => v.remove());   // sicurezza: niente «Ti ascolto…» sopra la scelta del pasto
   testo = String(testo || "").trim();
   if (!testo) { avviso("Non ho sentito niente: riprova"); return; }
+  if (SPESA_COMANDO.test(fraseDetta(testo))) { apriConfermaSpesa(testo); return; }
+  const cp = comandoCopia(testo); if (cp) { eseguiCopia(cp); return; }
+  // un altro giorno («domani a pranzo…», «giovedì a cena…»): si scrive in quel giorno
+  const t0 = fraseDetta(testo), giorni = giorniNellaFrase(t0);
+  const data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta();
+  if (giorni.length) testo = togliGiorni(t0, giorni) || testo;
   const { pasto, resto } = pastoDaFrase(testo);
-  if (pasto && resto) { apriPastoConDettato(pasto, resto); return; }
+  if (pasto && resto) { apriPastoConDettato(pasto, resto, data); return; }
   // il pasto non l'hai detto: si sceglie con un tocco
-  const data = dataDetta(), momenti = momentiGiorno(data);
+  const momenti = momentiGiorno(data);
   editCtx = null; liberoCtx = null;
   openModal(`<h3 class="modal-title">In quale pasto?</h3>
+    ${giorni.length ? `<p class="hint">${esc(fmtGiornoLungo(data))}</p>` : ""}
     <p class="detta-frase">«${esc(testo)}»</p>
     <div class="detta-pasti">${momenti.map(p => `<button class="btn-sec" data-detta-pasto="${p}">${ICONA_PASTO[p] || "🍽️"} ${esc(NomePasto(p, data))}</button>`).join("")}</div>`);
-  document.querySelectorAll("[data-detta-pasto]").forEach(b => b.addEventListener("click", () => { closeModal(true); apriPastoConDettato(b.dataset.dettaPasto, resto || testo); }));
+  document.querySelectorAll("[data-detta-pasto]").forEach(b => b.addEventListener("click", () => { closeModal(true); apriPastoConDettato(b.dataset.dettaPasto, resto || testo, data); }));
 }
-function apriPastoConDettato(pasto, testo) {
-  const data = dataDetta();
-  if (document.body.dataset.tab !== "oggi") { const t = document.getElementById("tab-oggi"); if (t) t.click(); }   // si torna in Oggi: è lì che il pasto si vede
+function apriPastoConDettato(pasto, testo, dataScelta) {
+  const data = dataScelta || dataDetta();
+  vaiAlGiornoDetta(data);   // si torna in Oggi, sul giorno giusto: è lì che il pasto si vede
   apriPastoDiario(data, null, pasto);
   if (!liberoCtx || liberoCtx.pasto !== pasto) return;
   aggiungiDaParlato(testo);
@@ -1999,7 +2148,8 @@ function apriDettaTesto(nota) {
     ${nota ? `<p class="hint">${nota}</p>` : ""}
     <div class="lib-detta"><textarea id="detta-oggi" class="qta-input" rows="3" autocomplete="off" autocapitalize="sentences" placeholder="es. a colazione 150 g di yogurt greco e un cappuccino"></textarea>
     <div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="detta-oggi-invia">Continua</button></div>
-    <p class="campo-nota">Tocca il 🎤 della tastiera e parla, oppure scrivi. Di' anche il pasto («a pranzo…»); poi controlli le quantità e tocchi ✓ Aggiungi.</p></div>`);
+    <p class="campo-nota">Tocca il 🎤 della tastiera e parla, oppure scrivi. Di' anche il pasto («a pranzo…»); poi controlli le quantità e tocchi ✓ Aggiungi.</p>
+    <p class="campo-nota">Puoi anche dire: «domani a pranzo riso basmati e tonno» · «rifai il pranzo di ieri anche oggi» · «copia la cena di lunedì su giovedì» · «aggiungi albumi alla spesa».</p></div>`);
   const ta = document.getElementById("detta-oggi"); if (ta) ta.focus();
   document.getElementById("detta-oggi-invia").addEventListener("click", () => { const v = document.getElementById("detta-oggi").value; if (!v.trim()) { avviso("Scrivi o detta cosa hai mangiato"); return; } closeModal(true); inviaDettato(v); });
 }
@@ -2019,6 +2169,7 @@ function micRipiego(modo, nota) {
 }
 function micTesto(modo, testo) {
   if (pastoApertoPerDetta()) modo = "pasto";
+  if (modo === "pasto" && liberoCtx && SPESA_COMANDO.test(fraseDetta(testo))) { apriConfermaSpesa(testo); return; }   // «aggiungi albumi alla spesa» anche da dentro un pasto
   if (modo === "pasto" && liberoCtx) {   // dentro un pasto si resta in quel pasto: «a cena…» detto nel pranzo va nel pranzo
     aggiungiDaParlato(pastoDaFrase(testo).resto || testo); rirenderLibero(); return;
   }
