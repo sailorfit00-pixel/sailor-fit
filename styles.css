@@ -2385,3 +2385,13 @@ body.tastiera .qz-backup { display: none; }
 /* la quantità che stai modificando: sfondo scuro, bordo tratteggiato e scritta nel colore dell'app (le altre restano grigie e discrete) */
 #spesa .spesa-riga .spesa-qta { border: 1.5px solid transparent; padding: 2px 9px; }
 #spesa li.voce.in-mod .spesa-qta { background: transparent; border: 1.5px dashed var(--lilla); color: var(--lilla); font-weight: 600; }
+/* 🎤 Detta acceso: il pulsante diventa bianco col contorno nel colore dell'app che si illumina (mentre ti sente); nel riquadro solo onda e frase */
+.tabbar .tab-detta.avvio .detta-ico, .tabbar .tab-detta.ascolta .detta-ico,
+html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="chiaro"] .tabbar .tab-detta.ascolta .detta-ico { background: #fff; color: #1a1426; transform: none; box-shadow: 0 0 0 3px var(--lilla), 0 4px 12px rgba(0,0,0,.35); }
+.tabbar .tab-detta.ascolta .detta-ico, html[data-tema="chiaro"] .tabbar .tab-detta.ascolta .detta-ico { animation: detta-luce 1.2s ease-out infinite; }
+@keyframes detta-luce { 0% { box-shadow: 0 0 0 3px var(--lilla), 0 0 0 3px rgba(var(--lilla-rgb), .7), 0 4px 12px rgba(0,0,0,.35); } 100% { box-shadow: 0 0 0 3px var(--lilla), 0 0 0 18px rgba(var(--lilla-rgb), 0), 0 4px 12px rgba(0,0,0,.35); } }
+.detta-velo { background: rgba(0,0,0,.35); }
+.detta-bolla { padding: 16px 18px; cursor: pointer; }
+.detta-barre { height: 54px; }
+.detta-live { margin-top: 10px; min-height: 1.4em; text-align: center; }
+.detta-live:not(.vuoto) { text-align: left; }

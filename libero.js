@@ -2615,7 +2615,7 @@ function apriComandiVocali() {
   editCtx = null; liberoCtx = null;
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
-    <p class="hint">Tocca <b>🎤 Detta</b> (in basso) e parla quando vedi «Ti sento» e l'onda che si muove; poi tocca ✓ Fatto. Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
+    <p class="hint">Tocca <b>🎤 Detta</b> (in basso): il pulsante diventa bianco e compare l'onda. Parla, poi tocca di nuovo 🎤 per finire. Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
     <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es], k) => `<details class="cv-sez"${k === 0 ? " open" : ""}>
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
@@ -2687,22 +2687,19 @@ function micTesto(modo, testo) {
     }
   };
   const togliTuttiVeli = () => document.querySelectorAll(".detta-velo").forEach(v => v.remove());
+  // il riquadro: solo l'onda sonora e la frase che si scrive mentre parli. Nessun pulsante: si finisce ritoccando 🎤
   const aggiornaVelo = () => {
     const velo = document.querySelector(".detta-velo"); if (!velo) return;
     velo.dataset.stato = stato || "";
-    const st = velo.querySelector(".detta-stato");
-    if (st) st.innerHTML = stato === "ascolto" ? `<i class="detta-rec"></i>Ti sento, parla pure` : stato === "chiudo" ? "Un attimo…" : "Accendo il microfono… aspetta";
     const t = testoTutto(), l = velo.querySelector(".detta-live");
-    if (l) { l.textContent = t || (stato === "ascolto" ? "es. «a pranzo 150 g di riso e un'insalata»" : ""); l.classList.toggle("vuoto", !t); l.scrollTop = l.scrollHeight; }
+    if (l) { l.textContent = t || (stato === "ascolto" ? "Parla… poi tocca 🎤 per finire" : ""); l.classList.toggle("vuoto", !t); l.scrollTop = l.scrollHeight; }
   };
   const mostraVelo = () => {
     togliTuttiVeli();
     const velo = document.createElement("div"); velo.className = "detta-velo";
-    velo.innerHTML = `<div class="detta-bolla" role="dialog" aria-live="polite">
-      <p class="detta-stato"></p>
+    velo.innerHTML = `<div class="detta-bolla" role="status" aria-live="polite">
       <div class="detta-barre" aria-hidden="true">${"<i></i>".repeat(N_BARRE)}</div>
-      <p class="detta-live"></p>
-      <div class="detta-tasti"><button class="btn-sec" data-detta-annulla>Annulla</button><button class="btn" data-detta-fatto>✓ Fatto</button></div></div>`;
+      <p class="detta-live"></p></div>`;
     document.body.appendChild(velo);
     storia = []; clearInterval(timerOnda); timerOnda = setInterval(disegnaOnda, 70);
     aggiornaVelo();
@@ -2727,7 +2724,7 @@ function micTesto(modo, testo) {
     if (!ok) { micRipiego(modo, "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
     avviso("Non ho sentito niente: tocca 🎤 e riprova");
   };
-  // ✓ Fatto (o di nuovo 🎤): il telefono consegna le ultime parole, poi si va avanti
+  // di nuovo 🎤: il telefono consegna le ultime parole, poi si va avanti
   const fatto = () => {
     if (!stato || stato === "chiudo") return;
     if (stato === "avvio" && !partito) { annulla(); return; }   // ritoccato prima che si accendesse: si annulla e basta
@@ -2797,7 +2794,7 @@ function micTesto(modo, testo) {
     // il microfono non si accende entro 5 secondi: il campo per scrivere (o dettare con la tastiera)
     timerAvvio = setTimeout(() => { if (stato === "avvio") finisci(); }, 5000);
   };
-  // 🎤 Detta: un tocco accende (il tocco intero: su iPhone il microfono parte solo così), un altro tocco o ✓ Fatto finisce
+  // 🎤 Detta: un tocco accende (il tocco intero: su iPhone il microfono parte solo così), un altro tocco finisce
   document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest("[data-mic]")) e.preventDefault(); });
   document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
@@ -2810,12 +2807,11 @@ function micTesto(modo, testo) {
   });
   // l'app va in secondo piano: quello già detto si tiene
   document.addEventListener("visibilitychange", () => { if (document.hidden && stato) fatto(); });
-  // mentre ascolta: i tasti del riquadro; i tocchi sul resto della pagina non fanno niente (niente pasti aperti per sbaglio)
+  // mentre ascolta i tocchi sul resto della pagina non fanno niente (niente pasti aperti per sbaglio); il riquadro toccato finisce, come 🎤
   document.addEventListener("click", (e) => {
     if (!stato || !e.target.closest) return;
-    if (e.target.closest("[data-detta-fatto]")) { e.preventDefault(); fatto(); return; }
-    if (e.target.closest("[data-detta-annulla]")) { e.preventDefault(); annulla(); return; }
-    if (e.target.closest(".detta-bolla") || e.target.closest("[data-mic]")) return;
+    if (e.target.closest(".detta-bolla")) { e.preventDefault(); fatto(); return; }
+    if (e.target.closest("[data-mic]")) return;
     e.preventDefault(); e.stopPropagation();
   }, true);
 })();
