@@ -505,6 +505,8 @@ const POOL_SOSTITUZIONE = [
 ];
 const VERDURE_CONSIGLI = ["Zucchine", "Spinaci", "Broccoli", "Insalata", "Pomodoro", "Carote", "Finocchi", "Cetriolo", "Rucola", "Asparagi", "Fagiolini"];
 const GRAMMI_MAX_FONTI = { "Proteine in polvere": 30, "Proteine vegetali in polvere (pisello)": 30, "Albume": 200, "Yogurt greco 0%": 250, "Yogurt greco intero": 200, "Fiocchi di latte": 200, "Quark magro": 250, "Ricotta": 150, "Petto di pollo": 220, "Fesa di tacchino": 200, "Merluzzo": 250, "Nasello": 250, "Branzino": 200, "Orata": 200, "Tofu": 200, "Ceci cotti": 200, "Lenticchie cotte": 200, "Uova": 220, "Salmone fresco": 180, "Bresaola": 90, "Skyr": 250, "Yogurt di soia": 250 };
+// porzione massima sensata di un alimento: quella scritta sopra, altrimenti dal tipo di alimento (pasta o riso crudi ~130 g, olio 25 g…), mai oltre «resto»
+const tettoFonte = (nome, resto) => GRAMMI_MAX_FONTI[nome] || (() => { try { return (window.ALIMENTI || {})[nome] ? Math.min(resto, Math.max(profiloBase(nome).hi, 25)) : resto; } catch (e) { return resto; } })();
 const FONTI_PROTEINE = {
   leggero: ["Yogurt greco 0%", "Fiocchi di latte", "Quark magro"],      // colazione e spuntini: latticini magri
   pasto: ["Petto di pollo", "Fesa di tacchino", "Merluzzo", "Nasello", "Albume", "Tofu", "Fiocchi di latte", "Ceci cotti", "Lenticchie cotte"],   // niente tonno in scatola: per il mercurio si mangia con moderazione
@@ -670,7 +672,7 @@ function elencoConsigli(c, m) {
     let migliore = null;
     [0.5, 0.7, 1.3, 1.5, 2].forEach(f => {
       let nuova = qtaPezziInteri(r.nome, "pz", Math.round(r.qta * f / 5) * 5);   // pizza, piadina…: pezzi interi
-      if (f > 1) nuova = Math.min(nuova, r.qta + 100, GRAMMI_MAX_FONTI[r.nome] || 300);
+      if (f > 1) nuova = Math.min(nuova, r.qta + 100, tettoFonte(r.nome, 300));
       if (nuova < 5 || Math.abs(nuova - r.qta) < Math.max(10, r.qta * 0.2)) return;
       const d = mac(r.nome, nuova - r.qta);
       if (famigliaProt(r.nome) && d.proteine < -4 && gap.kcal > -150) return;       // le fonti di proteine non si riducono se non sei molto oltre con le calorie
@@ -683,7 +685,7 @@ function elencoConsigli(c, m) {
     // completa: la fonte di carboidrati sale alla quantità che colma il buco (o che usa le calorie rimaste), anche di pochi grammi (patate 150 → 170 g)
     if (a0[2] * 4 / a0[0] >= 0.55 && gap.carboidrati >= 8 && gap.kcal >= 15) {
       const extra = Math.min(gap.carboidrati / (a0[2] / 100), gap.kcal / (a0[0] / 100));
-      const nuova = Math.min(Math.floor((r.qta + extra) / 5) * 5, r.qta + 100, GRAMMI_MAX_FONTI[r.nome] || 400);
+      const nuova = Math.min(Math.floor((r.qta + extra) / 5) * 5, r.qta + 100, tettoFonte(r.nome, 400));
       if (nuova - r.qta >= 10) {
         const d = mac(r.nome, nuova - r.qta), nuovo = meno(gap, d);
         if (!sforaCarbo(d) && nuovo.kcal >= -5 && (d.grassi <= 1 || nuovo.grassi >= -3)) {
@@ -716,7 +718,7 @@ function elencoConsigli(c, m) {
   const prot = principale ? FONTI_PROTEINE.pasto : FONTI_PROTEINE.leggero;
   const aggiungi = (nomi, grammi, gruppo, ruolo, minV = 6) => nomi.filter(n => A[n] && !dentro.has(n) && !MAI_CONSIGLIATI.test(n) && !famDentro.has(famigliaProt(n))).forEach(n => {
     let migliore = null;
-    grammi.filter(g => g <= (GRAMMI_MAX_FONTI[n] || 300)).forEach(g => {
+    grammi.filter(g => g <= tettoFonte(n, 300)).forEach(g => {   // mai oltre una porzione sensata (frutta secca 40 g, olio 25 g)
       const d = mac(n, g);
       if (pre && (d.grassi > 3 || (X[n] || [])[2] * g / 100 > 4)) return;           // pre-workout: niente grassi né fibre in più
       if (d.kcal > Math.max(120, gap.kcal + 40)) return;                             // starebbe fuori dal pasto
@@ -1089,7 +1091,7 @@ function rigaQuantitaHTML(p, k, it, u) {
   const input = gu
     ? `<input class="qta-input lib-qta" type="text" inputmode="decimal" autocomplete="off" data-${p}-qta="${k}" data-pz="${gu}" value="${fmt(it.qta / gu)}" aria-label="Quantità di ${esc(it.nome)}">`
     : `<input class="qta-input lib-qta" type="text" inputmode="decimal" autocomplete="off" data-${p}-qta="${k}" value="${Math.round(it.qta)}" aria-label="Quantità di ${esc(it.nome)}">`;
-  return `<div class="lib-riga"><div class="lib-nome-txt${classeNome(it.nome)}"><span class="lib-nome-t">${esc(it.nome)}</span></div>
+  return `<div class="lib-riga"><div class="lib-nome-txt${classeNome(it.nome)}"><span class="lib-nome-t">${esc(it.nome)}</span>${avvisoEsclusoHTML(it.nome)}</div>
       <div class="qstep"><button class="qstep-b" data-${p}-step="${k}|-1" aria-label="Meno">−</button>${input}<button class="qstep-b" data-${p}-step="${k}|1" aria-label="Più">＋</button></div>
       <div class="unita-box"><span class="unita-et ${(ABBR[u] || u).length > 3 ? "lunga" : ""}">${ABBR[u] || u}</span><select class="lib-unita-sel" data-${p}-unita="${k}" aria-label="Unità di misura">${opzioniUnita(it.nome).map(([v, l]) => `<option value="${v}" ${u === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <button class="lib-del" data-${p}-del="${k}" aria-label="Rimuovi">${ICONA_CESTINO}</button></div>`;
@@ -1221,7 +1223,7 @@ function liberoHTML() {
   const righeK = c.items.map((it, k) => {
     const alt = cercaAlimenti(it.cercato || it.nome).slice(0, 6);
     // il nome è un campo: tocchi, scrivi il nuovo ingrediente e scegli dai suggerimenti (la quantità resta)
-    const sel = `<div class="lib-nome-txt${classeNome(it.nome)}" role="button" tabindex="0" data-lib-nome-edit="${k}" aria-label="${esc(it.nome)} (tocca per cambiarlo)"><span class="lib-nome-t">${esc(it.nome)}</span></div>`; // testo che va a capo; al tocco diventa un campo
+    const sel = `<div class="lib-nome-txt${classeNome(it.nome)}" role="button" tabindex="0" data-lib-nome-edit="${k}" aria-label="${esc(it.nome)} (tocca per cambiarlo)"><span class="lib-nome-t">${esc(it.nome)}</span>${avvisoEsclusoHTML(it.nome)}</div>`; // testo che va a capo; al tocco diventa un campo. Un cibo che hai escluso (dettato o scritto): «⚠️ contiene lattosio»
     const pz = (window.PESO_PZ || {})[it.nome];
     const u = unitaDi(it), gu = grammiPerUnita(it.nome, u);
     const unitaG = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
@@ -1319,7 +1321,7 @@ function liberoHTML() {
     const aperta = !bloccato && !!(c.vociAperte && c.vociAperte.has(it.nome));
     return `<div class="pm-blocco pm-card pm-piatto lib-voce${aperta ? " aperta" : ""}" data-voce="${esc(it.nome)}">
       <div class="pasto-riga pm-testa pm-ing lib-voce-testa${bloccato ? " sola-lettura pm-fissa" : ""}"${bloccato ? "" : ` data-voce-toggle="${esc(it.nome)}" role="button" tabindex="0" aria-expanded="${aperta}"`}>
-        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${gu && !inGrammi ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
+        <span class="pr-testo"><b><i class="pr-check pm-ck">✓</i>${esc(riepilogo)}${avvisoEsclusoHTML(it.nome)}${gu && !inGrammi ? `<span class="pm-eq-riep"> ≈ ${Math.round(it.qta)} ${ug}</span>` : ""}</b>${piuPiatti ? macroStileHTML(m, { senzaKcal: true }) : ""}</span>
         <span class="pr-kcal">${Math.round(m.kcal)}<small> kcal</small></span>${avv && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avv="${k}" aria-label="Prima dell'allenamento meglio senza grassi">⚠</button>` : ""}${avvT && !aperta && !bloccato ? `<button class="lib-avv" data-lib-avvt="${k}" aria-label="Tonno in scatola oltre il consigliato">⚠</button>` : ""}${bloccato ? "" : frecciaHTML()}
         <button class="lib-voce-del" data-lib-del="${k}" hidden tabindex="-1" aria-hidden="true"></button>
       </div>${aperta && bloccato ? `<div class="pm-dett">${righeSolaLetturaHTML([it])}</div>` : aperta ? `<div class="pm-dett pm-riga-sola">${righeK[k].replace(/<button class="lib-del"[^>]*>[\s\S]*?<\/button>/, "").replace(/<div class="lib-nome-txt[^"]*"[^>]*>[\s\S]*?<\/div>/, "")}</div>` : ""}${!bloccato && aperta ? presetHTML(k) : ""}${avvT && !aperta && !bloccato && c.tonnoAperto === k ? `<div class="lib-avv-lista"><span class="avv-tonno">${esc(avvT)}</span>${alternativeTonno(it, k).map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}${avv && !aperta && !bloccato && c.avvAperto === k ? `<div class="lib-avv-lista">${alt2.map(x => `<button class="var-furbo lib-furbo" data-sost-scegli="${k}" data-nome="${esc(x.nome)}" data-g="${x.g}">${esc(x.nome.toLowerCase())} <b>${x.g} g</b></button>`).join("")}</div>` : ""}
@@ -2004,7 +2006,9 @@ function pastoDaFrase(testo, data) {
   return { pasto: p.p, resto: (t.slice(0, p.i) + " " + t.slice(p.i + p.l)).replace(/\s+/g, " ").trim() };
 }
 // il giorno su cui si detta: quello aperto in Oggi, altrimenti oggi
-const dataDetta = () => document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" ? dataDiario : oggiISO();
+// (se il giorno l'ha cambiato un comando a voce, es. «copia il pranzo anche domani», le frasi dopo senza giorno tornano a oggi: il giorno aperto conta solo se ci sei andata tu)
+let _dataDaVoce = null;
+const dataDetta = () => document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" && dataDiario !== _dataDaVoce ? dataDiario : oggiISO();
 
 // ---------- Comandi a voce ----------
 // 1) un altro giorno: «domani a pranzo riso basmati e tonno» → il pranzo di domani con gli alimenti da confermare (quantità adatte ai tuoi obiettivi)
@@ -2142,6 +2146,7 @@ function vaiAlGiornoDetta(data) {
   if (document.body.dataset.tab !== "oggi") { const t = document.getElementById("tab-oggi"); if (t) t.click(); }
   if (typeof dataDiario !== "undefined" && dataDiario !== data) {
     dataDiario = data; if (typeof vistaHome !== "undefined") vistaHome = "oggi";
+    _dataDaVoce = data === oggiISO() ? null : data;
     if (typeof renderOggi === "function") renderOggi();
     window.scrollTo(0, 0);
   }
@@ -2326,7 +2331,9 @@ function comandoAllenamento(testo) {
   const riposo = RIPOSO_COMANDO.test(t), sport = riposo ? [] : sportDetti(t, pf), durate = durateDette(t), ora = oraDetta(t);
   if (!riposo && !sport.length && !(ora !== null && /\balleno|allenamento|allenarmi|palestra\b/.test(t))) return false;
   if (!riposo && sport.length && !ALLEN_COMANDO.test(t) && !durate.length && !giorniNellaFrase(t).length && ora === null) return false;   // una parola sola («pesi»): non basta
-  const g = giorniNellaFrase(t), data = g.length ? dataDelGiorno(g[0], /\b(?:ho fatto|ho corso|ho camminato|mi sono allenat|ho nuotato|ho pedalato|ho ballato)/.test(t) ? -1 : 1) : dataDetta();
+  const passato = /\b(?:ho fatto|ho corso|ho camminato|mi sono allenat|ho nuotato|ho pedalato|ho ballato|sono andat[oa])/.test(t);
+  let data = (() => { const g = giorniNellaFrase(t); return g.length ? dataDelGiorno(g[0], passato ? -1 : 1) : dataDetta(); })();
+  if (passato && data > oggiISO()) data = oggiISO();   // «ho corso 6 km» (al passato) non va su domani anche se Oggi mostra domani
   if (riposo) { vaiAlGiornoDetta(data); apriAllenamentiGiorno(data, "riposo"); return true; }
   const mancanti = sport.filter(s => !s.sp);
   if (mancanti.length && mancanti.length === sport.length) { avviso(`«${mancanti[0].parola}» non è tra i tuoi sport: di' «aggiungi lo sport ${mancanti[0].parola}»`); return true; }

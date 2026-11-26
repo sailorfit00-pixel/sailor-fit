@@ -798,6 +798,24 @@ Object.entries(ALIMENTI_COLAZIONE_USA).forEach(([n, v]) => { if (!ALIMENTI[n]) {
 Object.assign(PESO_PZ, { "Bacon croccante": 8, "Bacon di tacchino": 8, "Hash brown (frittelle di patate)": 60, "Bagel": 100, "English muffin": 57, "Pane in cassetta (toast)": 28, "Pane tostato": 25, "French toast": 65, "Cheddar": 20, "Formaggio a fette (sottiletta)": 20, "Brie": 30, "Uova di quaglia": 10, "Mandarini": 80, "Croissant": 60, "Donut": 60, "Cookie con gocce di cioccolato": 30, "Marshmallow": 5, "Acciughe sott'olio": 4 });
 
 
+// Senza glutine (per chi è celiaco o intollerante): valori medi dei prodotti in commercio (etichette), per 100 g di prodotto crudo/pronto.
+// [kcal, proteine, carboidrati, grassi, zuccheri, di cui aggiunti, fibre, sale]
+const ALIMENTI_SENZA_GLUTINE = {
+  "Pasta senza glutine": [357, 7, 79, 1.5, 1, 0, 2, 0.01],
+  "Pasta senza glutine cotta": [152, 3, 33.5, 0.7, 0.4, 0, 0.9, 0.01],
+  "Pasta di riso": [352, 7, 79, 1, 0.5, 0, 1, 0.01],
+  "Pasta di mais": [355, 7.5, 78, 1.5, 1, 0, 3, 0.01],
+  "Pane senza glutine": [250, 4, 46, 5, 3, 1, 6, 1.2],
+  "Pane in cassetta senza glutine": [260, 3.5, 45, 6, 3, 2, 7, 1.2],
+  "Fette biscottate senza glutine": [395, 6, 80, 5, 6, 5, 4, 1],
+  "Biscotti senza glutine": [480, 5, 70, 20, 25, 23, 3, 0.5],
+  "Crackers senza glutine": [430, 7, 75, 11, 2, 1, 4, 2],
+  "Pizza senza glutine": [240, 6, 35, 8, 3, 1, 2, 1.2],
+  "Farina senza glutine": [350, 6, 80, 1, 1, 0, 3, 0.01],
+};
+Object.entries(ALIMENTI_SENZA_GLUTINE).forEach(([n, v]) => { if (!ALIMENTI[n]) { ALIMENTI[n] = v.slice(0, 4); NUTRIENTI_EXTRA[n] = v.slice(4, 8); } });
+Object.assign(PESO_PZ, { "Pane in cassetta senza glutine": 30, "Fette biscottate senza glutine": 9, "Biscotti senza glutine": 8, "Crackers senza glutine": 5 });
+
 // Alimenti aggiunti dall'utente o letti dal codice a barre (valori per 100 g), salvati sul dispositivo:
 // [kcal, proteine, carboidrati, grassi] e, se noti, [zuccheri, di cui aggiunti, fibre, sale]
 try {

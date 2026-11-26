@@ -1730,7 +1730,7 @@ function mosseCarbo(data, p, m, scritto) {
   if (scritto) {
     try { basi = ingredientiPastoTutti(data, p).filter(r => fonteCarbo(A[r.nome]) && !MAI_CONSIGLIATI.test(r.nome)); } catch (e) {}
     basi.forEach(r => {
-      const a = A[r.nome], tetto = Math.max(30, Math.min(r.qta * 1.2, 250));   // al massimo poco più del doppio di quanto c'è già
+      const a = A[r.nome], tetto = Math.max(0, Math.min(Math.max(30, Math.min(r.qta * 1.2, 250)), (typeof tettoFonte === "function" ? tettoFonte(r.nome, 400) : 400) - r.qta));   // al massimo poco più del doppio di quanto c'è già, e mai oltre una porzione sensata (pasta cruda ~130 g)
       const extra = grammiCheCi(r.nome, need * 100 / a[2], tetto, m); if (!extra || extra.g < 10 || extra.d.carboidrati < Math.min(need * 0.4, 10)) return;
       const nuova = Math.round((r.qta + extra.g) / 5) * 5;
       out.push({ key: `${p}|por|${r.rif[0]}|${r.rif[1]}|${nuova}`, testa: `Porta <b>${esc(r.nome.toLowerCase())}</b> da ${Math.round(r.qta)} a <b>${nuova} g</b>`, d: extra.d, _p: Math.abs(extra.d.carboidrati - need) - 20 });

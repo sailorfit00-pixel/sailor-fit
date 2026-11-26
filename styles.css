@@ -2310,3 +2310,7 @@ body.tastiera .qz-backup { display: none; }
 .voce-cambio span { color: var(--muted); font-size: 13px; }
 .voce-cambio b { font-size: 16px; }
 .voce-cambio s { color: var(--muted); font-weight: 400; }
+/* alimento escluso (allergie, dieta, cibi che non mangi) dentro il pasto: l'avviso va sotto il nome, non accanto */
+.lib-nome-txt:has(.autoc-escluso) { flex-wrap: wrap; flex-direction: column; align-items: flex-start; justify-content: center; }
+.lib-nome-txt .autoc-escluso { display: block; font-size: 11px; line-height: 1.2; margin-top: 2px; }
+.pr-testo .autoc-escluso { display: block; font-size: 12px; font-weight: 600; }
