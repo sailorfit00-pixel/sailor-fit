@@ -2615,7 +2615,7 @@ function apriComandiVocali() {
   editCtx = null; liberoCtx = null;
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
-    <p class="hint">Tocca <b>🎤 Detta</b> (in basso): il pulsante diventa bianco e compare l'onda. Parla, poi tocca di nuovo 🎤 per finire. Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
+    <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla: vedi l'onda e la frase mentre parli; lascia per finire. (Con un tocco breve resta in ascolto: ritocca 🎤 per finire.) Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
     <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es], k) => `<details class="cv-sez"${k === 0 ? " open" : ""}>
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
@@ -2641,7 +2641,7 @@ function apriDettaTesto(nota) {
   const ta = document.getElementById("detta-oggi"); if (ta) ta.focus();
   document.getElementById("detta-oggi-invia").addEventListener("click", () => { const v = document.getElementById("detta-oggi").value; if (!v.trim()) { avviso("Scrivi o detta cosa hai mangiato"); return; } closeModal(true); inviaDettato(v); });
 }
-// tocca e parla: il tasto «Detta» della barra in basso (come i vocali di WhatsApp: si vede quando ti sente, l'onda e la frase mentre parli).
+// tieni premuto e parla: il tasto «Detta» della barra in basso (come i vocali di WhatsApp: l'onda e la frase mentre parli, lasci per finire).
 // Con un pasto aperto quello che dici va in quel pasto; altrimenti nel pasto che nomini («a colazione…») o in quello che scegli
 // dove il microfono dell'app non funziona: dalla barra il campo per scrivere, nel pasto la ricerca (lì si detta con il 🎤 della tastiera)
 // c'è un pasto aperto (il suo pannello, con il campo di ricerca)? allora si detta in quello
@@ -2669,6 +2669,7 @@ function micTesto(modo, testo) {
   // stato: null (spento) · "avvio" (il microfono si sta accendendo: NON ti sente ancora) · "ascolto" (ti sente) · "chiudo" (finito, aspetto le ultime parole)
   let stato = null, rec = null, testoGiri = "", testoGiro = "", errore = null, partito = false, modo = "barra", bottone = null;
   let ultimoTocco = 0, inizioAscolto = 0, giri = 0, timerFine = null, timerOnda = null, timerAvvio = null, timerSente = null;
+  let premuto = false, premutoDa = 0, daRiprovare = false, toccoFinito = false;   // tenuto premuto · il telefono non ha acceso il microfono col dito appoggiato: si riprova al rilascio
   // l'onda sonora si muove con la voce che il telefono sta riconoscendo (niente secondo microfono: su iPhone fermava il riconoscimento)
   let livello = 0, storia = [];
   const N_BARRE = 28;
@@ -2687,25 +2688,26 @@ function micTesto(modo, testo) {
     }
   };
   const togliTuttiVeli = () => document.querySelectorAll(".detta-velo").forEach(v => v.remove());
-  // il riquadro: solo l'onda sonora, come i vocali di WhatsApp (quello che hai detto lo vedi scritto quando chiudi, nella conferma). Si finisce ritoccando 🎤
+  // il riquadro: l'onda sonora e la frase che si scrive mentre parli. Tenendo premuto si finisce lasciando; con un tocco, ritoccando 🎤
   const aggiornaVelo = () => {
     const velo = document.querySelector(".detta-velo"); if (!velo) return;
     velo.dataset.stato = stato || "";
     const t = testoTutto(), l = velo.querySelector(".detta-live");
-    if (l) { l.textContent = t || (stato === "ascolto" ? "Parla… poi tocca 🎤 per finire" : ""); l.classList.toggle("vuoto", !t); l.scrollTop = l.scrollHeight; }
+    if (l) { l.textContent = t || (stato === "ascolto" ? (premuto ? "Parla… poi lascia" : "Parla… poi tocca 🎤 per finire") : ""); l.classList.toggle("vuoto", !t); l.scrollTop = l.scrollHeight; }
   };
   const mostraVelo = () => {
     togliTuttiVeli();
     const velo = document.createElement("div"); velo.className = "detta-velo";
-    velo.innerHTML = `<div class="detta-bolla" role="status" aria-label="Ti ascolto: tocca 🎤 per finire">
-      <div class="detta-barre" aria-hidden="true">${"<i></i>".repeat(N_BARRE)}</div></div>`;
+    velo.innerHTML = `<div class="detta-bolla" role="status" aria-live="polite">
+      <div class="detta-barre" aria-hidden="true">${"<i></i>".repeat(N_BARRE)}</div>
+      <p class="detta-live"></p></div>`;
     document.body.appendChild(velo);
     storia = []; clearInterval(timerOnda); timerOnda = setInterval(disegnaOnda, 70);
     aggiornaVelo();
   };
   const staccaRec = () => { if (rec) { const r = rec; rec = null; r.onend = null; r.onresult = null; r.onerror = null; r.onstart = null; r.onaudiostart = null; try { r.abort(); } catch (e) {} } };
   const spegni = () => {
-    stato = null; clearTimeout(timerFine); clearTimeout(timerAvvio); clearTimeout(timerSente); clearInterval(timerOnda); timerOnda = null;
+    stato = null; premuto = false; daRiprovare = false; clearTimeout(timerFine); clearTimeout(timerAvvio); clearTimeout(timerSente); clearInterval(timerOnda); timerOnda = null;
     if (bottone) bottone.classList.remove("ascolta", "avvio");
     togliTuttiVeli();
   };
@@ -2721,7 +2723,7 @@ function micTesto(modo, testo) {
       micRipiego(modo, "Il microfono non è permesso per questa app: permettilo nelle impostazioni del telefono (Safari → Microfono). Intanto puoi usare il 🎤 della tastiera."); return;
     }
     if (!ok) { micRipiego(modo, "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
-    avviso("Non ho sentito niente: tocca 🎤 e riprova");
+    avviso("Non ho sentito niente, riprova");
   };
   // di nuovo 🎤: il telefono consegna le ultime parole, poi si va avanti
   const fatto = () => {
@@ -2771,6 +2773,9 @@ function micTesto(modo, testo) {
       if (rec !== r) return;
       if (testoGiro) { testoGiri = (testoGiri + " " + testoGiro).trim(); testoGiro = ""; }
       const bloccato = errore === "not-allowed" || errore === "service-not-allowed" || errore === "audio-capture";
+      // l'iPhone può rifiutare il microfono finché il dito è appoggiato (non è ancora un «tocco»): si aspetta il rilascio e si riprova lì
+      // (se il tocco è già finito non c'è più niente da aspettare: il microfono è proprio bloccato)
+      if (errore === "not-allowed" && !partito && !daRiprovare && !toccoFinito && stato === "avvio" && Date.now() - inizioAscolto < 1500) { daRiprovare = true; rec = null; return; }
       // si riparte anche se si è fermato prima di sentirti (su iPhone capita un «no-speech» appena acceso): al massimo 5 secondi, poi il campo per scrivere
       if ((stato === "ascolto" || stato === "avvio") && !bloccato && giri < 40 && Date.now() - inizioAscolto < 90000) {
         giri++; errore = null;
@@ -2784,7 +2789,7 @@ function micTesto(modo, testo) {
   const avvia = (b) => {
     modo = b.dataset.mic; bottone = b;
     if (!SR) { micRipiego(modo); return; }
-    testoGiri = ""; testoGiro = ""; errore = null; partito = false; giri = 0; inizioAscolto = Date.now(); livello = 0;
+    testoGiri = ""; testoGiro = ""; errore = null; partito = false; giri = 0; inizioAscolto = Date.now(); livello = 0; daRiprovare = false;
     staccaRec();   // un ascolto alla volta
     stato = "avvio"; b.classList.add("avvio");
     mostraVelo();
@@ -2793,16 +2798,32 @@ function micTesto(modo, testo) {
     // il microfono non si accende entro 5 secondi: il campo per scrivere (o dettare con la tastiera)
     timerAvvio = setTimeout(() => { if (stato === "avvio") finisci(); }, 5000);
   };
-  // 🎤 Detta: un tocco accende (il tocco intero: su iPhone il microfono parte solo così), un altro tocco finisce
+  // 🎤 Detta: tieni premuto e parla, lascia per finire (come i vocali di WhatsApp). Con un tocco breve resta in ascolto: ritocchi 🎤 per finire.
   document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest("[data-mic]")) e.preventDefault(); });
-  document.addEventListener("click", (e) => {
+  document.addEventListener("pointerdown", (e) => {
     const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
     e.preventDefault();
     if (Date.now() - ultimoTocco < 400) return;   // il doppio tocco dell'iPhone: uno solo
     ultimoTocco = Date.now();
-    if (stato) { fatto(); return; }
+    if (stato) { fatto(); return; }   // in ascolto dopo un tocco breve: questo tocco finisce
     if (typeof vibra === "function") vibra();
-    avvia(b);
+    premuto = true; premutoDa = Date.now(); toccoFinito = false;
+    avvia(b);   // subito, senza attese: si parla appena compare l'onda
+  });
+  const rilascia = () => {
+    if (!premuto) return; premuto = false;
+    if (!stato || stato === "chiudo") return;
+    if (Date.now() - premutoDa > 600 && partito) { fatto(); return; }   // tenuto premuto mentre parlavi: lasciando è finito
+    aggiornaVelo();   // tocco breve (o microfono non ancora acceso): resta in ascolto, si finisce ritoccando 🎤
+  };
+  document.addEventListener("pointerup", rilascia); document.addEventListener("touchend", rilascia);
+  // il telefono «perde» il dito (es. una notifica): resta in ascolto, si finisce ritoccando 🎤
+  document.addEventListener("pointercancel", () => { if (premuto) { premuto = false; aggiornaVelo(); } });
+  // il rilascio è un vero tocco: se col dito appoggiato il telefono non ha acceso il microfono, si riprova qui
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
+    e.preventDefault(); toccoFinito = true;
+    if (stato === "avvio" && daRiprovare) { daRiprovare = false; errore = null; try { ascolta(); } catch (x) { finisci(); } }
   });
   // l'app va in secondo piano: quello già detto si tiene
   document.addEventListener("visibilitychange", () => { if (document.hidden && stato) fatto(); });
