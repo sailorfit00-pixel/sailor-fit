@@ -2178,10 +2178,11 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 .qz-altro-riga .qz-inp { width: auto; margin: 0; }
 .qz-altro-riga .btn.lib-piu { flex: 0 0 auto; width: 56px; min-height: 0; height: auto; padding: 0; margin: 0; font-size: 24px; border-radius: 16px; }
 
-/* Oggi: «✨ Compila i pasti del giorno» e «🎲 Cambia menu del giorno»: solo la scritta, senza contorni, sottolineata a puntini (si capisce che si tocca); stesso stile per tutte e due, cambia solo l'icona */
+/* Oggi: «✨ Compila i pasti del giorno» e «🎲 Cambia menu del giorno»: solo la scritta, senza contorni, sottolineata a puntini (si capisce che si tocca); Compila in lilla, Cambia menu in grigio */
 /* spazio sotto: il banner «✓ Pasti pronti · Annulla» (sopra la barra in basso) non copre la scritta */
 .oggi-azioni { margin-bottom: 56px; }
-.btn-link.btn-compila, .btn-link.btn-cambia { color: var(--lilla); font-size: 16px; font-weight: 700; margin: 0 auto; gap: 6px; }
+.btn-link.btn-compila, .btn-link.btn-cambia { color: var(--lilla); font-size: 14px; font-weight: 700; margin: 0 auto; gap: 6px; }   /* 14px come «✅ Giornata in linea» */
+.btn-link.btn-cambia { color: var(--muted); font-weight: 500; }   /* grigio, poco in vista: sostituisce i pasti */
 .sotto-punti { text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
 /* tema chiaro: il contorno bianco della barra sforata sul bianco non si vede; arancione si confonde con la barra dei carboidrati.
    Ogni barra ha il contorno del suo colore, più scuro */
@@ -2310,3 +2311,12 @@ body.tastiera .qz-backup { display: none; }
 .lib-nome-txt:has(.autoc-escluso) { flex-wrap: wrap; flex-direction: column; align-items: flex-start; justify-content: center; }
 .lib-nome-txt .autoc-escluso { display: block; font-size: 11px; line-height: 1.2; margin-top: 2px; }
 .pr-testo .autoc-escluso { display: block; font-size: 12px; font-weight: 600; }
+
+/* «I miei dati»: schede Io · Sport · Cibo · App (icona sopra, nome sotto, linea lilla sotto quella aperta); restano in alto mentre scorri, subito sotto la fascia con la ✕ (.modal-testa, alta 64 px) */
+.pf-schede { position: sticky; top: 54px; z-index: 7; display: flex; margin: 0 -18px 4px; padding: 0 14px; background: var(--card); border-bottom: 1px solid var(--line2); }
+.pf-schede button { flex: 1; min-width: 0; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 0 9px;
+  background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -1px; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.pf-schede .pf-tab-ico { font-size: 20px; line-height: 1; opacity: .55; }
+.pf-schede button[aria-selected="true"] { color: var(--lilla); font-weight: 800; border-bottom-color: var(--lilla); }
+.pf-schede button[aria-selected="true"] .pf-tab-ico { opacity: 1; }
+.pf-scheda > h4:first-child, .pf-scheda > #form-profilo:first-child > .wiz-l:first-child { margin-top: 16px; }

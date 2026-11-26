@@ -2325,12 +2325,19 @@ function anteprimaProfiloHTML() {
     </tbody></table>
     <p class="hint">P, C, G in grammi · ×N = quante volte a settimana nella settimana tipo</p>`;
 }
-function apriProfilo() {
+// Schede di «I miei dati» (la pagina era lunga 5 schermi): Io · Sport · Cibo · App.
+// apriProfilo("io") apre su una scheda; senza argomento (ridisegno dopo una modifica) resta su quella aperta.
+const SCHEDE_PROFILO = [["io", "⚖️", "Io"], ["sport", "🏋️", "Sport"], ["cibo", "🥗", "Cibo"], ["app", "🎨", "App"]];
+let _schedaProfilo = "io";
+function apriProfilo(scheda) {
   editCtx = null;
-  const pf = leggiProfilo();
+  if (scheda && SCHEDE_PROFILO.some(([k]) => k === scheda)) _schedaProfilo = scheda;
+  const pf = leggiProfilo(), sk = (k) => `class="pf-scheda" data-pf-scheda="${k}" role="tabpanel"${_schedaProfilo === k ? "" : " hidden"}`;
   if (!_profiloPrima) _profiloPrima = statoProfilo();   // aperto adesso (non ridisegnato): da qui si contano le modifiche
   openModal(`
     <h3 class="modal-title">👤 I miei dati</h3>
+    <div class="pf-schede" role="tablist">${SCHEDE_PROFILO.map(([k, ic, l]) => `<button role="tab" data-pf-tab="${k}" aria-selected="${_schedaProfilo === k}"><span class="pf-tab-ico">${ic}</span>${l}</button>`).join("")}</div>
+    <div ${sk("io")}>
     <div id="form-profilo">
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
         <input class="qta-input wiz-full" type="number" ${k === "deficit" ? 'min="-20"' : 'inputmode="decimal" min="0"'} step="${st}" data-profilo="${k}" value="${pf[k]}">${k === "protKg" && pesoRiferimento(pf) < pf.peso ? `<p class="campo-nota">Proteine e grassi si calcolano su ${String(Math.round(pesoRiferimento(pf))).replace(".", ",")} kg invece di ${String(pf.peso).replace(".", ",")}: servono ai muscoli, e sul peso intero diventerebbero troppe.</p>` : ""}${k === "bmr" ? `
@@ -2340,6 +2347,10 @@ function apriProfilo() {
       ${CAMPI_MANUALI.map(([k, l, st]) => `<label class="wiz-l">${l}</label>
         <input class="qta-input wiz-full" type="number" inputmode="decimal" step="${st}" min="0" placeholder="automatico" data-profilo="${k}" value="${pf[k] > 0 ? pf[k] : ""}">`).join("")}
     </div>
+    <h4>Obiettivi che ne risultano</h4>
+    <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
+    </div>
+    <div ${sk("sport")}>
     <h4>I tuoi sport</h4>
     <div class="sport-lista">${pf.sport.filter(sp => !sp.nascosto).map(sp => `<div class="sport-riga">
         <span class="sr-ico">${sp.icona}</span><span class="sr-nome">${esc(sp.nome)}</span>
@@ -2360,10 +2371,12 @@ function apriProfilo() {
       return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].concat((pf.pasti || []).includes("sera") ? [["sera", esc(NomePasto("sera"))]] : []).map(([k, l]) =>
         `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
     ${orariSportHTML(pf)}
-    <h4>Obiettivi che ne risultano</h4>
-    <div id="anteprima-profilo">${anteprimaProfiloHTML()}</div>
+    </div>
+    <div ${sk("cibo")}>
     <h4>Alimentazione e allergie</h4>
     ${esclusioniHTML(pf)}
+    </div>
+    <div ${sk("app")}>
     <h4>Personalizza</h4>
     <label class="wiz-l">Il nome della tua app</label>
     <div class="pers-icone">${ICONE_APP.map(i => `<button class="qz-ico ${(pf.iconaApp || "🌙") === i ? "on" : ""}" data-pers-icona="${i}">${i}</button>`).join("")}</div>
@@ -2380,9 +2393,17 @@ function apriProfilo() {
     <div class="chips">${[["si", "📳 Sì"], ["no", "🔕 No"]].map(([k, l]) => `<button class="chip ${(pf.vibrazione === false ? "no" : "si") === k ? "attivo" : ""}" data-pers-vibra="${k}">${l}</button>`).join("")}</div>
     <p class="campo-nota">Una piccola vibrazione quando tocchi «✓ Aggiungi» o «✓ Salva». Su iPhone è leggera e c'è solo sui modelli recenti.</p>
     <button class="btn-sec block" data-azione="rifai-questionario">📝 Rifai il questionario iniziale</button>
+    </div>
     <div class="barra-salva due" id="pf-barra" ${profiloModificato() ? "" : "hidden"}><button class="btn-sec" data-pf-annulla>Annulla</button><button class="btn" data-pf-salva>✓ Salva</button></div>
 `);
 }
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-pf-tab]"); if (!b) return;
+  _schedaProfilo = b.dataset.pfTab;
+  document.querySelectorAll("[data-pf-tab]").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+  document.querySelectorAll("[data-pf-scheda]").forEach(x => { x.hidden = x.dataset.pfScheda !== _schedaProfilo; });
+  const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;   // ogni scheda parte dall'inizio
+});
 // Dieta, allergie e cose che non mangi (le stesse scelte del questionario): le ricette con quei cibi non si propongono
 function esclusioniHTML(pf) {
   const e = pf.esclusioni || {}, chip = (gr, k, l, ic, on) => `<button class="chip ${on ? "attivo" : ""}" data-escl="${gr}|${k}">${ic} ${l}</button>`;
@@ -2990,7 +3011,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (az.dataset.azione === "scarica") scaricaRicettario();
       else if (az.dataset.azione === "importa") { const f = document.getElementById("file-csv"); f.value = ""; f.click(); closeModal(); }
       else if (az.dataset.azione === "nuova") apriWizard();
-      else if (az.dataset.azione === "profilo") apriProfilo();
+      else if (az.dataset.azione === "profilo") apriProfilo("io");
       else if (az.dataset.azione === "miei-alimenti") apriMieiAlimenti();
       else if (az.dataset.azione === "spesa-aggiungi") aggiungiVoceSpesa();
       else if (az.dataset.azione === "spesa-nuova") { salvaPresi(new Set()); renderSpesa(); }

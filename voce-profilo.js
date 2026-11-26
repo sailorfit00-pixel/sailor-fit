@@ -51,7 +51,7 @@ function vpNaviga(t) {
   if (!m) return false;
   const x = m[1].replace(/[.!?]/g, "").trim(), tab = (id) => { closeModal(true); const b = document.getElementById(id); if (b) b.click(); };
   const dest = [
-    [/^(?:profilo|impostazioni|dati)$/, () => { closeModal(true); apriProfilo(); }],
+    [/^(?:profilo|impostazioni|dati|miei dati)$/, () => { closeModal(true); apriProfilo("io"); }],
     [/^(?:lista(?: della spesa)?|spesa)$/, () => { closeModal(true); apriSpesa(); }],
     [/^(?:ricette|ricettario|tutte le ricette)$/, () => { closeModal(true); apriListaRicette(); }],
     [/^(?:andamento|statistiche|grafici|progressi|pesate|peso)$/, () => tab("apri-andamento")],
