@@ -1492,10 +1492,18 @@ const MISURE_PARLATO = [
   [/^(?:piatto|piatti|piattino|ciotola|ciotole|porzione|porzioni|scodella|scodelle|coppetta|coppette)$/, 0, "porz"],
 ];
 // a voce le parole arrivano giuste: l'alimento trovato deve contenere la parola principale detta («frittelle di zia Pina» non è «Pinoli»)
+// un alimento trovato per una parola detta è credibile se almeno metà delle parole importanti corrisponde a parole del nome
+// (prima bastavano le prime lettere della prima parola: «una cosa buona» diventava «Coscia di pollo», «manda un messaggio» «Mandorle»)
+const PAROLE_VUOTE_CIBO = /^(?:con|del|della|dello|dei|degli|delle|una|uno|per|alla|allo|alle|agli|nel|nella|sul|sulla|tipo|po|poco|qualche|circa)$/;
 function credibile(r) {
   if (!r || !r.nome) return false;
-  const w = norm(r.cercato || "").split(/[\s']+/).find(x => x.length >= 3);
-  return !w || norm(r.nome).includes(stem(w)) || PREFERITI[norm(r.cercato)] === r.nome;
+  if (PREFERITI[norm(r.cercato || "")] === r.nome) return true;
+  const parole = norm(r.cercato || "").split(/[\s']+/).filter(x => x.length >= 3 && !PAROLE_VUOTE_CIBO.test(x) && !/^\d/.test(x));
+  if (!parole.length) return true;
+  const nomeP = norm(r.nome).split(/[\s'()]+/).filter(Boolean);
+  const tocca = (w) => { const sw = stem(w); return nomeP.some(n => n === w || (sw.length >= 4 && n.startsWith(sw)) || (n.length >= 4 && stem(n).length >= 3 && w.startsWith(stem(n)))); };
+  const ok = parole.filter(tocca).length;
+  return tocca(parole[0]) && ok >= Math.ceil(parole.length / 2);   // la prima parola (in italiano quella che conta: «spigola al forno») deve esserci
 }
 function righeDaParlato(testo) {
   let t = String(testo || "").toLowerCase().replace(/[’`]/g, "'").replace(/[.!?\n]+/g, ",").replace(/\b(?:e poi|poi|e dopo|dopo|e anche|inoltre)\b/g, ",").replace(RIEMPITIVI_PARLATO, " ").replace(/\bun paio di\b/g, "2").replace(/\bun (?:po'|pochino|pochettino) d(?:i\s*|')/g, "mezza porzione di ").replace(/\s+/g, " ");
@@ -2166,7 +2174,12 @@ function comandoPeso(testo) {
   const t = fraseDetta(testo);
   if (!PESO_COMANDO.test(t)) return false;
   const kg = kgDaFrase(t.replace(/\b(?:alle|ore)\s+\d+(?:[:.]\d+)?/g, " "));
-  if (!(kg >= 30 && kg <= 200)) { avviso("Non ho capito il peso: di' per esempio «peso 61,4»"); return true; }
+  if (!(kg >= 30 && kg <= 200)) {
+    if (/\b(?:quant[oi]|perso|preso|calat[oa]|sces[oa]|salit[oa]|andamento|grafico|come va|come sta andando|progressi)\b/.test(t)) {   // «quanto peso ho perso questo mese?»: il peso è nell'Andamento
+      closeModal(true); const b = document.getElementById("apri-andamento"); if (b) b.click(); avviso("📊 Il tuo peso è qui, nell'Andamento"); return true;
+    }
+    avviso("Non ho capito il peso: di' per esempio «peso 61,4»"); return true;
+  }
   const g = giorniNellaFrase(t), data = g.length ? dataDelGiorno(g[0], -1) : oggiISO();
   if (data > oggiISO()) { avviso("Il peso si registra per oggi o per i giorni passati"); return true; }
   const altre = leggiPesi().filter(p => p.data !== data && p.data < data), ultima = altre[altre.length - 1];
@@ -2489,14 +2502,30 @@ function inviaDettato(testo) {
   if (giorni.length) testo = togliGiorni(t0, giorni) || testo;
   const { pasto, resto } = pastoDaFrase(testo, data);
   if (pasto && resto) { apriPastoConDettato(pasto, resto, data); return; }
-  // il pasto non l'hai detto: si sceglie con un tocco
+  // né un comando né un cibo che conosco («che tempo fa», «accendi la luce»): lo si dice, invece di chiedere in quale pasto scriverlo
+  if (!righeDaParlato(resto || testo).some(x => x.r)) { nonCapitoDetta(testo, () => sceltaPastoDettato(testo, resto, data, giorni.length)); return; }
+  sceltaPastoDettato(testo, resto, data, giorni.length);
+}
+// il pasto non l'hai detto: si sceglie con un tocco
+function sceltaPastoDettato(testo, resto, data, conGiorno) {
   const momenti = momentiGiorno(data);
   editCtx = null; liberoCtx = null;
   openModal(`<h3 class="modal-title">In quale pasto?</h3>
-    ${giorni.length ? `<p class="hint">${esc(fmtGiornoLungo(data))}</p>` : ""}
+    ${conGiorno ? `<p class="hint">${esc(fmtGiornoLungo(data))}</p>` : ""}
     <p class="detta-frase">«${esc(testo)}»</p>
     <div class="detta-pasti">${momenti.map(p => `<button class="btn-sec" data-detta-pasto="${p}">${ICONA_PASTO[p] || "🍽️"} ${esc(NomePasto(p, data))}</button>`).join("")}</div>`);
   document.querySelectorAll("[data-detta-pasto]").forEach(b => b.addEventListener("click", () => { closeModal(true); apriPastoConDettato(b.dataset.dettaPasto, resto || testo, data); }));
+}
+// «Non ho capito»: la frase, la guida dei comandi e, se era un cibo che non conosco, la scelta del pasto (lì si può cercare o crearlo)
+function nonCapitoDetta(testo, comePasto) {
+  editCtx = null; liberoCtx = null;
+  openModal(`<h3 class="modal-title">🤔 Non ho capito</h3>
+    <p class="detta-frase">«${esc(testo)}»</p>
+    <p class="hint">Non è uno dei comandi che conosco e non ci ho trovato cibi. Riprova con altre parole, oppure guarda cosa puoi dire.</p>
+    <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Chiudi</button><button class="btn" id="detta-nc-guida">🎤 Comandi vocali</button></div></div>
+    <button class="btn-link" id="detta-nc-pasto">È un cibo che non conosco? Scegli il pasto ›</button>`);
+  document.getElementById("detta-nc-guida").addEventListener("click", () => { closeModal(true); apriComandiVocali(); });
+  document.getElementById("detta-nc-pasto").addEventListener("click", () => { closeModal(true); comePasto(); });
 }
 function apriPastoConDettato(pasto, testo, dataScelta) {
   const data = dataScelta || dataDetta();
