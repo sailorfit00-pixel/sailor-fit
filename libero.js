@@ -2718,8 +2718,11 @@ function micTesto(modo, testo) {
     const testo = testoTutto(), err = errore, ok = partito;
     staccaRec(); spegni();
     if (testo) { micTesto(modo, testo); return; }
-    if (!ok && (err === "not-allowed" || err === "service-not-allowed")) {
-      micRipiego(modo, "Il microfono non è permesso per questa app: usa il 🎤 della tastiera (o permettilo nelle impostazioni del telefono)."); return;
+    if (!ok && err === "service-not-allowed") {   // su iPhone: la Dettatura è spenta
+      micRipiego(modo, "Il riconoscimento vocale è spento: su iPhone attiva Impostazioni → Generali → Tastiera → Abilita dettatura. Intanto puoi usare il 🎤 della tastiera."); return;
+    }
+    if (!ok && err === "not-allowed") {
+      micRipiego(modo, "Il microfono non è permesso per questa app: permettilo nelle impostazioni del telefono (Safari → Microfono). Intanto puoi usare il 🎤 della tastiera."); return;
     }
     if (!ok) { micRipiego(modo, "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
     avviso("Non ho sentito niente: tocca 🎤 e riprova");
@@ -2727,7 +2730,7 @@ function micTesto(modo, testo) {
   // ✓ Fatto (o di nuovo 🎤): il telefono consegna le ultime parole, poi si va avanti
   const fatto = () => {
     if (!stato || stato === "chiudo") return;
-    if (stato === "avvio" && !partito) { finisci(); return; }
+    if (stato === "avvio" && !partito) { annulla(); return; }   // ritoccato prima che si accendesse: si annulla e basta
     stato = "chiudo"; aggiornaVelo();
     if (bottone) bottone.classList.remove("ascolta", "avvio");
     if (typeof vibra === "function") vibra();
@@ -2772,7 +2775,8 @@ function micTesto(modo, testo) {
       if (rec !== r) return;
       if (testoGiro) { testoGiri = (testoGiri + " " + testoGiro).trim(); testoGiro = ""; }
       const bloccato = errore === "not-allowed" || errore === "service-not-allowed" || errore === "audio-capture";
-      if (stato === "ascolto" && !bloccato && giri < 40 && Date.now() - inizioAscolto < 90000) {
+      // si riparte anche se si è fermato prima di sentirti (su iPhone capita un «no-speech» appena acceso): al massimo 5 secondi, poi il campo per scrivere
+      if ((stato === "ascolto" || stato === "avvio") && !bloccato && giri < 40 && Date.now() - inizioAscolto < 90000) {
         giri++; errore = null;
         try { ascolta(); } catch (x) { finisci(); }   // se il telefono non lascia ripartire: si tiene quello già detto
         return;
