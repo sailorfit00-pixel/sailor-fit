@@ -1319,8 +1319,9 @@ function ingredientiSpesa(nome) {
   if (!r) return null;
   return r[1](n).filter(([x]) => (window.ALIMENTI || {})[x]);
 }
-// Consumo per alimento nei giorni indicati: la somma di quello che hai scritto nel diario (conta ogni giorno con almeno un pasto; nessuna stima per i giorni mancanti)
-function consumiPerAlimento(giorniISO) {
+// Consumo per alimento nei giorni indicati: la somma di quello che hai scritto nel diario (conta ogni giorno con almeno un pasto).
+// perGiorni (numero): quantità per quei giorni di spesa = media di un giorno scritto × perGiorni; null = la somma esatta (pasti pianificati)
+function consumiPerAlimento(giorniISO, perGiorni) {
   const d = typeof leggiDiario === "function" ? leggiDiario() : {};
   const validi = giorniISO.filter(x => d[x] && (d[x].pasti || []).length >= 1);
   const st = {};
@@ -1338,14 +1339,13 @@ function consumiPerAlimento(giorniISO) {
       });
     }));
   });
-  // la spesa è settimanale: quantità per 7 giorni (niente stime per i giorni non scritti),
-  // ma mai meno di quanto ne hai mangiato in un giorno: lo yogurt mangiato una volta (170 g) resta 170 g, non 85
-  const sett = 7 / Math.max(7, giorniISO.length);
-  Object.values(st).forEach(e => { e.g = Math.max(e.g * sett, ...Object.values(e.perGiorno)); delete e.perGiorno; });
+  // abitudini: la media di un giorno scritto × i giorni della spesa (prima: metà delle 2 settimane, troppo poco se avevi scritto pochi giorni),
+  // ma mai meno di quanto ne hai mangiato in un giorno: lo yogurt mangiato una volta (170 g) resta 170 g
+  const fatt = perGiorni ? perGiorni / Math.max(1, validi.length) : 1;
+  Object.values(st).forEach(e => { e.g = Math.max(e.g * fatt, ...Object.values(e.perGiorno)); delete e.perGiorno; });
   return { st, nValidi: validi.length, validi };
 }
-// La lista della spesa: se nei prossimi 7 giorni hai pasti pianificati, è quello che serve per quei pasti;
-// altrimenti quello che mangi di solito (oggi e i 13 giorni prima, ridotto a una settimana)
+// (non più usata dalla lista dal v457: ora la base sono le abitudini) i 7 giorni dal primo pianificato
 function giorniPiano() {
   // la spesa si fa per la settimana pianificata: 7 giorni a partire dal primo giorno pianificato da domani in poi
   // (pianificata la settimana prossima di giovedì → da lunedì a domenica, non solo lunedì e martedì). Se il piano parte domani conta anche oggi.
@@ -1357,13 +1357,29 @@ function giorniPiano() {
   const out = []; for (let k = 0; k < 7; k++) { const x = addGiorniISO(inizio, k); if (conPasti(x)) out.push(x); }
   return out;
 }
+// Per quanti giorni fai la spesa (3 · 7 · 14): si sceglie in cima alla lista e si ricorda
+const GIORNI_SPESA_SCELTE = [[3, "3 giorni"], [7, "1 settimana"], [14, "2 settimane"]];
+const ABITUDINI_MIN = 3;   // giorni scritti nelle ultime 2 settimane perché «quello che mangi di solito» valga
+function giorniSpesaScelti() { const n = +localStorage.getItem("mp_spesa_giorni"); return GIORNI_SPESA_SCELTE.some(([k]) => k === n) ? n : 7; }
+// La lista della spesa (v457): la base è quello che mangi di solito (oggi e i 13 giorni prima): per ogni alimento la media
+// di un giorno scritto × i giorni della spesa (mai meno di quanto ne hai mangiato in un giorno). Dai pasti pianificati nei giorni
+// della spesa si aggiungono solo le cose che di solito non compri (es. i gamberi di una ricetta nuova). Il resto lo aggiungi tu.
+// Con meno di 3 giorni scritti (app appena installata): tutto quello dei pasti pianificati in quei giorni.
 function statSpesa() {
-  const piano = giorniPiano();
-  if (piano.length) { const r = consumiPerAlimento(piano); return { st: r.st, nGiorni: r.nValidi, modo: "piano", giorni: piano }; }
-  const oggi = oggiISO();
-  const giorni = []; for (let k = 0; k < GIORNI_SPESA; k++) giorni.push(addGiorniISO(oggi, -k));   // anche oggi: chi fa la spesa la sera trova i pasti della giornata
-  const r = consumiPerAlimento(giorni);
-  return { st: r.st, nGiorni: r.nValidi, modo: "abitudini" };
+  const oggi = oggiISO(), N = giorniSpesaScelti();
+  const passati = []; for (let k = 0; k < GIORNI_SPESA; k++) passati.push(addGiorniISO(oggi, -k));   // anche oggi: chi fa la spesa la sera trova i pasti della giornata
+  const ab = consumiPerAlimento(passati, N);
+  if (ab.nValidi < ABITUDINI_MIN) {   // pochi giorni scritti (es. app nuova e solo oggi compilato): una media non vale, si usano i pasti pianificati dei giorni della spesa
+    const tutti = []; for (let k = 0; k < N; k++) tutti.push(addGiorniISO(oggi, k));
+    const r = consumiPerAlimento(tutti, null);
+    return { st: r.st, nGiorni: r.nValidi, modo: r.nValidi ? "piano" : "vuota", giorni: N, nuovi: 0 };
+  }
+  const futuri = []; for (let k = 1; k < N; k++) futuri.push(addGiorniISO(oggi, k));
+  const pi = consumiPerAlimento(futuri, null);
+  const st = ab.st, giaSoliti = new Set(Object.keys(st).map(n => nomeSpesa(n).toLowerCase()));
+  let nuovi = 0;
+  Object.entries(pi.st).forEach(([nome, e]) => { if (!giaSoliti.has(nomeSpesa(nome).toLowerCase()) && !st[nome]) { st[nome] = e; nuovi++; } });
+  return { st, nGiorni: ab.nValidi, modo: "abitudini", giorni: N, nuovi };
 }
 function fmtPeso(x, u) {
   if (x >= 1000) return (Math.round(x / 100) / 10).toString().replace(".", ",") + (u === "ml" ? " l" : " kg");
@@ -1404,7 +1420,9 @@ function compraSpesa(nome, nome0, g0) {
   if (SPESA_A_PESO.has(rep)) return { info: qtaSettimanaLabel(nome0, g0), q: g };
   if (durataLunga(nome)) return { controllare: true };
   const pacco = paccoG(nome);
-  if (g < pacco / 3) return { controllare: true };
+  // ne serve poco (meno di 1/3 di confezione): «In dispensa» solo se sai di averne ancora abbastanza (spuntato in una spesa recente e non finito).
+  // Prima bastava «poco» per nasconderlo: uova, pane, pasta, riso, latte, albume… sparivano dalla lista anche se in casa non c'erano.
+  if (g < pacco / 3) { const r = restoInCasa(nome); if (r !== null && r >= g) return { controllare: true }; }
   const n = Math.max(1, Math.ceil(g / pacco - 0.1));   // 1,05 confezioni = 1; 1,4 = 2
   if (/^uova$/i.test(nome)) return { info: `${n * PACCO_UOVA} uova`, q: n * pacco };
   const noto = PACCO_TIPICO.some(([re]) => re.test(nome));
@@ -1432,10 +1450,8 @@ function spesaHTML() {
     else if (v.controllare) { v.controllare = false; v.extra = true; v.info = "aggiunto da te"; }   // dalla dispensa (o detto a voce): l'hai messo tu in lista, va comprato
   });
   // da dove viene la lista
-  const fino = stat.modo === "piano" && stat.giorni.length ? stat.giorni[stat.giorni.length - 1] : null;
-  const intro = !voci.length ? `<li class="hint">🛒 Si riempie con i pasti: quelli pianificati nei prossimi 7 giorni oppure, se non ne hai, quelli che hai scritto nelle ultime 2 settimane</li>`
-    : stat.modo === "piano" ? `<li class="hint spesa-fonte">📅 Per i pasti pianificati: ${stat.giorni.length} ${stat.giorni.length === 1 ? "giorno" : "giorni"}, ${stat.giorni[0] === oggiISO() ? "da oggi" : `da ${typeof fmtGiornoLungo === "function" ? esc(fmtGiornoLungo(stat.giorni[0]).toLowerCase()) : stat.giorni[0]}`} a ${typeof fmtGiornoLungo === "function" ? esc(fmtGiornoLungo(fino).toLowerCase()) : fino}</li>`
-    : `<li class="hint spesa-fonte">🛒 Da quello che mangi di solito (ultime 2 settimane). Se pianifichi i prossimi giorni, la lista segue il piano.</li>`;
+  // solo a lista vuota una riga che spiega da dove arriva (con le voci in lista non serve: «non ha senso di esistere»)
+  const intro = !voci.length ? `<li class="hint">🛒 Si riempie con i pasti che scrivi: quello che mangi di solito (ultime 2 settimane) e i pasti pianificati</li>` : "";
   const gruppi = {}, daControllare = [];
   voci.filter(v => !presi.has(v.nome)).forEach(v => { if (!v.extra && v.controllare) daControllare.push(v); else (gruppi[repartoDi(v.nome)] ||= []).push(v); });
   let html = intro + ORDINE_REPARTI.map(rep => {
@@ -1448,7 +1464,7 @@ function spesaHTML() {
   // olio, salse, miele, spezie, lievito…: si usano poco per volta e durano mesi. Non sono in lista: una riga chiusa «In dispensa»;
   // se uno è finito lo tocchi (o dici «ho finito l'olio») e va tra le cose da comprare
   if (daControllare.length) html += `<li class="spesa-dispensa"><details><summary><span>🫙 In dispensa</span><small>${daControllare.length} · di solito ce l'hai</small></summary>
-    <p class="campo-nota">Si usano poco per volta e durano mesi, quindi non li metto in lista. Se uno è finito, toccalo: va tra le cose da comprare.</p>
+    <p class="campo-nota">Durano mesi, oppure ne hai ancora da una spesa recente: per questo non li metto in lista. Se uno è finito, toccalo: va tra le cose da comprare.</p>
     <div class="spesa-disp-lista">${daControllare.sort((a, b) => a.nome.localeCompare(b.nome)).map(v => `<button class="spesa-disp" data-spesa-disp="${esc(v.nome)}">＋ ${esc(v.nome)}</button>`).join("")}</div></details></li>`;
   const giaPresi = voci.filter(v => presi.has(v.nome)).concat([...presi].filter(n => !voci.some(v => v.nome === n)).map(nome => ({ nome })))
     .sort((a, b) => a.nome.localeCompare(b.nome));
@@ -1457,6 +1473,11 @@ function spesaHTML() {
 }
 function renderSpesa() { const ul = document.getElementById("spesa"); if (ul) ul.innerHTML = spesaHTML(); }
 // Apre la lista della spesa nel pannello (bottom-sheet)
+document.addEventListener("change", (e) => {   // «🗓️ Spesa per [1 settimana ▾]»: 3 giorni · 1 settimana · 2 settimane
+  if (!e.target.matches || !e.target.matches("select[data-spesa-giorni]")) return;
+  try { localStorage.setItem("mp_spesa_giorni", e.target.value); } catch (err) {}
+  renderSpesa();
+});
 function apriSpesa() {
   editCtx = null;
   const { nGiorni } = statSpesa();
@@ -1466,6 +1487,7 @@ function apriSpesa() {
       <button class="btn lib-piu" data-azione="spesa-aggiungi" aria-label="Aggiungi">＋</button>
     </div>
     <div id="spesa-sugg" class="lib-autoc"></div>
+    <div class="spesa-per"><span>🗓️ Spesa per</span><label class="spesa-per-sel"><select data-spesa-giorni aria-label="Spesa per quanti giorni">${GIORNI_SPESA_SCELTE.map(([k, l]) => `<option value="${k}" ${giorniSpesaScelti() === k ? "selected" : ""}>${l}</option>`).join("")}</select><span class="caret" aria-hidden="true">▾</span></label></div>
     <ul id="spesa">${spesaHTML()}</ul>
     <button class="btn-sec block spesa-reset" data-spesa-reset>🧹 Nuova spesa</button>
     <p class="campo-nota">Toglie le spunte e le voci aggiunte a mano già prese: la lista riparte da zero.</p>`);

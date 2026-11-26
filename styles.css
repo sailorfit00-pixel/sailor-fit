@@ -2320,3 +2320,10 @@ body.tastiera .qz-backup { display: none; }
 .pf-schede button[aria-selected="true"] { color: var(--lilla); font-weight: 800; border-bottom-color: var(--lilla); }
 .pf-schede button[aria-selected="true"] .pf-tab-ico { opacity: 1; }
 .pf-scheda > h4:first-child, .pf-scheda > #form-profilo:first-child > .wiz-l:first-child { margin-top: 16px; }
+
+/* Lista della spesa: «🗓️ Spesa per [1 settimana ▾]» sotto il campo per aggiungere (discreto: grigio, niente lilla pieno) */
+.spesa-per { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 15px; color: var(--muted); }
+.spesa-per-sel { position: relative; display: inline-flex; align-items: center; }
+.spesa-per-sel select { -webkit-appearance: none; appearance: none; min-height: 40px; padding: 7px 30px 7px 12px; border-radius: 10px; border: 1px solid var(--line2);
+  background: var(--card2); color: var(--text); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.spesa-per-sel .caret { position: absolute; right: 11px; pointer-events: none; color: var(--muted); font-size: 12px; }
