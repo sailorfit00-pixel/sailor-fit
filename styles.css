@@ -1650,8 +1650,6 @@ summary { min-height: 40px; display: flex; align-items: center; }
 /* Profilo: i nomi dei campi un po' più in grassetto della nota grigia sotto */
 #form-profilo .wiz-l { font-weight: 600; color: var(--text); }
 
-/* «Cambia menu del giorno» (sostituisce i pasti) si distingue da «Compila i pasti» (riempie i vuoti): altra icona, altro colore */
-.btn-link.btn-cambia { color: var(--muted); font-weight: 500; }   /* poco in vista: è un'azione che sostituisce, non va toccata per caso */
 
 /* nei banner «Annulla» è rosso, l'azione che conferma resta verde */
 .toast button.t-rosso { color: var(--bad); }
@@ -2180,13 +2178,11 @@ body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px)
 .qz-altro-riga .qz-inp { width: auto; margin: 0; }
 .qz-altro-riga .btn.lib-piu { flex: 0 0 auto; width: 56px; min-height: 0; height: auto; padding: 0; margin: 0; font-size: 24px; border-radius: 16px; }
 
-/* Oggi: «✨ Compila i pasti» è un pulsante pieno (la prima volta con due righe di spiegazione) */
-.oggi-azioni .compila-box { width: 100%; }
-.compila-spiega { margin: 2px 4px 10px; font-size: 14px; line-height: 1.4; color: var(--muted); text-align: center; }
-.compila-spiega b { color: var(--text); }
-/* più discreto di un pulsante pieno: fondo tenue e scritta nel colore dell'app (si nota, ma non domina la pagina) */
-.btn.btn-compila { width: auto; display: block; margin: 0 auto; min-height: 44px; padding: 10px 22px; font-size: 15px; font-weight: 700; border-radius: 999px;
-  background: var(--lilla-bg); border: 1.5px solid rgba(var(--lilla-rgb),.6); color: var(--lilla); }
+/* Oggi: «✨ Compila i pasti del giorno» e «🎲 Cambia menu del giorno»: solo la scritta, senza contorni, sottolineata a puntini (si capisce che si tocca); stesso stile per tutte e due, cambia solo l'icona */
+/* spazio sotto: il banner «✓ Pasti pronti · Annulla» (sopra la barra in basso) non copre la scritta */
+.oggi-azioni { margin-bottom: 56px; }
+.btn-link.btn-compila, .btn-link.btn-cambia { color: var(--lilla); font-size: 16px; font-weight: 700; margin: 0 auto; gap: 6px; }
+.sotto-punti { text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
 /* tema chiaro: il contorno bianco della barra sforata sul bianco non si vede; arancione si confonde con la barra dei carboidrati.
    Ogni barra ha il contorno del suo colore, più scuro */
 /* contorno nella tonalità più scura dello stesso colore della barra: si vede, ma resta in armonia */

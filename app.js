@@ -585,7 +585,7 @@ function apriMieiAlimenti() {
   editCtx = null;
   const tutti = Object.entries(alimentiTuoi()).sort((a, b) => a[0].localeCompare(b[0], "it"));
   const f = (x) => String(Math.round(x * 10) / 10).replace(".", ",");
-  openModal(`<button class="btn-link modal-indietro" data-mio-menu>‹ Altro</button>
+  openModal(`<button class="btn-link modal-indietro" data-mio-menu>‹ Profilo</button>
     <h3 class="modal-title">I miei alimenti</h3>
     ${tutti.length ? `<p class="hint">Gli alimenti che hai aggiunto tu. Toccane uno per correggere nome e valori.</p>
     <div class="mio-lista">${tutti.map(([n, v]) => { const pz = pesoPzTuo(n);
@@ -2182,19 +2182,36 @@ function wizFieldUpdate(e) {
 function contaRicetteUniche() { return new Set(ricette.map(r => r.nome)).size; }
 
 // Menù impostazioni (calorie per tipo di giornata + gestione ricettario)
+// «I miei dati» nel menu Profilo: nome · peso · kcal di oggi (solo quello che c'è)
+function datiInBreve() {
+  try {
+    const pf = leggiProfilo(), k = typeof targetData === "function" ? Math.round(targetData(oggiISO()).kcal) : 0;
+    return [pf.nome ? esc(String(pf.nome)) : "", pf.peso ? `${String(pf.peso).replace(".", ",")} kg` : "", k ? `${k} kcal al giorno` : ""].filter(Boolean).join(" · ");
+  } catch (e) { return ""; }
+}
+// «La mia lista della spesa» nel menu Profilo: quante cose restano da comprare (le stesse righe della lista)
+function spesaInBreve() {
+  try {
+    const ul = document.createElement("ul"); ul.innerHTML = spesaHTML();
+    const n = ul.querySelectorAll("li.voce:not(.preso)").length;
+    if (n) return `${n} ${n === 1 ? "cosa" : "cose"} da comprare`;
+    return ul.querySelector("li.voce.preso") ? "tutto preso ✓" : "ancora vuota";
+  } catch (e) { return ""; }
+}
 function apriMenu() {
   editCtx = null;
+  const nAlim = Object.keys(alimentiTuoi()).length;
   const voce = (az, icona, titolo, sotto, azione) => `<button class="menu-voce" data-azione="${az}">
     <span class="mv-icona">${icona}</span><span class="mv-testo"><b>${titolo}</b>${sotto ? `<small>${sotto}</small>` : ""}</span>${azione ? "" : `<span class="mv-freccia">›</span>`}</button>`;   // › = apre un altro pannello; senza freccia = fa subito la cosa
   openModal(`
-    <h3 class="modal-title">Altro</h3>
+    <h3 class="modal-title">Profilo</h3>
     <div class="menu-lista">
-      ${voce("vai-spesa", "🛒", "Lista della spesa", "")}
-      ${voce("vai-ricette", "📖", "Ricette", `${contaRicetteUniche()}`)}
-      ${voce("miei-alimenti", "🥫", "I miei alimenti", `${Object.keys(alimentiTuoi()).length || ""}`)}
+      ${voce("profilo", "👤", "I miei dati", datiInBreve() || "età, peso, obiettivo")}
+      ${voce("vai-spesa", "🛒", "La mia lista della spesa", spesaInBreve())}
+      ${voce("vai-ricette", "📖", "Le mie ricette", `${contaRicetteUniche()} ricette`)}
+      ${voce("miei-alimenti", "🥫", "I miei alimenti", nAlim ? `${nAlim} ${nAlim === 1 ? "alimento" : "alimenti"}` : "ancora nessuno")}
       ${voce("comandi-voce", "🎤", "Comandi vocali", "cosa puoi dire a Detta")}
-      ${voce("profilo", "👤", "Profilo", "")}
-      ${voce("backup", "💾", "Backup", "")}
+      ${voce("backup", "💾", "Backup", "salva o ripristina")}
     </div>
   `);
 }
@@ -2313,7 +2330,7 @@ function apriProfilo() {
   const pf = leggiProfilo();
   if (!_profiloPrima) _profiloPrima = statoProfilo();   // aperto adesso (non ridisegnato): da qui si contano le modifiche
   openModal(`
-    <h3 class="modal-title">👤 Profilo</h3>
+    <h3 class="modal-title">👤 I miei dati</h3>
     <div id="form-profilo">
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
         <input class="qta-input wiz-full" type="number" ${k === "deficit" ? 'min="-20"' : 'inputmode="decimal" min="0"'} step="${st}" data-profilo="${k}" value="${pf[k]}">${k === "protKg" && pesoRiferimento(pf) < pf.peso ? `<p class="campo-nota">Proteine e grassi si calcolano su ${String(Math.round(pesoRiferimento(pf))).replace(".", ",")} kg invece di ${String(pf.peso).replace(".", ",")}: servono ai muscoli, e sul peso intero diventerebbero troppe.</p>` : ""}${k === "bmr" ? `

@@ -2158,18 +2158,14 @@ function renderOggi() {
     <div class="oggi-pasti">${righe}
       ${avvisoOggi || (giornataPronta(data) && mancaGiornata(data).ok ? `<p class="nota ok">✅ Giornata in linea</p>` : !prox && !giornataPronta(data) ? notaFineGiornataHTML(data) : "")}
       <div class="oggi-azioni">
-        ${(() => {   // un solo pulsante alla volta: se c'è qualcosa da riempire "Compila", altrimenti "Cambia menu" (anche se i pasti li hai scritti tu)
+        ${(() => {   // un solo comando alla volta: se c'è qualcosa da riempire "Compila", altrimenti "Cambia menu" (anche se i pasti li hai scritti tu)
           if (data < oggiISO()) return "";
           // un pasto vuoto, ma solo se resta abbastanza da riempirlo (con la giornata già in linea «Compila» non farebbe niente)
           const vuoto = momentiGiorno(data).some(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s)) && (!g.pasti.length || mancaData(data).kcal >= 80);
-          if (vuoto) {   // la funzione più utile dell'app: un pulsante pieno; la prima volta (finché non lo usi) anche due righe che dicono cosa fa
-            const n = momentiGiorno(data).filter(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s)).length;
-            let nuovo = true; try { nuovo = localStorage.getItem("mp_compila_usato") !== "1"; } catch (e) {}
-            return `<div class="compila-box">${nuovo ? `<p class="compila-spiega">Riempio ${n === 1 ? "il pasto vuoto" : `i ${n} pasti vuoti`} con piatti che stanno ${g.pasti.length ? `nelle <b>${Math.max(0, Math.round(mancaData(data).kcal))} kcal</b> che restano` : `nelle tue <b>${targetData(data).kcal} kcal</b>`} e nei tuoi macro. Poi puoi cambiare tutto.</p>` : ""}
-              <button class="btn block btn-compila" data-compila-giorno>✨ Compila i pasti ${data === oggiISO() ? "di oggi" : "del giorno"}</button></div>`;
-          }
+          if (vuoto)   // solo la scritta, sottolineata a puntini (niente pulsante pieno né spiegazione)
+            return `<button class="btn-link btn-compila" data-compila-giorno>✨ <span class="sotto-punti">Compila i pasti del giorno</span></button>`;
           if (!g.pasti.some(x => !pastoPassato(data, x.pasto))) return "";
-          return `<button class="btn-link btn-cambia" data-rigenera-giorno>♺︎ Cambia menu del giorno</button>`;
+          return `<button class="btn-link btn-cambia" data-rigenera-giorno>🎲 <span class="sotto-punti">Cambia menu del giorno</span></button>`;
         })()}
       </div>
     </div>

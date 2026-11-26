@@ -2533,7 +2533,7 @@ function apriPastoConDettato(pasto, testo, dataScelta) {
   aggiungiDaParlato(testo);
   rirenderLibero();
 }
-// ---------- Altro → «Comandi vocali»: cosa si può dire a 🎤 Detta ----------
+// ---------- Profilo → «Comandi vocali»: cosa si può dire a 🎤 Detta ----------
 const COMANDI_VOCALI = [
   ["🍽️", "Scrivere un pasto", "Di' il pasto e cosa hai mangiato: si apre il pasto con gli alimenti da confermare. Le quantità che non dici sono adatte ai tuoi obiettivi.",
     ["a pranzo 150 g di riso e un'insalata", "a colazione yogurt greco e un cappuccino", "spuntino di pomeriggio una banana", "a cena pollo e zucchine"]],
@@ -2580,7 +2580,7 @@ const COMANDI_VOCALI = [
 ];
 function apriComandiVocali() {
   editCtx = null; liberoCtx = null;
-  openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Altro</button>
+  openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
     <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla; rilascia per finire. Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
     <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es], k) => `<details class="cv-sez"${k === 0 ? " open" : ""}>
