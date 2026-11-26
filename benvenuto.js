@@ -435,7 +435,8 @@ function qzFine() {
   localStorage.setItem("mp_benvenuto", "fatto");
   try { sessionStorage.removeItem(QZ_CHIAVE); } catch (e) {}
   qz = null;
-  document.getElementById("modal").classList.remove("modal-qz");
+  // anche «qz-primo» (questionario a schermo intero): prima restava sul body e la barra in basso spariva finché non riaprivi l'app
+  document.getElementById("modal").classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo");
   closeModal();
   applicaPersonalizzazione();
   if (typeof renderOggi === "function") renderOggi();
