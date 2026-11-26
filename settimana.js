@@ -35,6 +35,8 @@ function budgetScelto(lun) {
   return null;
 }
 const limita = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
+// a decine (come il piano), restando nei limiti: 2025 → 2020 se 2025 è il massimo
+const limita10 = (v, [lo, hi]) => limita(Math.round(v / 10) * 10, [Math.ceil(lo / 10) * 10, Math.floor(hi / 10) * 10]);
 const arr10 = (v) => Math.round(v / 10) * 10;
 
 // Il piano della settimana che contiene `data`.
@@ -79,7 +81,8 @@ function pianoSettimanaCalc(data, totaleProva) {
   const bmr = Math.round(leggiProfilo().bmr);
   const base = scelto ? distribuisciTotale(naturale0, scelto, bmr) : naturale0;
   const budget = base.reduce((a, b) => a + b, 0);
-  const fisso = date.map((d, i) => sp[d] ? limita(base[i] + sp[d], limitiGiorno(base[i])) : null);
+  // un giorno scelto da te: { kcal } = proprio quelle calorie (anche se poi cambi sport o profilo); un numero = la differenza dal previsto (salvati prima)
+  const fisso = date.map((d, i) => sp[d] && typeof sp[d] === "object" ? limita(sp[d].kcal, limitiGiorno(base[i])) : sp[d] ? limita(base[i] + sp[d], limitiGiorno(base[i])) : null);
   const g = date.map(d => giornoDiario(d));
   const mangiato = g.map(x => sommaMacro(x.pasti).kcal);
   const completo = g.map((x, i) => x.pasti.length >= 3 || mangiato[i] >= base[i] * 0.7);
@@ -227,9 +230,8 @@ function giorniSettimanaHTML(dataRif) {
 
 function impostaSpostamento(data, valore) {
   const sp = leggiSpostamenti();
-  const p0 = pianoSettimana(data), base = p0.base[p0.date.indexOf(data)];   // rispetto all'obiettivo del giorno (già scalato sul totale che hai scelto)
-  const v = Math.round(limita(base + valore, limitiGiorno(base)) - base);
-  if (v) sp[data] = v; else delete sp[data];
+  const p0 = pianoSettimana(data), base = p0.base[p0.date.indexOf(data)];   // valore: la differenza rispetto all'obiettivo del giorno (già scalato sul totale che hai scelto)
+  sp[data] = { kcal: limita10(base + valore, limitiGiorno(base)) };   // si salvano le calorie esatte: «sabato 3200» resta 3200 anche se poi allunghi la bici
   salvaSpostamenti(sp);
 }
 

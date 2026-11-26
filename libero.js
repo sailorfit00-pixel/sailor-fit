@@ -2016,7 +2016,10 @@ function pastoDaFrase(testo, data) {
 // il giorno su cui si detta: quello aperto in Oggi, altrimenti oggi
 // (se il giorno l'ha cambiato un comando a voce, es. «copia il pranzo anche domani», le frasi dopo senza giorno tornano a oggi: il giorno aperto conta solo se ci sei andata tu)
 let _dataDaVoce = null;
-const dataDetta = () => document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" && dataDiario !== _dataDaVoce ? dataDiario : oggiISO();
+function dataDetta() {
+  if (typeof allineaOggi === "function") allineaOggi();   // passata la mezzanotte: «oggi» è il giorno nuovo
+  return document.body.dataset.tab === "oggi" && typeof dataDiario !== "undefined" && dataDiario !== _dataDaVoce ? dataDiario : oggiISO();
+}
 
 // ---------- Comandi a voce ----------
 // 1) un altro giorno: «domani a pranzo riso basmati e tonno» → il pranzo di domani con gli alimenti da confermare (quantità adatte ai tuoi obiettivi)
@@ -2402,7 +2405,7 @@ function comandoKcalGiorni(testo) {
   });
   if (!righe.length) { avviso("I giorni passati non si cambiano"); return true; }
   righe.sort((a, b) => a.data.localeCompare(b.data));
-  righe.forEach(r => { const p = pianoSettimana(r.data), i = p.date.indexOf(r.data); r.prima = p.target[i]; r.lim = limitiGiorno(p.base[i]); r.v = limita(r.voluto, r.lim); });
+  righe.forEach(r => { const p = pianoSettimana(r.data), i = p.date.indexOf(r.data); r.prima = p.target[i]; r.lim = limitiGiorno(p.base[i]); r.v = limita10(r.voluto, r.lim); });
   const nomeG = (d) => `${NOMI_GIORNI[indiceSettimana(d)]} ${fmtData(d)}`;
   editCtx = null; liberoCtx = null;
   openModal(`<h3 class="modal-title">🔥 Calorie dei giorni</h3>

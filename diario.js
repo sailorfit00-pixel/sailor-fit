@@ -5,6 +5,16 @@
 // =============================================================
 
 let dataDiario = oggiISO(); // giorno visualizzato
+// «oggi» può cambiare con l'app aperta (mezzanotte, o le 4 per chi cena tardi; o un orario dopo le 22 appena salvato):
+// se stavi guardando oggi, la vista segue il giorno nuovo (prima restava sul giorno di prima e i comandi lo chiamavano «domani»)
+let _oggiVisto = dataDiario;
+function allineaOggi() {
+  const o = oggiISO(); if (o === _oggiVisto) return false;
+  const seguiva = dataDiario === _oggiVisto; _oggiVisto = o;
+  if (seguiva) { dataDiario = o; return true; }
+  return false;
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && allineaOggi() && typeof renderOggi === "function") renderOggi(); });
 
 // Ordine "nel tempo" dei pasti e quota indicativa di ciascuno sulla giornata
 // "spuntino" è quello del pomeriggio (pre-workout): così i pasti già salvati restano al loro posto
@@ -195,6 +205,7 @@ function carboCenaDopo(data, pasto, escludiIdx, piu) {
   const restanti = momentiGiorno(data).filter(p => p !== pasto && p !== "cena" && !fatti.has(p) && !saltato(p));
   return ripartisciMancante(data, "cena", restanti, dopo).carboidrati;
 }
+const TETTO_PASTI_SALTATI = 1.3;
 // Obiettivo di un pasto = quota di ciò che manca, divisa tra i pasti non ancora mangiati
 function targetPastoDiario(data, pasto, escludiIdx = null) {
   const g = giornoDiario(data);
@@ -204,6 +215,13 @@ function targetPastoDiario(data, pasto, escludiIdx = null) {
   const saltato = (p) => data === oggiISO() && pastoPassato(data, p);
   const restanti = momentiGiorno(data).filter(p => p !== pasto && !fatti.has(p) && !saltato(p));
   const r = ripartisciMancante(data, pasto, restanti, manca);
+  // …ma senza esagerare: con la colazione e lo spuntino saltati il pranzo diventava di 1500 kcal. Ogni pasto prende al massimo il 30% in più
+  // della sua parte normale (come se i pasti saltati ci fossero ancora); quello che avanza resta da completare (consigli, idee), non finisce tutto in un piatto
+  const saltati = momentiGiorno(data).filter(p => p !== pasto && !fatti.has(p) && saltato(p));
+  if (saltati.length && !saltato(pasto)) {
+    const normale = ripartisciMancante(data, pasto, restanti.concat(saltati), manca);
+    MACRO_K.forEach(k => { r[k] = Math.min(r[k], Math.round((normale[k] || 0) * TETTO_PASTI_SALTATI)); });
+  }
   // le kcal seguono i macro del pasto (per il pre-workout cambiano un po')
   if (pesoMacro(data, pasto, "grassi") !== 1) r.kcal = Math.min(Math.round(r.proteine * 4 + r.carboidrati * 4 + r.grassi * 9), Math.max(0, manca.kcal));   // mai più di ciò che resta davvero nella giornata
   return r;
@@ -855,6 +873,8 @@ function ricetteInCasa(data, pasto, n = 3) {
 }
 const PESANTI_PRE = /Semi di|Mandorle|Noci|Nocciole|Pistacchi|Anacardi|Burro|Avocado|Frutta secca|Granola|Pancetta|Salsiccia|Formaggio|Mascarpone|Panna/;
 // Ricette del ricettario che, adattate, si avvicinano di più all'obiettivo del pasto
+// ricette da accompagnamento (si mangiano con qualcos'altro): restano nel ricettario, ma non si propongono come pranzo o cena
+const RICETTE_ACCOMPAGNAMENTO = /^(?:pane|focaccia|focaccine|grissini|crackers|taralli|piadina|piadine)\b/i;
 function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
   const T = escludiIdx !== null && escludiIdx !== undefined ? targetPastoDiario(data, pasto, escludiIdx) : targetResiduoPasto(data, pasto);   // aggiungendo a un pasto già scritto contano solo le kcal che restano a quel pasto
   if (T.kcal < 120) return [];
@@ -866,6 +886,7 @@ function ricetteConsigliate(data, pasto, n = 3, escludiIdx = null) {
     .filter((r, i, arr) => pasto === "colazione" ? !preColazione(data) || r.preworkout || !PESANTI_PRE.test(((r._orig || r).ingredienti || []).map(x => x.nome).join("|"))   // prima di allenarti: niente semi, frutta secca, burri, avocado
       : !preWorkout(data, pasto) ? (pasto === "sera" ? !r.preworkout && adattoSera(((r._orig || r).ingredienti || []).map(x => x.nome)) : pasto === "mattina" ? !r.preworkout : true) : (!arr.some(x => x.preworkout) || r.preworkout))
     .filter(r => !ricettaEsclusa(r))
+    .filter(r => !((pasto === "pranzo" || pasto === "cena") && RICETTE_ACCOMPAGNAMENTO.test(r.nome)))   // pane e focacce accompagnano un piatto: non sono un pranzo o una cena da sole (4 fette di focaccia come pranzo)
     .map(r => {
       const ps = porzioneSuMisura(r, T);
       let p = punteggioPasto(ps.tot, T);
@@ -1417,6 +1438,7 @@ function ingrandisciGiorno(data, slot, largo) {   // largo: «Compila» può alz
     const Tk = targetData(data).kcal, kcalDi = (sl) => g.pasti.filter(x => x.pasto === sl).reduce((s, x) => s + (+x.kcal || 0), 0);
     const pesoPasto = (sl) => { const q = quotaPasto(data, sl) * Tk; if (!(q > 0)) return 1; const r = kcalDi(sl) / q; return r < 0.9 ? 1.6 : r > 1.1 ? 0.6 : 1; };
     g.pasti.forEach((p, pi) => { if (!(slot.has(p.pasto) && p.auto) || pastoPassato(data, p.pasto)) return;
+      { const qMax = quotaPasto(data, p.pasto) * Tk * TETTO_PASTI_SALTATI; if (qMax > 0 && kcalDi(p.pasto) >= qMax) return; }   // nessun pasto oltre il 130% della sua parte (con colazione e spuntino saltati il pranzo arrivava a 1500 kcal)
       const wp = pesoPasto(p.pasto);
       (p.ingredienti || []).forEach((ing, ii) => {
         const a = A[ing.nome], k = pi + "|" + ii; if (!a || ing.unita === "q.b." || !(ing.qta > 0) || bloccati.has(k)) return;
@@ -1508,11 +1530,14 @@ function aggiungiContorno(data, slot) {
     const g = giornoDiario(data), ordine = ["pranzo", "cena", "colazione", "mattina", "spuntino", "sera"];
     // le proteine in più vanno in un pasto che non ha già una sua fonte (niente pollo aggiunto agli edamame o al tofu)
     const haFonte = (x) => (x.ingredienti || []).some(i => { const a = A[i.nome]; return a && a[1] >= 8 && a[1] * 4 >= a[0] * 0.25 && grammiIng(i) >= 60; });
-    const p = ordine.map(s => g.pasti.find(x => x.pasto === s && slot.has(s) && x.auto && !pastoPassato(data, s) && (tipo !== "prot" || !haFonte(x)))).find(Boolean); if (!p) return;
+    // il contorno va nel pasto con più spazio rispetto alla sua parte (non sempre nel pranzo), mai oltre il 130% della parte
+    const kcalDi = (sl) => g.pasti.filter(x => x.pasto === sl).reduce((t, x) => t + (+x.kcal || 0), 0), spazio = (x) => quotaPasto(data, x.pasto) * T.kcal * TETTO_PASTI_SALTATI - kcalDi(x.pasto);
+    const p = ordine.map(s => g.pasti.find(x => x.pasto === s && slot.has(s) && x.auto && !pastoPassato(data, s) && (tipo !== "prot" || !haFonte(x)))).filter(Boolean).filter(x => spazio(x) > 60)
+      .sort((x, y) => (spazio(y) - spazio(x)) + (ordine.indexOf(x.pasto) - ordine.indexOf(y.pasto)) * 20)[0]; if (!p) return;
     const grande = p.pasto === "pranzo" || p.pasto === "cena", lista = CONTORNI[tipo][grande ? "principale" : "piccolo"];
     const scelta = lista.find(([n]) => A[n] && !(typeof alimentoEscluso === "function" && alimentoEscluso(n)) && !(p.ingredienti || []).some(i => i.nome === n) && (p.pasto !== "sera" || adattoSera(n))); if (!scelta) return;
     const [nome, max] = scelta, a = A[nome], idx = tipo === "carbo" ? 2 : 1, manca = tipo === "carbo" ? m.carboidrati : m.proteine;
-    let gr = Math.min(max, Math.floor(manca / (a[idx] / 100) / 10) * 10, Math.floor(m.kcal / (a[0] / 100) / 10) * 10);
+    let gr = Math.min(max, Math.floor(manca / (a[idx] / 100) / 10) * 10, Math.floor(m.kcal / (a[0] / 100) / 10) * 10, Math.floor(spazio(p) / (a[0] / 100) / 10) * 10);
     const copia = JSON.parse(JSON.stringify(g));
     const minimo = Math.max(30, (window.PESO_PZ || {})[nome] || 0);   // almeno un pezzo intero (niente «30 g di uova»)
     for (; gr >= minimo; gr -= 10) {   // la dose più grande che sta nei limiti
@@ -1561,6 +1586,7 @@ function pianificaSettimana(dataRif, soloData, opz = {}) {
   _compilaGiorni++;
   try { return pianificaSettimanaVera(dataRif, soloData, opz); } finally { _compilaGiorni--; }
 }
+const COLAZIONE_DOLCE = /brownie|cheesecake|torta|muffin|plumcake|cookie|crostata|tiramis|ciambell|banana bread|crumble|pancake|waffle|crepe/i;
 function pianificaSettimanaVera(dataRif, soloData, opz = {}) {   // soloData: compila un giorno solo (il resto della settimana serve per la varietà)
   const p = pianoSettimana(dataRif), oggi = oggiISO(), giorni = p.date.filter(d => d >= oggi && (!soloData || d === soloData));
   const prima = {}; giorni.forEach(d => { prima[d] = JSON.stringify(leggiDiario()[d] || null); });
@@ -1597,6 +1623,8 @@ function pianificaSettimanaVera(dataRif, soloData, opz = {}) {   // soloData: co
           punti += Math.max(0, ex.sale * f - LIMITI_EXTRA.sale * q) * 4 + Math.max(0, 1 - ex.fibre * f / (LIMITI_EXTRA.fibre * q)) * 0.4;
           punti += Math.max(0, saleGiorno + ex.sale * f - LIMITI_EXTRA.sale) * 4; }   // con quello già nella giornata si supererebbero i 5 g di sale: molto meno probabile
         if (conosco) punti += Math.min(1.5, 0.5 * ing.filter(g => !abit.set.has(g.nome) && !abit.set.has(g.nome.toLowerCase())).length);   // alimenti che di solito non mangi: meno probabili
+        // un dolce a colazione (brownie, cheesecake, torta…) va bene, ma non due giorni di fila: se ieri c'era già, meno probabile
+        if (s === "colazione" && COLAZIONE_DOLCE.test(x.r.nome) && giornoDiario(addGiorniISO(d, -1)).pasti.some(q => q.pasto === "colazione" && COLAZIONE_DOLCE.test(q.ricetta || q.nome || ""))) punti += 2;
         return { x, punti: punti + (hashStr(d + s + x.r.nome + (opz.seme || "")) % 100) / 400 };
       }).sort((a, b) => a.punti - b.punti)[0];
       // il piatto composto non va oltre il 120% della quota del pasto (niente cene da 830 kcal su 3 pasti): il resto lo recuperano gli altri pasti
@@ -2074,6 +2102,7 @@ function renderSettimanaHome(cont) {
 function renderOggi() {
   const cont = document.getElementById("oggi");
   if (!cont) return;
+  allineaOggi();
   if (document.getElementById("modal").hidden && typeof segnaTab === "function") segnaTab(vistaHome); // scheda evidenziata nella barra in basso
   if (vistaHome === "settimana" && typeof budgetSettimanaHTML === "function") { renderSettimanaHome(cont); return; }
   const data = dataDiario;
