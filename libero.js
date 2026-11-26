@@ -2274,7 +2274,7 @@ function comandoSostituisci(testo) {
     const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
     openModal(`<h3 class="modal-title">🔄 ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
       <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span>${esc(nuovo)} <b>${q} g</b></span></div>
-      <p class="hint">${numeriMossa(d)}${grammiDetti ? "" : ` · ${A[v.nome][1] * 4 / Math.max(1, A[v.nome][0]) >= 0.25 && A[nuovo][1] >= 8 ? "stesse proteine" : A[v.nome][0] < 45 || A[nuovo][0] < 45 ? "stessi grammi" : "stesse calorie"}`}</p>
+      <p class="hint">${numeriMossa(d)}${grammiDetti ? "" : ` · ${A[v.nome][1] * 4 / Math.max(1, A[v.nome][0]) >= 0.25 && A[nuovo][1] >= 8 ? "stesse proteine" : A[v.nome][0] < 45 || A[nuovo][0] < 45 ? "stessi grammi" : "stesse calorie"}`}</p>${avvisoPassatoDetta(v.pasto, data)}
       <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="voce-sost-ok">Sostituisci</button></div></div>`);
     document.getElementById("voce-sost-ok").addEventListener("click", () => {
       const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
@@ -2434,6 +2434,12 @@ function dovePastoDetta(p, data) {
   const n = nomePasto(p, data), art = /^(?:cena|colazione|merenda)$/.test(n) ? "nella" : /^s[^aeiou]/.test(n) ? "nello" : "nel";
   return `${art} ${n} di ${g}`;
 }
+// un pasto già passato (a mano è chiuso col 🔒): a voce si può cambiare lo stesso, ma la conferma lo dice
+const avvisoPassatoDetta = (p, data) => {
+  if (!(typeof pastoPassato === "function" && pastoPassato(data, p))) return "";
+  const n = nomePasto(p, data), f = /^(?:colazione|cena|merenda)$/.test(n), art = f ? "La" : /^s[^aeiou]/.test(n) ? "Lo" : "Il";
+  return `<p class="hint voce-attenzione">🔒 ${art} ${esc(n)} è già passat${f ? "a" : "o"}: confermando ${f ? "la" : "lo"} cambi lo stesso.</p>`;
+};
 function ingredientiDetti(x, data, pasto) {
   const xn = norm(x).replace(/i$|e$/, ""), out = [];
   (giornoDiario(data).pasti || []).forEach((p, pi) => { if (pasto && p.pasto !== pasto) return; (p.ingredienti || []).forEach((i, ii) => {
@@ -2465,7 +2471,7 @@ function comandoTogliPorta(testo) {
     const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
     openModal(`<h3 class="modal-title">${tipo === "togli" ? "🗑️" : "⚖️"} ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
       <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span>${tipo === "togli" ? "<b>tolto</b>" : `<b>${nuovaQ} g</b>`}</span></div>
-      <p class="hint">${numeriMossa(d)}</p>
+      <p class="hint">${numeriMossa(d)}</p>${avvisoPassatoDetta(v.pasto, data)}
       <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn${tipo === "togli" ? " btn-danger" : ""}" id="voce-tp-ok">${tipo === "togli" ? "Togli" : "Salva"}</button></div></div>`);
     document.getElementById("voce-tp-ok").addEventListener("click", () => {
       const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
