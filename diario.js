@@ -2284,7 +2284,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const sh = e.target.closest("[data-sett-home]");
     if (sh) { offsetSettHome = Math.min(1, offsetSettHome + +sh.dataset.settHome); giornoSelSett = null; renderOggi(); return; }
     const ag = e.target.closest("[data-apri-giorno]");
-    if (ag) { dataDiario = ag.dataset.apriGiorno; vistaHome = "oggi"; renderOggi(); window.scrollTo(0, 0); return; }
+    if (ag) {   // un giorno passato della settimana: si apre in Oggi con quello che hai mangiato; dall'avviso si torna alla settimana
+      const daSett = vistaHome === "settimana", off = offsetSettHome;
+      dataDiario = ag.dataset.apriGiorno; vistaHome = "oggi"; renderOggi(); window.scrollTo(0, 0);
+      if (daSett) avviso(`📅 ${new Date(dataDiario + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric" })}: cosa hai mangiato`, "‹ Settimana", () => { vistaHome = "settimana"; offsetSettHome = off; renderOggi(); window.scrollTo(0, 0); });
+      return;
+    }
     const nav = e.target.closest("[data-oggi-giorno]");
     if (nav) { cambiaGiornoDiario(+nav.dataset.oggiGiorno); return; }
     const scrivi = e.target.closest("[data-oggi-scrivi]");

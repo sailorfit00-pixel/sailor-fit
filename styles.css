@@ -49,7 +49,7 @@ main { padding: 0 16px; max-width: 720px; margin: 0 auto; }
 .btn-sec.block { display: block; width: 100%; text-align: left; margin-top: 8px; }
 
 /* Modale bottom-sheet */
-body.no-scroll { overflow: hidden; }
+body.no-scroll { overflow: hidden; position: fixed; left: 0; right: 0; }   /* top: lo mette openModal (la pagina resta dov'era) */
 .modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
 .modal[hidden] { display: none; }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); animation: fade .2s ease; }
@@ -2212,18 +2212,28 @@ html[data-tema="chiaro"] .mc-bar span.mb-g.sopra, html[data-tema="chiaro"] .prog
 html[data-tema="chiaro"] .tabbar .tab-detta.ascolta .detta-ico { background: #1a1426; color: #fff; }
 @keyframes detta-onda { 0% { box-shadow: 0 0 0 0 rgba(var(--lilla-rgb),.75), 0 4px 12px rgba(0,0,0,.35); } 100% { box-shadow: 0 0 0 16px rgba(var(--lilla-rgb),0), 0 4px 12px rgba(0,0,0,.35); } }
 @keyframes detta-pulsa { 0%,100% { box-shadow: 0 0 0 0 rgba(229,83,75,.55); } 50% { box-shadow: 0 0 0 12px rgba(229,83,75,0); } }
-.detta-velo { position: fixed; inset: 0; z-index: 65; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; padding: 0 16px calc(var(--tabbar-h, 64px) + 40px + env(safe-area-inset-bottom)); pointer-events: none; }
+.detta-velo { position: fixed; inset: 0; z-index: 65; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; padding: 0 16px calc(var(--tabbar-h, 64px) + 28px + env(safe-area-inset-bottom)); pointer-events: none; animation: detta-appare .18s ease-out; }
 .detta-bolla { width: 100%; max-width: 420px; background: var(--card); border-radius: 22px; padding: 18px 18px 16px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
-.detta-onda { font-size: 30px; }
-.detta-stato { margin: 6px 0 4px; font-weight: 700; }
-.detta-live { margin: 0; min-height: 1.4em; color: var(--muted); font-size: 15px; }
+.detta-stato { margin: 0 0 10px; font-weight: 700; font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); }
+.detta-velo[data-stato="ascolto"] .detta-stato { color: var(--text); }
+.detta-live { margin: 12px 0 0; min-height: 2.8em; max-height: 9em; overflow-y: auto; color: var(--text); font-size: 18px; line-height: 1.35; text-align: left; }
+.detta-live.vuoto { color: var(--muted); font-size: 15px; font-style: italic; text-align: center; }
 .detta-frase { margin: 0 0 12px; color: var(--muted); font-style: italic; }
 .detta-pasti { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .detta-pasti .btn-sec { margin: 0; min-height: 50px; }
 /* tocco breve su «Detta»: solo il promemoria, senza velo scuro */
-.detta-velo.promemoria { background: none; animation: detta-appare .18s ease-out; }
 @keyframes detta-appare { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.detta-velo:not(.promemoria) .detta-bolla { pointer-events: auto; cursor: pointer; }   /* toccandolo si finisce, se il rilascio non è arrivato */
+.detta-velo .detta-bolla { pointer-events: auto; }
+/* il vocale: pallino rosso e onda sonora solo quando ti sente; prima («Accendo il microfono…») tutto grigio e fermo */
+.detta-rec { width: 11px; height: 11px; border-radius: 50%; background: #e5534b; animation: detta-rec 1s ease-in-out infinite; }
+@keyframes detta-rec { 50% { opacity: .35; } }
+.detta-barre { display: flex; align-items: center; justify-content: center; gap: 3px; height: 46px; }
+.detta-barre i { flex: 0 0 4px; height: 100%; border-radius: 3px; background: var(--muted); opacity: .45; transform: scaleY(.08); transition: transform .07s linear; }
+.detta-velo[data-stato="ascolto"] .detta-barre i { background: var(--lilla); opacity: 1; }
+.detta-tasti { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 14px; }
+.detta-tasti .btn, .detta-tasti .btn-sec { margin: 0; min-height: 48px; }
+.detta-aiuto { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+.tabbar .tab-detta.avvio .detta-ico { background: var(--muted); }
 
 /* ===== Questionario della prima volta: a tutto schermo, è la prima cosa che si vede (niente ✕, niente barra in basso) ===== */
 body.qz-primo .tabbar { display: none; }
@@ -2232,6 +2242,11 @@ body.qz-primo .tabbar { display: none; }
 .modal.qz-primo .modal-sheet { max-width: 640px; height: 100%; max-height: none; min-height: 0; border-radius: 0; padding-top: calc(env(safe-area-inset-top) + 14px); animation: none; }
 .modal.qz-primo .modal-close, .modal.qz-primo .modal-grip { display: none; }
 .modal.qz-primo .qz-top { margin-right: 0; }
+/* questionario aperto (anche rifatto dal Profilo): la barra in basso non c'è, il pannello arriva fino in fondo */
+body.qz-aperto .tabbar { display: none; }
+body.qz-aperto .modal.modal-qz { bottom: 0; }
+body.qz-aperto .modal-qz .modal-sheet { min-height: calc(100dvh - env(safe-area-inset-top) - 40px); max-height: calc(100dvh - env(safe-area-inset-top) - 24px); }
+body.qz-aperto.qz-primo .modal-qz .modal-sheet { min-height: 0; max-height: none; }
 /* il pulsante «Avanti» in fondo allo schermo, il contenuto in alto */
 .modal-qz .modal-sheet { display: flex; flex-direction: column; }
 .modal-qz #modal-content { flex: 1 0 auto; display: flex; flex-direction: column; }
@@ -2327,3 +2342,37 @@ body.tastiera .qz-backup { display: none; }
 .spesa-per-sel select { -webkit-appearance: none; appearance: none; min-height: 40px; padding: 7px 30px 7px 12px; border-radius: 10px; border: 1px solid var(--line2);
   background: var(--card2); color: var(--text); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
 .spesa-per-sel .caret { position: absolute; right: 11px; pointer-events: none; color: var(--muted); font-size: 12px; }
+
+/* ===== Lista della spesa: si spunta solo la casella; toccando nome o quantità si cambia la quantità (− [3 confezioni] ＋ OK) ===== */
+#spesa .voce > label.spesa-spunta { flex: 0 0 auto; width: auto; display: flex; align-items: center; justify-content: center; padding: 8px 6px 8px 2px; margin: -6px 0; }
+#spesa .voce > label.spesa-spunta input { width: 24px; height: 24px; }
+#spesa .spesa-riga { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 6px 0; margin: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+#spesa .spesa-riga .spesa-nome { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#spesa .spesa-riga .spesa-qta { margin-left: auto; flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; background: var(--card2); font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; }
+#spesa .spesa-riga .spesa-qta.mia { color: var(--text); font-weight: 600; }
+#spesa li.voce.in-mod { border-bottom: none; }
+#spesa li.voce.in-mod .spesa-qta { background: var(--accent); color: #fff; }
+#spesa li.preso .spesa-nome { text-decoration: line-through; color: var(--muted); }
+#spesa li.voce.nuova { animation: spesa-nuova 2.4s ease-out; border-radius: 10px; }
+@keyframes spesa-nuova { 0%, 40% { background: rgba(var(--lilla-rgb), .28); } 100% { background: transparent; } }
+#spesa li.spesa-mod { padding: 2px 0 12px 34px; }
+.spesa-mod-r { display: flex; align-items: center; gap: 6px; }
+.spesa-mod-r .qta-input, #spesa .spesa-mod-r input.qta-input { flex: 1 1 auto; min-width: 0; width: auto; height: 42px; font-size: 16px; text-align: center; margin: 0; accent-color: auto; }
+.spesa-step { flex: 0 0 42px; height: 42px; border-radius: 12px; border: 0; background: var(--card2); color: var(--text); font-size: 22px; line-height: 1; cursor: pointer; }
+.spesa-mod-ok, #spesa .spesa-mod-ok { flex: 0 0 auto; width: auto; margin: 0; min-height: 42px; padding: 0 16px; }
+#spesa li.spesa-mod .btn-link { margin-top: 6px; font-size: 13px; }
+/* «aggiungi … alla spesa» detto a voce: nome e quantità da controllare prima di aggiungere */
+.detta-spesa .voce.detta-spesa-v { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; font-weight: 400; }
+.detta-spesa-r { display: flex; align-items: center; gap: 8px; }
+.detta-spesa-r .detta-spesa-nome { flex: 1; min-width: 0; width: auto; height: 42px; margin: 0; text-align: left; font-weight: 600; font-size: 16px; padding: 0 12px; }
+.detta-spesa-l { flex: 0 0 auto; font-size: 13px; color: var(--muted); margin-right: 2px; }
+
+/* ===== Profilo → Sport → La tua settimana tipo: giorni in colonna, sport allineati a sinistra (anche con due sport nello stesso giorno), righe compatte ===== */
+.sett-tipo { gap: 0; border-radius: 14px; background: var(--card2); padding: 2px 10px; }
+.sett-tipo .st-riga { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: start; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line2); }
+.sett-tipo .st-riga:last-child { border-bottom: none; }
+.sett-tipo .st-riga > span { padding-top: 7px; font-weight: 600; color: var(--muted); font-size: 14px; }
+.sett-tipo .st-riga .tipo-btn { width: 100%; justify-content: flex-start; }
+.sett-tipo .st-riga .tipo-sport { justify-content: flex-start; gap: 5px; }
+.sett-tipo .tipo-chip { padding: 6px 10px; font-size: 13px; background: var(--card); max-width: 100%; white-space: normal; }
+.sett-tipo .tipo-chip.tipo-piu { padding: 4px 12px; min-width: 40px; }
