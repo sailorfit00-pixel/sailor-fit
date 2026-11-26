@@ -2401,3 +2401,6 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 .recupero p span { color: var(--muted); }
 .recupero-btn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .recupero-btn button { margin: 0; min-height: 40px; width: 100%; }
+/* Detta: solo l'onda (niente testo mentre parli), riquadro piccolo sopra il pulsante */
+.detta-bolla { max-width: 300px; padding: 14px 18px; border-radius: 999px; }
+.detta-barre { height: 44px; }

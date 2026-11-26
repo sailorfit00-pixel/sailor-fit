@@ -2687,7 +2687,7 @@ function micTesto(modo, testo) {
     }
   };
   const togliTuttiVeli = () => document.querySelectorAll(".detta-velo").forEach(v => v.remove());
-  // il riquadro: solo l'onda sonora e la frase che si scrive mentre parli. Nessun pulsante: si finisce ritoccando 🎤
+  // il riquadro: solo l'onda sonora, come i vocali di WhatsApp (quello che hai detto lo vedi scritto quando chiudi, nella conferma). Si finisce ritoccando 🎤
   const aggiornaVelo = () => {
     const velo = document.querySelector(".detta-velo"); if (!velo) return;
     velo.dataset.stato = stato || "";
@@ -2697,9 +2697,8 @@ function micTesto(modo, testo) {
   const mostraVelo = () => {
     togliTuttiVeli();
     const velo = document.createElement("div"); velo.className = "detta-velo";
-    velo.innerHTML = `<div class="detta-bolla" role="status" aria-live="polite">
-      <div class="detta-barre" aria-hidden="true">${"<i></i>".repeat(N_BARRE)}</div>
-      <p class="detta-live"></p></div>`;
+    velo.innerHTML = `<div class="detta-bolla" role="status" aria-label="Ti ascolto: tocca 🎤 per finire">
+      <div class="detta-barre" aria-hidden="true">${"<i></i>".repeat(N_BARRE)}</div></div>`;
     document.body.appendChild(velo);
     storia = []; clearInterval(timerOnda); timerOnda = setInterval(disegnaOnda, 70);
     aggiornaVelo();
