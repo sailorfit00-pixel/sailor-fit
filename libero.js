@@ -2269,14 +2269,9 @@ function comandoSostituisci(testo) {
     const g = prot ? v.qta * a0[1] / a1[1] : v.qta * a0[0] / Math.max(1, a1[0]);
     return Math.max(5, Math.min(GRAMMI_MAX_FONTI[nuovo] || 400, Math.round(g / 5) * 5));
   };
-  const conferma = (v) => {
-    const q = qtaNuova(v), d0 = macroAlimento(v.nome, v.qta), d1 = macroAlimento(nuovo, q);
-    const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
-    openModal(`<h3 class="modal-title">🔄 ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
-      <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span>${esc(nuovo)} <b>${q} g</b></span></div>
-      <p class="hint">${numeriMossa(d)}${grammiDetti ? "" : ` · ${A[v.nome][1] * 4 / Math.max(1, A[v.nome][0]) >= 0.25 && A[nuovo][1] >= 8 ? "stesse proteine" : A[v.nome][0] < 45 || A[nuovo][0] < 45 ? "stessi grammi" : "stesse calorie"}`}</p>${avvisoPassatoDetta(v.pasto, data)}
-      <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="voce-sost-ok">Sostituisci</button></div></div>`);
-    document.getElementById("voce-sost-ok").addEventListener("click", () => {
+  const conferma = (v) => {   // solo la domanda: «Sicura di voler sostituire petto di pollo 120 g con fesa di tacchino 115 g?»
+    const q = qtaNuova(v);
+    chiediConferma(`${sicuraDetta()} di voler sostituire ${cosaDetta(v.nome, v.qta)} con ${cosaDetta(nuovo, q)}?`, "", "Sostituisci", () => {
       const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
       const ingrPrima = clone(p.ingredienti);
       p.ingredienti[v.ii] = { nome: nuovo, qta: q, unita: UNITA_LIQUIDI.test(nuovo) ? "ml" : "g", lock: true, cercato: nuovo };
@@ -2284,7 +2279,7 @@ function comandoSostituisci(testo) {
       scriviGiorno(data, g);
       closeModal(true); if (typeof renderOggi === "function") renderOggi();
       avviso(`${nuovo} al posto di ${v.nome.toLowerCase()}`);
-    });
+    }, null, true);   // tasto verde: sostituire è una scelta, non un errore da evitare
   };
   editCtx = null; liberoCtx = null;
   vaiAlGiornoDetta(data);
@@ -2434,12 +2429,9 @@ function dovePastoDetta(p, data) {
   const n = nomePasto(p, data), art = /^(?:cena|colazione|merenda)$/.test(n) ? "nella" : /^s[^aeiou]/.test(n) ? "nello" : "nel";
   return `${art} ${n} di ${g}`;
 }
-// un pasto già passato (a mano è chiuso col 🔒): a voce si può cambiare lo stesso, ma la conferma lo dice
-const avvisoPassatoDetta = (p, data) => {
-  if (!(typeof pastoPassato === "function" && pastoPassato(data, p))) return "";
-  const n = nomePasto(p, data), f = /^(?:colazione|cena|merenda)$/.test(n), art = f ? "La" : /^s[^aeiou]/.test(n) ? "Lo" : "Il";
-  return `<p class="hint voce-attenzione">🔒 ${art} ${esc(n)} è già passat${f ? "a" : "o"}: confermando ${f ? "la" : "lo"} cambi lo stesso.</p>`;
-};
+// «Sicura» / «Sicuro» dal sesso del Profilo; il nome dell'alimento in minuscolo (le marche restano come sono) con la quantità
+const sicuraDetta = () => { const sx = leggiProfilo().sesso; return sx === "uomo" ? "Sicuro" : sx === "donna" ? "Sicura" : "Sicuro/a"; };
+const cosaDetta = (nome, g) => `${/.[A-ZÀ-Ý]/.test(nome) ? nome : nome.toLowerCase()} ${Math.round(g)} ${UNITA_LIQUIDI.test(nome) ? "ml" : "g"}`;
 function ingredientiDetti(x, data, pasto) {
   const xn = norm(x).replace(/i$|e$/, ""), out = [];
   (giornoDiario(data).pasti || []).forEach((p, pi) => { if (pasto && p.pasto !== pasto) return; (p.ingredienti || []).forEach((i, ii) => {
@@ -2476,20 +2468,9 @@ function comandoTogliPorta(testo) {
     closeModal(true); if (typeof renderOggi === "function") renderOggi();
     avviso(tipo === "togli" ? `Tolto: ${v.nome.toLowerCase()}` : `${v.nome}: ${nuovaQ} g`);
   };
-  const conferma = (v) => {
-    if (tipo === "togli") {   // togliere: solo la domanda, «Annulla» o «Togli»
-      const sx = leggiProfilo().sesso, sic = sx === "uomo" ? "Sicuro" : sx === "donna" ? "Sicura" : "Sicuro/a";
-      const nm = /.[A-ZÀ-Ý]/.test(v.nome) ? v.nome : v.nome.toLowerCase();
-      chiediConferma(`${sic} di voler eliminare ${nm} ${Math.round(v.qta)} ${UNITA_LIQUIDI.test(v.nome) ? "ml" : "g"}?`, "", "Togli", () => applica(v));
-      return;
-    }
-    const d0 = macroAlimento(v.nome, v.qta), d1 = macroAlimento(v.nome, nuovaQ);
-    const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
-    openModal(`<h3 class="modal-title">⚖️ ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
-      <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span><b>${nuovaQ} g</b></span></div>
-      <p class="hint">${numeriMossa(d)}</p>${avvisoPassatoDetta(v.pasto, data)}
-      <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="voce-tp-ok">Salva</button></div></div>`);
-    document.getElementById("voce-tp-ok").addEventListener("click", () => applica(v));
+  const conferma = (v) => {   // solo la domanda e due pulsanti
+    if (tipo === "togli") chiediConferma(`${sicuraDetta()} di voler eliminare ${cosaDetta(v.nome, v.qta)}?`, "", "Togli", () => applica(v));
+    else chiediConferma(`${sicuraDetta()} di voler portare ${/.[A-ZÀ-Ý]/.test(v.nome) ? v.nome : v.nome.toLowerCase()} da ${Math.round(v.qta)} a ${nuovaQ} ${UNITA_LIQUIDI.test(v.nome) ? "ml" : "g"}?`, "", "Cambia", () => applica(v));
   };
   editCtx = null; liberoCtx = null; vaiAlGiornoDetta(data);
   if (trovati.length === 1) { conferma(trovati[0]); return true; }
