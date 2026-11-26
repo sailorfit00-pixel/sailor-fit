@@ -2351,7 +2351,6 @@ body.tastiera .qz-backup { display: none; }
 #spesa .spesa-riga .spesa-qta { margin-left: auto; flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; background: var(--card2); font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; }
 #spesa .spesa-riga .spesa-qta.mia { color: var(--text); font-weight: 600; }
 #spesa li.voce.in-mod { border-bottom: none; }
-#spesa li.voce.in-mod .spesa-qta { background: var(--accent); color: #fff; }
 #spesa li.preso .spesa-nome { text-decoration: line-through; color: var(--muted); }
 #spesa li.voce.nuova { animation: spesa-nuova 2.4s ease-out; border-radius: 10px; }
 @keyframes spesa-nuova { 0%, 40% { background: rgba(var(--lilla-rgb), .28); } 100% { background: transparent; } }
@@ -2383,8 +2382,6 @@ body.tastiera .qz-backup { display: none; }
 .spesa-mod-nota .btn-link { display: inline; padding: 0; margin: 0; font-size: 12px; min-height: 0; }
 
 #spesa .spesa-del-posto { flex: 0 0 36px; height: 36px; }   /* righe senza cestino: la quantità resta in colonna con le altre */
-/* la quantità di ogni voce: sfondo scuro, bordo tratteggiato e scritta nel colore dell'app (si capisce che si tocca); aperta: bordo pieno */
-#spesa .spesa-riga .spesa-qta { background: transparent; border: 1.5px dashed rgba(var(--lilla-rgb), .65); color: var(--lilla); padding: 2px 9px; font-weight: 600; }
-#spesa .spesa-riga .spesa-qta.mia { color: var(--lilla); font-weight: 700; }
-#spesa li.voce.in-mod .spesa-qta { background: var(--lilla-bg); border-style: solid; border-color: var(--lilla); color: var(--lilla); }
-html[data-tema="chiaro"] #spesa .spesa-riga .spesa-qta { border-color: rgba(var(--lilla-rgb), .9); }
+/* la quantità che stai modificando: sfondo scuro, bordo tratteggiato e scritta nel colore dell'app (le altre restano grigie e discrete) */
+#spesa .spesa-riga .spesa-qta { border: 1.5px solid transparent; padding: 2px 9px; }
+#spesa li.voce.in-mod .spesa-qta { background: transparent; border: 1.5px dashed var(--lilla); color: var(--lilla); font-weight: 600; }
