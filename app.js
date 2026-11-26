@@ -1508,7 +1508,7 @@ function voceSpesaHTML(nome, preso, info, extra, q, mia) {
       <input id="spesa-mod-qta" class="qta-input" value="${esc(val)}" placeholder="es. 3 confezioni" autocomplete="off" enterkeyhint="done" data-nome="${esc(nome)}">
       <button class="spesa-step" data-spesa-step="1" aria-label="Più">＋</button>
       <button class="btn spesa-mod-ok" data-spesa-mod-ok>OK</button></div>
-      <p class="spesa-mod-nota">${mia ? `Scelta da te. <button class="btn-link" data-spesa-mod-reset>↺ Torna a quella suggerita</button>` : `Suggerita da quanto ne mangi di solito${frescoDi(nome) ? ", al massimo per una settimana (scade presto)" : ""}.`}</p></li>`;
+      <p class="spesa-mod-nota">${mia ? `Scelta da te. <button class="btn-link" data-spesa-mod-reset>↺ Torna a quella suggerita</button>` : "Suggerita da quanto ne mangi di solito."}</p></li>`;
   }
   return h;
 }
