@@ -148,11 +148,12 @@ function recuperoHTML(data) {
   const quando = r.data === addGiorniISO(data, -1) ? "Ieri" : fmtGiornoLungo(r.data);
   const sopra = r.diff > 0;
   const alGiorno = Math.round(Math.abs(r.diff) / r.giorni / 10) * 10;
-  // una riga sola: cosa è successo e quanto al giorno; ✓ sì, ✕ no
+  // scritto chiaro: cosa è successo e cosa ti propongo; «No» / «Sì»
+  const giorni = r.giorni === 1 ? "domani" : `in ${r.giorni} giorni`;
   return `<div class="recupero">
-    <p>↩ ${quando} ${sopra ? "+" : "−"}${Math.abs(r.diff)} kcal · ${sopra ? "−" : "+"}${alGiorno}/giorno${r.giorni === 1 ? "" : ` × ${r.giorni}`}</p>
-    <button class="nav-btn" data-recupero="no" data-giorno="${r.data}" aria-label="No">✕</button>
-    <button class="nav-btn recupero-si" data-recupero="si" data-giorno="${r.data}" aria-label="${sopra ? "Recupera" : "Riprendile"}">✓</button>
+    <p>${quando} hai mangiato <b>${Math.abs(r.diff)} kcal in ${sopra ? "più" : "meno"}</b>.<br>
+      <span>${sopra ? "Toglierle" : "Recuperarle"} ${giorni}? (${sopra ? "−" : "+"}${alGiorno} al giorno)</span></p>
+    <div class="recupero-btn"><button class="btn-sec" data-recupero="no" data-giorno="${r.data}">No</button><button class="btn" data-recupero="si" data-giorno="${r.data}">Sì</button></div>
   </div>`;
 }
 

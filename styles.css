@@ -2395,3 +2395,9 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 .detta-barre { height: 54px; }
 .detta-live { margin-top: 10px; min-height: 1.4em; text-align: center; }
 .detta-live:not(.vuoto) { text-align: left; }
+/* avviso di recupero: due righe chiare e «No» / «Sì» */
+.recupero { display: block; padding: 12px 14px; }
+.recupero p { margin: 0 0 10px; font-size: 14.5px; line-height: 1.4; }
+.recupero p span { color: var(--muted); }
+.recupero-btn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.recupero-btn button { margin: 0; min-height: 40px; width: 100%; }
