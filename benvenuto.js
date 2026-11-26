@@ -45,13 +45,14 @@ const QZ = [
   { k: "obiettivo", t: "u", e: "✨", q: "Qual è il tuo obiettivo?", o: QZ_OBIETTIVI },
   { k: "lavoro", t: "u", e: "💼", q: "Com'è la tua giornata?", o: QZ_LAVORO, nota: "Senza contare lo sport: serve a stimare quanto consumi ogni giorno." },
   { k: "sport", t: "m", e: "🏃‍♀️", q: "Che sport fai?", o: QZ_SPORT, excl: QZ_NESSUNO, req: 1 },
-  { k: "giorni", t: "m", e: "📅", q: "In quali giorni ti alleni di solito?", o: QZ_GIORNI.map(([l, , v]) => [l, "", v]), salta: senzaSport, nota: "Poi potrai scegliere lo sport giorno per giorno nel Profilo." },
-  { k: "settimana", t: "settimana", e: "🗓️", q: "Cosa fai ogni giorno?", salta: (R) => senzaSport(R) || (R.sport || []).length < 2 || !(R.giorni || []).length,
+  { k: "giorni", t: "m", e: "📅", q: "In quali giorni ti alleni di solito?", o: QZ_GIORNI.map(([l, , v]) => [l, "", v]), salta: senzaSport, nota: "Quale sport fare ogni giorno lo scegli dopo, nella Settimana." },
+  // per ora non si chiede: gli allenamenti si distribuiscono poi nella settimana (Settimana / I miei dati). Il codice resta per quando tornerà
+  { k: "settimana", t: "settimana", e: "🗓️", q: "Cosa fai ogni giorno?", salta: () => true,
     nota: "Se in un giorno fai due allenamenti (es. equitazione e sala pesi), tocca tutti e due." },
   { k: "durate", t: "durate", e: "⏱️", q: "Quanto dura di solito ogni allenamento?", salta: senzaSport,
     nota: "Più o meno: serve a calcolare quanto consumi. Se un giorno è diverso (es. un'uscita lunga), lo cambi in Oggi toccando lo sport del giorno." },
   { k: "oraAllen", t: "ora", e: "🕒", q: "Quando ti alleni, di solito?", salta: (R) => senzaSport(R) || !qzSportConOra(R).length,   // solo camminate: non cambiano i pasti, l'ora non serve
-    nota: "Non serve l'ora esatta, basta il momento della giornata. Serve ad adattare i pasti: prima dell'allenamento uno più leggero, con i carboidrati che danno energia; dopo, proteine e carboidrati per recuperare. Se fai sport in momenti diversi, poi puoi cambiarlo per ogni sport in I miei dati → Sport. Se un giorno cambia, lo sistemi in Oggi." },
+    nota: "Basta il momento della giornata: serve ad adattare i pasti prima e dopo l'allenamento." },
   { k: "pasti", t: "m", e: "🍽️", q: "Quali pasti fai ogni giorno?", o: QZ_PASTI, req: 1, altro: "pastoAltro", altroPh: "Altro, dopo cena (es. spuntino serale)",
     nota: "Se dopo cena mangi qualcosa (uno yogurt, una tisana con biscotti…), scrivilo sopra: diventa un pasto in più, con il suo orario." },
   { k: "orari", t: "orari", e: "⏰", q: "A che ora mangi, più o meno?", nota: "Servono a sapere qual è il prossimo pasto e quando un pasto è passato." },
@@ -112,6 +113,8 @@ function apriQuestionario(rifai) {
   // prima volta: il questionario occupa tutto lo schermo e non si chiude (né ✕, né tocco fuori, né la barra in basso) finché non lo finisci o ripristini un backup
   document.getElementById("modal").classList.toggle("qz-primo", !qz.rifai);
   document.body.classList.toggle("qz-primo", !qz.rifai);
+  // anche rifacendolo dal Profilo: niente barra in basso finché è aperto (toccandola si usciva a metà)
+  document.body.classList.add("qz-aperto");
   qzRender();
 }
 // la persona nuova: al posto della vecchia schermata unica
@@ -431,7 +434,7 @@ function qzFine() {
   try { sessionStorage.removeItem(QZ_CHIAVE); } catch (e) {}
   qz = null;
   // anche «qz-primo» (questionario a schermo intero): prima restava sul body e la barra in basso spariva finché non riaprivi l'app
-  document.getElementById("modal").classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo");
+  document.getElementById("modal").classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo", "qz-aperto");
   closeModal();
   applicaPersonalizzazione();
   if (typeof renderOggi === "function") renderOggi();
@@ -441,7 +444,7 @@ function qzFine() {
 { const m = document.getElementById("modal");
   if (m) new MutationObserver(() => {
     if (!m.hidden) return;
-    if (m.classList.contains("modal-qz")) { m.classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo"); qz = null; applicaPersonalizzazione(); }
+    if (m.classList.contains("modal-qz")) { m.classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo", "qz-aperto"); qz = null; applicaPersonalizzazione(); }
     // persona nuova che non ha ancora finito (es. ha annullato il ripristino del backup): il questionario torna, dal punto in cui era
     if (localStorage.getItem("mp_benvenuto") === "da fare") setTimeout(() => { if (m.hidden && localStorage.getItem("mp_benvenuto") === "da fare") apriBenvenuto(); }, 60);
   }).observe(m, { attributes: true, attributeFilter: ["hidden"] }); }

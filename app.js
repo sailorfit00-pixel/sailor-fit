@@ -184,14 +184,28 @@ if (window.visualViewport) {
     const campo = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) && !/^(checkbox|radio|button|file|range|color)$/.test(document.activeElement.type);
     if (!campo || vv.height > altezzaPiena) altezzaPiena = Math.max(campo ? altezzaPiena : 0, vv.height, campo ? 0 : window.innerHeight);
     const aperta = campo && altezzaPiena - vv.height > 120;
+    // Safari (anche nel browser, non solo l'app sulla Home) con la tastiera aperta spinge in su tutta la pagina: con un pannello aperto
+    // la pagina sotto è bloccata, quindi la si riporta in cima e il pannello si mette esattamente nello spazio sopra la tastiera
+    const pannello = document.body && document.body.classList.contains("no-scroll");
+    if (aperta && pannello && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
     root.style.setProperty("--vv-h", `${Math.round(vv.height)}px`);
     root.style.setProperty("--vv-top", `${Math.round(vv.offsetTop)}px`);
     document.body && document.body.classList.toggle("tastiera", aperta);
+    // il campo in cui scrivi resta visibile dentro il pannello (sopra la tastiera e sopra i tasti in fondo)
+    if (aperta && pannello) {
+      const el = document.activeElement, sh = el && el.closest && el.closest(".modal-sheet");
+      if (sh) { const r = el.getBoundingClientRect(), rs = sh.getBoundingClientRect();
+        if (r.top < rs.top + 8 || r.bottom > rs.bottom - 80) sh.scrollTop += r.top - rs.top - Math.min(90, rs.height / 4); }
+    }
   };
-  vv.addEventListener("resize", aggiornaTastiera);
-  vv.addEventListener("scroll", aggiornaTastiera);
+  let _rafTastiera = 0;
+  const aggiornaPresto = () => { cancelAnimationFrame(_rafTastiera); _rafTastiera = requestAnimationFrame(aggiornaTastiera); };
+  vv.addEventListener("resize", aggiornaPresto);
+  vv.addEventListener("scroll", aggiornaPresto);
+  window.addEventListener("scroll", aggiornaPresto, { passive: true });   // Safari sposta la pagina anche senza avvisare il visualViewport
   window.addEventListener("resize", aggiornaTastiera);   // Android: con la tastiera si accorcia tutta la finestra (non sempre arriva l'avviso del visualViewport)
-  document.addEventListener("focusin", () => setTimeout(aggiornaTastiera, 300));
+  // la tastiera si apre con un'animazione (e Safari scorre dopo): si ricontrolla più volte
+  document.addEventListener("focusin", () => [60, 300, 600, 1000].forEach(t => setTimeout(aggiornaTastiera, t)));
   document.addEventListener("focusout", () => { setTimeout(aggiornaTastiera, 300); setTimeout(aggiornaTastiera, 700); });
   // ricontrollo dopo ogni tocco: su iPhone la tastiera a volte si chiude senza avvisare (e il pannello restava alto, con una striscia vuota sotto)
   document.addEventListener("touchend", () => setTimeout(aggiornaTastiera, 400), { passive: true });
@@ -1205,7 +1219,7 @@ function segnaInCasa(nome, si, grammi) {
 // Quanto ne hai in casa: alla spesa si assume una confezione tipica (in grammi, per il riso e la pasta da crudo);
 // ogni volta che lo scrivi nel diario si sottrae. Quando è quasi finito torna da solo in lista; se non lo usi, comunque dopo qualche giorno.
 const PACCO_TIPICO = [
-  [/^albume/i, 500], [/^uova/i, 330], [/^latte(?! di cocco)|^bevanda di (avena|soia|riso|mandorla)/i, 1000], [/^skyr/i, 450], [/^yogurt/i, 250], [/^fiocchi di latte/i, 200], [/^ricotta/i, 250], [/^mozzarella|^burrata|^scamorza|^feta/i, 250],
+  [/^albume/i, 500], [/^uova/i, 330], [/^latte(?! di cocco)|^bevanda di (avena|soia|riso|mandorla)/i, 1000], [/^skyr/i, 450], [/^yogurt/i, 250], [/^fiocchi di latte/i, 200], [/^ricotta/i, 250], [/^mozzarella|^burrata/i, 125], [/^scamorza|^feta/i, 200],
   [/^petto di pollo|^coscia/i, 500], [/^fesa di tacchino|^bresaola|^prosciutto/i, 150], [/^tofu|^seitan|^tempeh/i, 200], [/^proteine in polvere/i, 900],
   [/^riso|^pasta|^couscous|^quinoa|^farro|^noodles|^orzo|^bulgur|^miglio/i, 500], [/^fiocchi d'avena|^farina|^granola|^muesli/i, 500], [/^pane|^piadina|^tortilla|^crackers|^gallette/i, 300],
   [/^olio|^aceto|^salsa di soia/i, 500], [/^parmigiano|^grana|^pecorino/i, 200], [/^mandorle|^noci|^nocciole|^anacardi|^pistacchi|^arachidi|^semi|^burro d'arachidi|^burro di mandorle/i, 200],
@@ -1403,10 +1417,100 @@ function qtaSettimanaG(nome, gSett) {
 }
 function leggiExtraSpesa() { try { return JSON.parse(localStorage.getItem("mp_spesa_extra")) || []; } catch (e) { return []; } }
 function salvaExtraSpesa(a) { localStorage.setItem("mp_spesa_extra", JSON.stringify(a)); }
-function voceSpesaHTML(nome, preso, info, extra, q) {
-  return `<li class="voce${preso ? " preso" : ""}"><label>
-    <input type="checkbox" data-spesa="${esc(nome)}" ${q ? `data-q="${Math.round(q)}"` : ""} ${preso ? "checked" : ""}><span>${esc(nome)}</span>${info ? `<em class="spesa-qta">${info}</em>` : ""}</label>
-    ${extra ? `<button class="lib-del" data-spesa-del="${esc(nome)}" aria-label="Togli dalla lista">${ICONA_CESTINO}</button>` : ""}</li>`;
+// Quantità scelte da te per le voci della lista («3 confezioni», «1,5 kg», «6»): per nome. Valgono anche per le voci suggerite dall'app
+function leggiQtaSpesa() { try { return JSON.parse(localStorage.getItem("mp_spesa_qta")) || {}; } catch (e) { return {}; } }
+function salvaQtaSpesa(m) { try { localStorage.setItem("mp_spesa_qta", JSON.stringify(m)); } catch (e) {} }
+const qtaSpesaDi = (nome) => { const m = leggiQtaSpesa(), k = Object.keys(m).find(x => x.toLowerCase() === String(nome).toLowerCase()); return k ? m[k] : ""; };
+function impostaQtaSpesa(nome, qta) {
+  const m = leggiQtaSpesa(); Object.keys(m).forEach(k => { if (k.toLowerCase() === String(nome).toLowerCase()) delete m[k]; });
+  if (qta && String(qta).trim()) m[nome] = String(qta).trim();
+  salvaQtaSpesa(m);
+}
+// singolare/plurale delle confezioni (per il + e il −: «1 confezione» → «2 confezioni»)
+const UNITA_SPESA_SP = [["confezione", "confezioni"], ["pacco", "pacchi"], ["pacchetto", "pacchetti"], ["bottiglia", "bottiglie"], ["scatola", "scatole"], ["scatoletta", "scatolette"],
+  ["vasetto", "vasetti"], ["barattolo", "barattoli"], ["lattina", "lattine"], ["vaschetta", "vaschette"], ["busta", "buste"], ["bustina", "bustine"], ["sacchetto", "sacchetti"], ["cartone", "cartoni"],
+  ["tubetto", "tubetti"], ["rotolo", "rotoli"], ["pezzo", "pezzi"], ["dozzina", "dozzine"], ["mazzo", "mazzi"], ["cespo", "cespi"], ["casco", "caschi"], ["retina", "retine"], ["vaso", "vasi"], ["brick", "brick"], ["confezione", "conf"]];
+const UNITA_SPESA_RE = "confezion[ei]|conf|pacc(?:o|hi)|pacchett[oi]|bottigli[ae]|scatolett[ae]|scatol[ae]|vasett[oi]|barattol[oi]|lattin[ae]|vaschett[ae]|bustin[ae]|bust[ae]|sacchett[oi]|carton[ei]|tubett[oi]|rotol[oi]|pezz[oi]|pz|dozzin[ae]|mazz[oi]|cesp[oi]|casc(?:o|hi)|retin[ae]|vas[oi]|brick|kg|chil[oi]|chilogramm[oi]|grammi|gr|g|ett[oi]|litr[oi]|l|ml|millilitri";
+const NUMERI_SPESA = { un: 1, uno: 1, una: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12, tredici: 13, quattordici: 14, quindici: 15, venti: 20, trenta: 30, mezzo: 0.5, mezza: 0.5 };
+const fmtNumSpesa = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
+function pluraleUnita(u, n) {
+  const [primo, ...resto] = String(u || "").split(" ");
+  const c = UNITA_SPESA_SP.find(([s, p]) => s === primo.toLowerCase() || p === primo.toLowerCase());
+  return [c ? (n === 1 ? c[0] : c[1]) : primo, ...resto].join(" ").trim();
+}
+// la quantità detta o scritta, con le parole del negozio: «tre confezioni» → «3 confezioni», «un chilo e mezzo» → «1,5 kg», «2 etti» → «200 g»
+function qtaSpesaNormale(num, unita) {
+  let n = NUMERI_SPESA[String(num).toLowerCase()] ?? parseFloat(String(num).replace(",", "."));
+  if (!(n > 0)) return "";
+  let u = String(unita || "").toLowerCase().trim();
+  if (/^(chil[oi]|chilogramm[oi])$/.test(u)) u = "kg";
+  else if (/^(grammi|gr)$/.test(u)) u = "g";
+  else if (/^ett[oi]$/.test(u)) { n *= 100; u = "g"; }
+  else if (/^litr[oi]$/.test(u)) u = "l";
+  else if (u === "millilitri") u = "ml";
+  else if (u === "conf") u = "confezione";
+  return (fmtNumSpesa(n) + " " + pluraleUnita(u, n)).trim();
+}
+// «latte scremato Lidl tre confezioni» → { nome: "latte scremato Lidl", qta: "3 confezioni" }; «6 uova» → { nome: "uova", qta: "6" }
+function separaQtaSpesa(testo) {
+  let t = String(testo || "").replace(/\s+/g, " ").trim();
+  const NUM = "(\\d+(?:[.,]\\d+)?|un|uno|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|quindici|venti|trenta|mezz[oa])";
+  t = t.replace(new RegExp("\\b" + NUM + "\\s+(chil[oi]|kg|litr[oi]|l)\\s+e\\s+mezzo\\b", "i"), (m, n, u) => ((NUMERI_SPESA[n.toLowerCase()] ?? parseFloat(n.replace(",", "."))) + 0.5) + " " + u);
+  // in fondo: «… tre confezioni», «… 2 kg», «… x 3», «… 4»
+  let m = t.match(new RegExp("^(.{2,}?)\\s*(?:,|-|\\bx\\s*|\\bper\\s+|\\bda\\s+)?\\s*\\b" + NUM + "\\s*(" + UNITA_SPESA_RE + ")?\\.?$", "i"));
+  if (m && !/^(un|uno|una)$/i.test(m[2]) || (m && m[3])) { const q = qtaSpesaNormale(m[2], m[3]); if (q) return { nome: m[1].replace(/\s+(?:di|da|per|x)$/i, "").trim(), qta: q }; }
+  // all'inizio: «tre confezioni di latte», «2 kg di mele», «6 uova», «un pacco di pasta» (ma «una mela» resta com'è)
+  m = t.match(new RegExp("^" + NUM + "\\s*(" + UNITA_SPESA_RE + ")?\\b\\s*(?:di\\s+|d'\\s*)?(.{2,})$", "i"));
+  if (m && (m[2] || !/^(un|uno|una|mezz[oa])$/i.test(m[1]))) { const q = qtaSpesaNormale(m[1], m[2]); if (q) return { nome: m[3].trim(), qta: q }; }
+  return { nome: t, qta: "" };
+}
+// il + e il − accanto alla quantità: il numero cambia a passi sensati (1 confezione, 50 g, mezzo kg)
+function cambiaQtaSpesa(testo, delta, nome) {
+  const m = String(testo || "").trim().match(/^~?\s*(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  if (!m) {
+    if (delta < 0) return String(testo || "");
+    const rep = typeof repartoDi === "function" ? repartoDi(nome || "") : "";
+    return rep === "Frutta e verdura" ? "1 pz" : rep === "Carne e pesce" ? "300 g" : "1 confezione";
+  }
+  const n = parseFloat(m[1].replace(",", ".")), u = m[2].trim(), u1 = u.split(" ")[0].toLowerCase();
+  const passo = /^(g|ml)$/.test(u1) ? (n < 100 ? 10 : n < 500 ? 50 : 100) : /^(kg|l)$/.test(u1) ? 0.5 : 1;
+  let v = Math.round((n + delta * passo) * 100) / 100;
+  if (v <= 0) v = passo;
+  return (fmtNumSpesa(v) + " " + pluraleUnita(u, v)).trim();
+}
+// la quantità scelta in grammi (per sapere quanto ne hai in casa dopo averlo spuntato)
+function qtaSpesaInGrammi(nome, testo, qBase) {
+  const m = String(testo || "").trim().match(/^~?\s*(\d+(?:[.,]\d+)?)\s*(\S*)/); if (!m) return qBase || 0;
+  const n = parseFloat(m[1].replace(",", ".")), u = m[2].toLowerCase();
+  if (u === "g" || u === "ml") return n;
+  if (u === "kg" || u === "l") return n * 1000;
+  if (/^uov/.test(u) || (!u && /^uova$/i.test(nome))) return n * 55;
+  if (!u || /^(pz|pezz)/.test(u)) { const pz = (window.PESO_PZ || {})[nome]; if (pz) return n * pz; if (!u) return n * (typeof paccoG === "function" ? paccoG(nome) : 300); return qBase || 0; }
+  return n * (typeof paccoG === "function" ? paccoG(nome) : 300);
+}
+let _spesaMod = null;   // la voce della lista di cui stai cambiando la quantità (si apre toccando la riga)
+let _spesaNuove = [];   // le voci appena aggiunte (a voce): si illuminano un attimo quando si apre la lista
+// la quantità nella pastiglia della riga, corta perché stia su una riga: «2 confezioni da 500 g» → «2 conf. da 500 g»
+const qtaBreve = (t) => String(t).replace(/^~?\s*(\d+(?:[.,]\d+)?)\s+confezion[ei]\s+da\s+/i, "$1 conf. da ").replace(/\s+da crudo$/i, " crudo");
+// una riga della lista: si spunta SOLO toccando la casella (prima bastava toccare il nome e la voce spariva tra i «già presi»);
+// toccando il nome o la quantità si cambia la quantità
+function voceSpesaHTML(nome, preso, info, extra, q, mia) {
+  const inMod = !preso && _spesaMod && _spesaMod.toLowerCase() === nome.toLowerCase(), nuova = _spesaNuove.some(x => x.toLowerCase() === nome.toLowerCase());
+  const riga = preso ? `<span class="spesa-riga"><span class="spesa-nome">${esc(nome)}</span></span>`
+    : `<button class="spesa-riga" data-spesa-mod="${esc(nome)}" aria-label="Cambia la quantità di ${esc(nome)}"><span class="spesa-nome">${esc(nome)}</span><em class="spesa-qta${mia ? " mia" : ""}">${info ? esc(qtaBreve(info)) : "＋ quantità"}</em></button>`;
+  let h = `<li class="voce${preso ? " preso" : ""}${inMod ? " in-mod" : ""}${nuova ? " nuova" : ""}"><label class="spesa-spunta" aria-label="${preso ? "Togli la spunta" : "Preso"}: ${esc(nome)}">
+    <input type="checkbox" data-spesa="${esc(nome)}" ${q ? `data-q="${Math.round(q)}"` : ""} ${preso ? "checked" : ""}></label>${riga}
+    ${extra ? `<button class="lib-del" data-spesa-del="${esc(nome)}" aria-label="Togli dalla lista">${ICONA_CESTINO}</button>` : `<span class="spesa-del-posto" aria-hidden="true"></span>`}</li>`;
+  if (inMod) {
+    const val = mia || (info ? qtaBreve(info.replace(/^~\s*/, "")) : "");
+    h += `<li class="spesa-mod"><div class="spesa-mod-r">
+      <button class="spesa-step" data-spesa-step="-1" aria-label="Meno">−</button>
+      <input id="spesa-mod-qta" class="qta-input" value="${esc(val)}" placeholder="es. 3 confezioni" autocomplete="off" enterkeyhint="done" data-nome="${esc(nome)}">
+      <button class="spesa-step" data-spesa-step="1" aria-label="Più">＋</button>
+      <button class="btn spesa-mod-ok" data-spesa-mod-ok>OK</button></div>
+      <p class="spesa-mod-nota">${mia ? `Scelta da te. <button class="btn-link" data-spesa-mod-reset>↺ Torna a quella suggerita</button>` : "Suggerita da quanto ne mangi di solito."}</p></li>`;
+  }
+  return h;
 }
 const SPESA_SALTA = /^(acqua|sale|spezie|tè|caffè|bicarbonato|vaniglia|purea di mela|salsa yogurt-limone|uova al tegamino|patate lesse|patate al forno|gin|gin tonic|vodka|rum|whisky|birra|prosecco|spritz|vino|vino bianco|vino rosso|liquore|amaro|grappa|aperol|campari)$/i;   // + alcolici (si bevono fuori: in lista solo se li aggiungi tu a mano)   // quello che non si compra (si prepara in casa)
 // in negozio non esiste "riso cotto": si compra il riso (le legumi cotti sono ceci e lenticchie)
@@ -1415,6 +1519,8 @@ const nomeSpesa = (n) => /prosciutto/i.test(n) ? n : n.replace(/ (cotto|cotta|co
 // Se ne serve meno di un terzo di una confezione (granola 30 g, pesto 20 g, lievito…), di solito ce l'hai: va in «Da controllare se c'è».
 const SPESA_A_PESO = new Set(["Frutta e verdura", "Carne e pesce"]);
 const PACCO_UOVA = 6;
+// il peso di una confezione si scrive esatto (mozzarella 125 g, non «130 g»)
+const fmtPacco = (g, u) => g >= 1000 ? fmtPeso(g, u) : `${Math.round(g)} ${u}`;
 function compraSpesa(nome, nome0, g0) {
   const rep = repartoDi(nome), g = qtaSettimanaG(nome0, g0);
   if (SPESA_A_PESO.has(rep)) return { info: qtaSettimanaLabel(nome0, g0), q: g };
@@ -1426,7 +1532,38 @@ function compraSpesa(nome, nome0, g0) {
   const n = Math.max(1, Math.ceil(g / pacco - 0.1));   // 1,05 confezioni = 1; 1,4 = 2
   if (/^uova$/i.test(nome)) return { info: `${n * PACCO_UOVA} uova`, q: n * pacco };
   const noto = PACCO_TIPICO.some(([re]) => re.test(nome));
-  return { info: `${n} ${n === 1 ? "confezione" : "confezioni"}${noto ? ` da ${fmtPeso(pacco, UNITA_LIQUIDI.test(nome) ? "ml" : "g")}` : ""}`, q: n * pacco };
+  return { info: `${n} ${n === 1 ? "confezione" : "confezioni"}${noto ? ` da ${fmtPacco(pacco, UNITA_LIQUIDI.test(nome) ? "ml" : "g")}` : ""}`, q: n * pacco };
+}
+// Freschi (latticini freschi, frutta e verdura, carne e pesce, pane fresco): scadono presto, quindi mai più di una settimana di consumo
+// anche con la spesa per 2 settimane (lo yogurt di 14 giorni scade prima di finirlo)
+const FRESCO_MAX_GIORNI = 7;
+const FRESCO_LATTICINI = /^(yogurt|skyr|kefir|latte(?! di cocco| in polvere| condensato)|ricotta|mozzarella|burrata|stracchino|squacquerone|fiocchi di latte|mascarpone|panna fresca|primo sale|feta)/i;
+const frescoDi = (nome) => { const rep = repartoDi(nome); return !durataLunga(nome) && (rep === "Frutta e verdura" || rep === "Carne e pesce" || FRESCO_LATTICINI.test(nome) || /^(pane|focaccia|piadina fresca)/i.test(nome)) && !/scatola|scatolame|in vetro|surgelat|secc|uht|a lunga conservazione/i.test(nome); };
+const gPerFresco = (nome, g) => { const N = giorniSpesaScelti(); return frescoDi(nome) && N > FRESCO_MAX_GIORNI ? g * FRESCO_MAX_GIORNI / N : g; };
+// quanto comprare di una voce aggiunta da te (scritta o detta senza quantità): quanto ne mangi di solito nei giorni della spesa
+// (dalle ultime 4 settimane del diario); se non lo mangi mai, il minimo: una confezione (o qualche pezzo / un po' a peso)
+let _memoSugg = { k: "", st: null };
+function suggerisciQtaSpesa(nome) {
+  const chiave = (() => { try { return (localStorage.getItem("mp_diario") || "").length + "|" + giorniSpesaScelti() + "|" + oggiISO(); } catch (e) { return ""; } })();
+  if (_memoSugg.k !== chiave || !_memoSugg.st) {
+    const giorni = []; for (let k = 0; k < 28; k++) giorni.push(addGiorniISO(oggiISO(), -k));
+    _memoSugg = { k: chiave, st: consumiPerAlimento(giorni, giorniSpesaScelti()).st };
+  }
+  const n = String(nome).toLowerCase();
+  // «Yogurt greco» detto o scritto vale anche per lo «Yogurt greco 0%» che scrivi nel diario
+  let fonti = Object.entries(_memoSugg.st).filter(([k]) => nomeSpesa(k).toLowerCase() === n);
+  if (!fonti.length) fonti = Object.entries(_memoSugg.st).filter(([k]) => nomeSpesa(k).toLowerCase().startsWith(n + " "));
+  if (fonti.length) {
+    const g = gPerFresco(nome, fonti.reduce((a, [k, e]) => { const f = /cott/i.test(k) && (window.CRUDO_FATTORE || []).find(([re]) => re.test(k)); return a + (f ? e.g / f[1] : e.g); }, 0));
+    const c = compraSpesa(nome, fonti.length === 1 ? fonti[0][0] : nome, fonti.length === 1 && /cott/i.test(fonti[0][0]) ? gPerFresco(nome, fonti[0][1].g) : g);
+    if (!c.controllare && c.info) return { info: c.info, q: c.q };
+  }
+  const rep = repartoDi(nome), pz = (window.PESO_PZ || {})[nome];
+  if (rep === "Frutta e verdura") return pz && pz < 300 ? { info: `${Math.max(1, Math.round(500 / pz))} pz`, q: Math.max(1, Math.round(500 / pz)) * pz } : { info: "~500 g", q: 500 };
+  if (rep === "Carne e pesce") return { info: "~300 g", q: 300 };
+  if (/^uova$/i.test(nome)) return { info: `${PACCO_UOVA} uova`, q: paccoG(nome) };
+  const pacco = paccoG(nome), noto = PACCO_TIPICO.some(([re]) => re.test(nome));
+  return { info: `1 confezione${noto ? ` da ${fmtPacco(pacco, UNITA_LIQUIDI.test(nome) ? "ml" : "g")}` : ""}`, q: pacco };
 }
 function spesaHTML() {
   const stat = statSpesa(), { st } = stat;
@@ -1442,13 +1579,17 @@ function spesaHTML() {
   });
   const voci = Object.values(unite).map(u => {
     const [nome0, g0] = u.fonti.length === 1 ? u.fonti[0] : [u.nome, u.g];   // una fonte sola: etichetta di sempre ("~200 g da crudo")
-    return Object.assign({ nome: u.nome, giorni: u.giorni }, compraSpesa(u.nome, nome0, g0));
+    return Object.assign({ nome: u.nome, giorni: u.giorni }, compraSpesa(u.nome, nome0, gPerFresco(u.nome, g0)));
   });
+  // le voci aggiunte da te hanno comunque una quantità suggerita (quanto ne mangi di solito, o una confezione): la cambi toccandola
   leggiExtraSpesa().forEach(nome => {
     const v = voci.find(x => x.nome.toLowerCase() === nome.toLowerCase());
-    if (!v) voci.push({ nome, giorni: -1, info: "aggiunto da te", extra: true });
-    else if (v.controllare) { v.controllare = false; v.extra = true; v.info = "aggiunto da te"; }   // dalla dispensa (o detto a voce): l'hai messo tu in lista, va comprato
+    if (!v) voci.push(Object.assign({ nome, giorni: -1, extra: true }, suggerisciQtaSpesa(nome)));
+    else if (v.controllare) { v.controllare = false; v.extra = true; Object.assign(v, suggerisciQtaSpesa(nome)); }   // dalla dispensa (o detto a voce): l'hai messo tu in lista, va comprato
+    else v.extra = true;
   });
+  // la quantità che hai scelto tu (detta, scritta o cambiata con + e −) vale più di quella calcolata
+  voci.forEach(v => { const mia = qtaSpesaDi(v.nome); if (mia) { v.mia = mia; v.q = qtaSpesaInGrammi(v.nome, mia, v.q); v.info = mia; } });
   // da dove viene la lista
   // solo a lista vuota una riga che spiega da dove arriva (con le voci in lista non serve: «non ha senso di esistere»)
   const intro = !voci.length ? `<li class="hint">🛒 Si riempie con i pasti che scrivi: quello che mangi di solito (ultime 2 settimane) e i pasti pianificati</li>` : "";
@@ -1458,7 +1599,7 @@ function spesaHTML() {
     const g = gruppi[rep];
     if (!g || !g.length) return "";
     g.sort((a, b) => (b.giorni - a.giorni) || a.nome.localeCompare(b.nome)); // prima ciò che mangi più spesso
-    return `<li class="reparto-h">${rep}</li>` + g.map(v => voceSpesaHTML(v.nome, false, v.info, v.extra, v.q)).join("");
+    return `<li class="reparto-h">${rep}</li>` + g.map(v => voceSpesaHTML(v.nome, false, v.info, v.extra, v.q, v.mia)).join("");
   }).join("");
   // ne serve poco o dura mesi (spezie, salse, lievito, frutta secca…): di solito ce l'hai, basta controllare
   // olio, salse, miele, spezie, lievito…: si usano poco per volta e durano mesi. Non sono in lista: una riga chiusa «In dispensa»;
@@ -1472,6 +1613,11 @@ function spesaHTML() {
   return html;
 }
 function renderSpesa() { const ul = document.getElementById("spesa"); if (ul) ul.innerHTML = spesaHTML(); }
+function salvaQtaModificata() {
+  const i = document.getElementById("spesa-mod-qta"); if (!i) return;
+  const v = i.value.trim(), m = v.match(/^(\S+)\s*(.*)$/), q = m && (NUMERI_SPESA[m[1].toLowerCase()] || /^\d/.test(m[1])) ? (qtaSpesaNormale(m[1], m[2].split(" ")[0]) + " " + m[2].split(" ").slice(1).join(" ")).trim() : v;   // «tre confezioni» → «3 confezioni»
+  impostaQtaSpesa(i.dataset.nome, q || v); _spesaMod = null; renderSpesa();
+}
 // Apre la lista della spesa nel pannello (bottom-sheet)
 document.addEventListener("change", (e) => {   // «🗓️ Spesa per [1 settimana ▾]»: 3 giorni · 1 settimana · 2 settimane
   if (!e.target.matches || !e.target.matches("select[data-spesa-giorni]")) return;
@@ -1479,7 +1625,7 @@ document.addEventListener("change", (e) => {   // «🗓️ Spesa per [1 settima
   renderSpesa();
 });
 function apriSpesa() {
-  editCtx = null;
+  editCtx = null; _spesaMod = null;
   const { nGiorni } = statSpesa();
   openModal(`<h3 class="modal-title">🛒 Lista della spesa</h3>
     <div class="lib-add">
@@ -1496,14 +1642,14 @@ function apriSpesa() {
 function suggerimentiSpesa() {
   const inp = document.getElementById("spesa-nuova"), box = document.getElementById("spesa-sugg");
   if (!inp || !box) return;
-  const v = inp.value.trim();
+  const sepSc = separaQtaSpesa(inp.value.trim()), v = sepSc.nome, qSc = sepSc.qta;   // i suggerimenti cercano il nome, non «3 confezioni»
   if (!v) { box.innerHTML = ""; return; }
   const nq = typeof norm === "function" ? norm(v) : v.toLowerCase(), nn = (x) => typeof norm === "function" ? norm(x) : x.toLowerCase();
   const gia = new Set(leggiExtraSpesa().map(x => x.toLowerCase()));
   const t = (typeof cercaAlimenti === "function" ? cercaAlimenti(v) : []).filter(n => !gia.has(n.toLowerCase()) && !SPESA_COMPOSTI.test(n))
     .sort((a, b) => nn(b).startsWith(nq) - nn(a).startsWith(nq)).slice(0, 6);
   const esatto = t.some(n => n.toLowerCase() === v.toLowerCase());
-  box.innerHTML = (esatto ? "" : `<button class="autoc-voce" data-spesa-sugg="" >＋ Aggiungi «${esc(v)}»</button>`) + t.map(n => `<button class="autoc-voce" data-spesa-sugg="${esc(n)}">${esc(n)}</button>`).join("");
+  box.innerHTML = (esatto ? "" : `<button class="autoc-voce" data-spesa-sugg="" >＋ Aggiungi «${esc(v)}»${qSc ? ` · ${esc(qSc)}` : ""}</button>`) + t.map(n => `<button class="autoc-voce" data-spesa-sugg="${esc(n)}">${esc(n)}</button>`).join("");
 }
 // il nome con cui una voce scritta (o detta) va in lista: l'alimento che conosco se combacia ("banna" → Banana, "albumi" → Albume), altrimenti com'è ("detersivo piatti")
 function nomeVoceSpesa(v) {
@@ -1517,13 +1663,15 @@ function aggiungiVoceSpesa(scelto) {
   if (scelto) {   // toccato un suggerimento: va in lista con quel nome esatto
     const extra = leggiExtraSpesa(); if (!extra.includes(scelto)) { extra.push(scelto); salvaExtraSpesa(extra); }
     const presi = leggiPresi(); presi.delete(scelto); salvaPresi(presi);
+    const sq = inp ? separaQtaSpesa(inp.value).qta : ""; if (sq) impostaQtaSpesa(scelto, sq);   // «uova 12» → Uova · 12
     renderSpesa(); if (inp) { inp.value = ""; inp.focus(); } suggerimentiSpesa(); return;
   }
   const v = (inp && inp.value || "").trim();
   if (!v) return;
-  const nome = nomeVoceSpesa(v);
+  const sep = separaQtaSpesa(v), nome = nomeVoceSpesa(sep.nome);   // «latte scremato 3 confezioni» → Latte scremato · 3 confezioni
   const extra = leggiExtraSpesa();
   if (!extra.includes(nome)) { extra.push(nome); salvaExtraSpesa(extra); }
+  if (sep.qta) impostaQtaSpesa(nome, sep.qta);
   const presi = leggiPresi(); presi.delete(nome); salvaPresi(presi);
   renderSpesa();
   inp.value = ""; inp.focus(); suggerimentiSpesa();
@@ -1714,11 +1862,14 @@ function apriListaRicetteCome() {
   if (inp && _statoLista.q) { inp.value = _statoLista.q; aggiornaListaRicette(); }
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = _statoLista.sc || 0;
 }
+let _scrollSotto = 0;   // dov'era la pagina quando si è aperto il pannello
 function openModal(html) {
   _ricettaDaLista = false;
   document.getElementById("modal-content").innerHTML = html;
   const m = document.getElementById("modal");
   m.hidden = false;
+  // la pagina sotto il pannello resta ferma dov'era (su iPhone «overflow: hidden» non basta: con la tastiera Safari la faceva scorrere e il pannello finiva in alto)
+  if (!document.body.classList.contains("no-scroll")) { _scrollSotto = window.scrollY || 0; document.body.style.top = `-${_scrollSotto}px`; }
   document.body.classList.add("no-scroll");
   m.querySelector(".modal-sheet").scrollTop = 0;
   m.querySelector(".modal-sheet").classList.remove("foglio-pieno");   // solo il pannello del pasto resta a tutta altezza (lo rimette apriEditorPasto)
@@ -1787,7 +1938,7 @@ function closeModal(forza) {
   segnaTab(typeof vistaHome !== "undefined" ? vistaHome : "oggi");
   _chiusoAlle = Date.now();
   document.getElementById("modal").hidden = true;
-  document.body.classList.remove("no-scroll");
+  if (document.body.classList.contains("no-scroll")) { document.body.classList.remove("no-scroll"); document.body.style.top = ""; window.scrollTo(0, _scrollSotto); }
   editCtx = null;
   if (nuovaRic && nuovaRic === bozzaRic) bozzaStep = wizStep;   // la ricetta nuova a metà resta nella bozza
   nuovaRic = null;
@@ -2233,6 +2384,7 @@ function apriMenu() {
       ${voce("vai-ricette", "📖", "Le mie ricette", `${contaRicetteUniche()} ricette`)}
       ${voce("miei-alimenti", "🥫", "I miei alimenti", nAlim ? `${nAlim} ${nAlim === 1 ? "alimento" : "alimenti"}` : "ancora nessuno")}
       ${voce("comandi-voce", "🎤", "Comandi vocali", "cosa puoi dire a Detta")}
+      ${voce("rifai-questionario", "📝", "Rifai il questionario iniziale", "parte con le risposte di adesso")}
       ${voce("backup", "💾", "Backup", "salva o ripristina")}
     </div>
   `);
@@ -3006,9 +3158,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (e.target.closest("[data-spesa-reset]")) {   // 🧹 Nuova spesa: via le spunte (e le voci aggiunte a mano già prese)
-      const presiPrima = [...leggiPresi()], extraPrima = leggiExtraSpesa();
-      salvaPresi(new Set()); salvaExtraSpesa(extraPrima.filter(x => !presiPrima.includes(x))); renderSpesa();
-      avviso("Lista pronta per la nuova spesa", "Annulla", () => { salvaPresi(new Set(presiPrima)); salvaExtraSpesa(extraPrima); renderSpesa(); });
+      const presiPrima = [...leggiPresi()], extraPrima = leggiExtraSpesa(), qtaPrima = leggiQtaSpesa();
+      // le quantità scelte per le voci già prese valevano per quella spesa: si tolgono
+      const qta = Object.assign({}, qtaPrima); Object.keys(qta).forEach(k => { if (presiPrima.some(x => x.toLowerCase() === k.toLowerCase())) delete qta[k]; });
+      salvaPresi(new Set()); salvaExtraSpesa(extraPrima.filter(x => !presiPrima.includes(x))); salvaQtaSpesa(qta); _spesaMod = null; renderSpesa();
+      avviso("Lista pronta per la nuova spesa", "Annulla", () => { salvaPresi(new Set(presiPrima)); salvaExtraSpesa(extraPrima); salvaQtaSpesa(qtaPrima); renderSpesa(); });
       return;
     }
     const sdisp = e.target.closest("[data-spesa-disp]");   // dalla dispensa: è finito, va comprato
@@ -3017,11 +3171,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sg) { aggiungiVoceSpesa(sg.dataset.spesaSugg || ""); return; }
     const sd = e.target.closest("[data-spesa-del]");
     if (sd) {
-      const nomeVoce = sd.dataset.spesaDel, prima = leggiExtraSpesa();
-      salvaExtraSpesa(prima.filter(x => x !== nomeVoce)); renderSpesa();
-      avviso(`Tolto: ${nomeVoce.toLowerCase()}`, "Annulla", () => { salvaExtraSpesa(prima); renderSpesa(); });   // si rimedia con un tocco, come per pasti e ingredienti
+      const nomeVoce = sd.dataset.spesaDel, prima = leggiExtraSpesa(), qtaPrima = leggiQtaSpesa();
+      salvaExtraSpesa(prima.filter(x => x !== nomeVoce)); impostaQtaSpesa(nomeVoce, ""); if (_spesaMod === nomeVoce) _spesaMod = null; renderSpesa();
+      avviso(`Tolto: ${nomeVoce.toLowerCase()}`, "Annulla", () => { salvaExtraSpesa(prima); salvaQtaSpesa(qtaPrima); renderSpesa(); });   // si rimedia con un tocco, come per pasti e ingredienti
       return;
     }
+    // la quantità di una voce: tocchi la riga → − [3 confezioni] ＋ OK
+    const smod = e.target.closest("[data-spesa-mod]");
+    if (smod) { const n = smod.dataset.spesaMod; _spesaMod = _spesaMod === n ? null : n; renderSpesa(); const i = document.getElementById("spesa-mod-qta"); if (i && !i.value) i.focus(); return; }
+    const sstep = e.target.closest("[data-spesa-step]");
+    if (sstep) { const i = document.getElementById("spesa-mod-qta"); if (i) i.value = cambiaQtaSpesa(i.value, +sstep.dataset.spesaStep, i.dataset.nome); return; }
+    if (e.target.closest("[data-spesa-mod-ok]")) { salvaQtaModificata(); return; }
+    if (e.target.closest("[data-spesa-mod-reset]")) { if (_spesaMod) impostaQtaSpesa(_spesaMod, ""); _spesaMod = null; renderSpesa(); return; }
     const elim = e.target.closest("[data-elimina]");
     if (elim) { eliminaRicetta(elim.dataset.elimina); return; }
     const mod = e.target.closest("[data-modifica]");
@@ -3192,6 +3353,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.id === "cerca-ingredienti") aggiornaListaRicette();
     if (e.target.id === "spesa-nuova") suggerimentiSpesa();
   });
+  document.getElementById("modal-content").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "spesa-mod-qta") { e.preventDefault(); salvaQtaModificata(); } });
 
   // Lista spesa: spunta una voce -> va in fondo (presa); togli la spunta -> torna in lista
   document.getElementById("modal-content").addEventListener("change", (e) => {
@@ -3199,6 +3361,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!chk) return;
     const presi = leggiPresi();
     if (chk.checked) presi.add(chk.dataset.spesa); else presi.delete(chk.dataset.spesa);
+    if (chk.checked && _spesaMod === chk.dataset.spesa) _spesaMod = null;
     segnaInCasa(chk.dataset.spesa, chk.checked, +chk.dataset.q || 0);
     salvaPresi(presi);
     const ul = document.getElementById("spesa");

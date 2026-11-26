@@ -1955,8 +1955,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // =============================================================
 //  «🎤 Detta» (barra in basso): «a colazione 150 g di yogurt greco e un cappuccino»
-//  Tieni premuto e parla, al rilascio si apre il pasto con gli alimenti da confermare.
-//  Dove il telefono non lo permette (o con un tocco breve) si apre un campo: lì si usa il 🎤 della tastiera.
+//  Tocca 🎤 e parla, poi ✓ Fatto: si apre il pasto con gli alimenti da confermare.
+//  Dove il telefono non lo permette si apre un campo: lì si usa il 🎤 della tastiera.
 // =============================================================
 // il pasto detto nella frase (e la frase senza quelle parole); null se non c'è
 // I pasti come si dicono a voce (le stesse regole per tutti i comandi):
@@ -2063,17 +2063,26 @@ const fraseDetta = (testo) => " " + String(testo || "").toLowerCase().replace(/[
 
 // 3) SPESA
 const SPESA_COMANDO = /(?:^|[^a-zà-ù])(?:lista della spesa|nella spesa|alla spesa|in spesa|sulla spesa|per la spesa|nella lista|alla lista|da comprare|devo comprare|dobbiamo comprare|compra|comprami|mi manca|mi mancano|ci manca|ci mancano|manca il|manca la|manca lo|mancano i|mancano le|mancano gli|(?:è|e') finit[oa]|sono finit[ie]|ho finito|abbiamo finito|non c'è più|non ci sono più)(?![a-zà-ù])/;
+// ogni voce con la sua quantità, se l'hai detta: «latte scremato Lidl tre confezioni» → { nome: "Latte scremato Lidl", qta: "3 confezioni" }
 function vociSpesaDaFrase(testo) {
+  // i nomi propri (marche, negozi: «Lidl», «Esselunga») restano con la maiuscola com'erano nel dettato
+  const maiusc = {}; String(testo || "").split(/\s+/).slice(1).forEach(w => { const p = w.replace(/[.,!?;:]/g, ""); if (/[A-ZÀ-Ù]/.test(p)) maiusc[p.toLowerCase()] = p; });
+  const ripristina = (x) => x.split(" ").map(w => maiusc[w] || w).join(" ");
   let t = fraseDetta(testo)
     .replace(/\b(?:aggiungi|aggiungimi|metti|mettimi|scrivi|segna|segnami|inserisci|ricordami di comprare|ricordati di comprare|devo comprare|dobbiamo comprare|da comprare|comprami|compra|mi mancano|mi manca|ci mancano|ci manca|mancano|manca|ho finito|abbiamo finito|sono finit[ie]|anche|per favore|grazie)\b/g, " ")
     .replace(/(?:non c'è più|non ci sono più|(?:è|e') finit[oaie])(?![a-zà-ù])/g, " ")
     .replace(/\b(?:alla|nella|in|sulla|per la|sulla mia|nella mia)\s+(?:mia\s+)?(?:lista(?:\s+della\s+spesa)?|spesa)\b/g, " ")
-    .replace(/\b(?:lista della spesa|spesa)\b/g, " ");
+    .replace(/\b(?:lista della spesa|spesa)\b/g, " ")
+    .replace(/\b(chil[oi]|kg|litr[oi]|l)\s+e\s+mezzo\b/g, "$1 emezzo");   // «un chilo e mezzo» non va diviso in due voci
   return t.replace(/[.!?;]/g, ",").split(/,|\s(?:e|ed|poi|più|piu)\s/)
-    .map(x => x.trim().replace(/^(?:(?:il|lo|la|i|gli|le|un|uno|una|del|dello|della|dei|degli|delle|qualche|un po' di|un po di|po' di|di)\s+|l'|un'|dell')+/, "").trim())
-    .filter(x => x.length >= 2)
-    .map(x => { const noto = vocePerSpesa(x); return noto || (typeof nomeVoceSpesa === "function" ? nomeVoceSpesa(x) : x.charAt(0).toUpperCase() + x.slice(1)); })
-    .filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i);
+    .map(x => {
+      const sep = typeof separaQtaSpesa === "function" ? separaQtaSpesa(x.trim().replace(/\bemezzo\b/, "e mezzo")) : { nome: x.trim(), qta: "" };
+      const nome = sep.nome.replace(/^(?:(?:il|lo|la|i|gli|le|un|uno|una|del|dello|della|dei|degli|delle|qualche|un po' di|un po di|po' di|di)\s+|l'|un'|dell')+/, "").trim();
+      return { nome, qta: sep.qta };
+    })
+    .filter(x => x.nome.length >= 2)
+    .map(x => { const noto = vocePerSpesa(x.nome); return { nome: noto || ripristina(typeof nomeVoceSpesa === "function" ? nomeVoceSpesa(x.nome) : x.nome.charAt(0).toUpperCase() + x.nome.slice(1)), qta: x.qta }; })
+    .filter((x, i, a) => a.findIndex(y => y.nome.toLowerCase() === x.nome.toLowerCase()) === i);
 }
 // «l'olio» detto a voce → la voce che c'è già nella lista o nella dispensa («Olio EVO»), così non ne nasce una seconda
 function vocePerSpesa(x) {
@@ -2082,27 +2091,51 @@ function vocePerSpesa(x) {
   return noti.find(v => norm(v) === norm(x)) || noti.find(v => new RegExp("^" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[a-z]?\\b").test(norm(v))) || null;
 }
 let _vociSpesaDetta = [];
+// «aggiungi … alla spesa»: prima di scrivere in lista si controlla qui (nome e quantità, con − e ＋); poi si apre la lista con le voci nuove in evidenza
 function apriConfermaSpesa(testo) {
   _vociSpesaDetta = vociSpesaDaFrase(testo);
   if (!_vociSpesaDetta.length) { avviso("Non ho capito cosa aggiungere alla spesa: riprova"); return true; }
+  // senza quantità detta: quella suggerita (quanto ne mangi di solito, o una confezione), che puoi cambiare
+  _vociSpesaDetta.forEach(v => { if (!v.qta && typeof suggerisciQtaSpesa === "function") { v.sugg = qtaBreve(suggerisciQtaSpesa(v.nome).info.replace(/^~\s*/, "")); v.qta = v.sugg; } });
   editCtx = null; liberoCtx = null;
   const disegna = () => {
     const c = document.getElementById("detta-spesa"); if (!c) return;
-    c.innerHTML = _vociSpesaDetta.map((v, i) => `<li class="voce"><span>🛒 ${esc(v)}</span><button class="lib-del" data-detta-spesa-del="${i}" aria-label="Togli ${esc(v)}">${ICONA_CESTINO}</button></li>`).join("") || `<li class="hint">Niente da aggiungere</li>`;
+    c.innerHTML = _vociSpesaDetta.map((v, i) => `<li class="voce detta-spesa-v">
+      <div class="detta-spesa-r"><input class="qta-input detta-spesa-nome" data-detta-spesa-nome="${i}" value="${esc(v.nome)}" aria-label="Nome" autocomplete="off"><button class="lib-del" data-detta-spesa-del="${i}" aria-label="Togli ${esc(v.nome)}">${ICONA_CESTINO}</button></div>
+      <div class="spesa-mod-r"><span class="detta-spesa-l">Quantità</span><button class="spesa-step" data-detta-spesa-step="${i}|-1" aria-label="Meno">−</button>
+      <input class="qta-input" data-detta-spesa-qta="${i}" value="${esc(v.qta)}" placeholder="es. 2 confezioni" autocomplete="off"><button class="spesa-step" data-detta-spesa-step="${i}|1" aria-label="Più">＋</button></div></li>`).join("") || `<li class="hint">Niente da aggiungere</li>`;
     const b = document.getElementById("detta-spesa-ok"); if (b) b.disabled = !_vociSpesaDetta.length;
   };
   openModal(`<h3 class="modal-title">🛒 Aggiungo alla lista della spesa</h3>
     <p class="detta-frase">«${esc(testo.trim())}»</p>
     <ul id="detta-spesa" class="detta-spesa"></ul>
-    <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="detta-spesa-ok">Aggiungi</button></div></div>`);
+    <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="detta-spesa-ok">✓ Aggiungi</button></div></div>`);
   disegna();
-  document.getElementById("detta-spesa").addEventListener("click", (e) => { const b = e.target.closest("[data-detta-spesa-del]"); if (b) { _vociSpesaDetta.splice(+b.dataset.dettaSpesaDel, 1); disegna(); } });
+  const lista = document.getElementById("detta-spesa");
+  lista.addEventListener("input", (e) => {
+    const n = e.target.dataset.dettaSpesaNome, q = e.target.dataset.dettaSpesaQta;
+    if (n !== undefined && _vociSpesaDetta[+n]) _vociSpesaDetta[+n].nome = e.target.value;
+    if (q !== undefined && _vociSpesaDetta[+q]) _vociSpesaDetta[+q].qta = e.target.value;
+  });
+  lista.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-detta-spesa-del]"); if (b) { _vociSpesaDetta.splice(+b.dataset.dettaSpesaDel, 1); disegna(); return; }
+    const st = e.target.closest("[data-detta-spesa-step]");
+    if (st) { const [i, d] = st.dataset.dettaSpesaStep.split("|"), v = _vociSpesaDetta[+i]; if (!v) return; v.qta = cambiaQtaSpesa(v.qta, +d, v.nome); const inp = lista.querySelector(`[data-detta-spesa-qta="${i}"]`); if (inp) inp.value = v.qta; }
+  });
   document.getElementById("detta-spesa-ok").addEventListener("click", () => {
+    // la quantità suggerita non cambiata non si fissa: in lista resta «suggerita» e segue quanto ne mangi
+    const voci = _vociSpesaDetta.map(v => ({ nome: String(v.nome || "").trim(), qta: String(v.qta || "").trim(), sugg: v.sugg })).filter(v => v.nome);
+    if (!voci.length) { closeModal(true); return; }
     const extra = leggiExtraSpesa(), presi = leggiPresi();
-    _vociSpesaDetta.forEach(v => { if (!extra.some(x => x.toLowerCase() === v.toLowerCase())) extra.push(v); presi.delete(v); });
+    voci.forEach(v => { if (!extra.some(x => x.toLowerCase() === v.nome.toLowerCase())) extra.push(v.nome); presi.delete(v.nome); if (v.qta && v.qta !== v.sugg) impostaQtaSpesa(v.nome, v.qta); });
     salvaExtraSpesa(extra); salvaPresi(presi);
     closeModal(true);
-    avviso(`🛒 In lista: ${_vociSpesaDetta.join(", ").toLowerCase()}`);
+    // si apre la lista: vedi dove sono finite (illuminate) e puoi ancora cambiarne la quantità
+    _spesaNuove = voci.map(v => v.nome);
+    apriSpesa(); segnaTab("altro");
+    setTimeout(() => { const el = document.querySelector("#spesa .voce.nuova"); if (el) el.scrollIntoView({ block: "center", behavior: "smooth" }); }, 120);
+    setTimeout(() => { _spesaNuove = []; document.querySelectorAll("#spesa .voce.nuova").forEach(x => x.classList.remove("nuova")); }, 2600);
+    avviso(`🛒 In lista: ${voci.map(v => v.nome + (v.qta ? " (" + v.qta + ")" : "")).join(", ")}`);
   });
   return true;
 }
@@ -2582,7 +2615,7 @@ function apriComandiVocali() {
   editCtx = null; liberoCtx = null;
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
-    <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla; rilascia per finire. Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
+    <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla: vedi l'onda e la frase mentre parli; lascia per finire. (Con un tocco breve resta in ascolto: ritocca 🎤 per finire.) Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
     <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es], k) => `<details class="cv-sez"${k === 0 ? " open" : ""}>
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
@@ -2591,10 +2624,10 @@ function apriComandiVocali() {
     <p class="cv-nota"><b>Giorni:</b> oggi, ieri, l'altro ieri, domani, dopodomani, stamattina e stasera (= oggi), lunedì…domenica, anche con «prossimo» o «scorso». Se non lo dici vale il giorno aperto in Oggi.</p>
     <p class="cv-nota"><b>Pasti:</b> colazione · spuntino di metà mattina (o «spuntino mattutino») · pranzo · merenda (anche «spuntino di pomeriggio», «spuntino pomeridiano», «pre-workout») · cena · dopo cena (anche «spuntino serale»). «Spuntino» da solo: se ne hai uno solo è quello, altrimenti quello del momento.</p>
     <p class="cv-nota"><b>Sport:</b> CrossFit, pesi/palestra, funzionale, corsa, camminata, bici, nuoto, yoga/pilates, padel/tennis, ballo, equitazione, calcio/pallavolo/basket e quelli che hai aggiunto tu (per nome).</p>
-    <p class="cv-nota">Se il microfono dell'app non funziona, un tocco breve su Detta apre un campo: lì usa il 🎤 della tastiera, le frasi sono le stesse.</p>`);
+    <p class="cv-nota">Se il microfono dell'app non funziona, Detta apre un campo: lì usa il 🎤 della tastiera, le frasi sono le stesse.</p>`);
   const b = document.querySelector("[data-cv-altro]"); if (b) b.addEventListener("click", () => { closeModal(true); apriMenu(); segnaTab("altro"); });
 }
-// tocco breve, o telefono senza riconoscimento vocale: il campo dove scrivere (o dettare con la tastiera)
+// telefono senza riconoscimento vocale (o microfono non permesso): il campo dove scrivere (o dettare con la tastiera)
 function apriDettaTesto(nota) {
   editCtx = null; liberoCtx = null;
   openModal(`<h3 class="modal-title">🎤 Cosa hai mangiato?</h3>
@@ -2608,9 +2641,8 @@ function apriDettaTesto(nota) {
   const ta = document.getElementById("detta-oggi"); if (ta) ta.focus();
   document.getElementById("detta-oggi-invia").addEventListener("click", () => { const v = document.getElementById("detta-oggi").value; if (!v.trim()) { avviso("Scrivi o detta cosa hai mangiato"); return; } closeModal(true); inviaDettato(v); });
 }
-// tieni premuto e parla: il tasto «Detta» della barra in basso. Con un pasto aperto quello che dici va in quel pasto;
-// altrimenti nel pasto che nomini («a colazione…») o in quello che scegli
-// tocco breve: solo il promemoria «Tieni premuto per parlare» (il microfono non parte)
+// tieni premuto e parla: il tasto «Detta» della barra in basso (come i vocali di WhatsApp: l'onda e la frase mentre parli, lasci per finire).
+// Con un pasto aperto quello che dici va in quel pasto; altrimenti nel pasto che nomini («a colazione…») o in quello che scegli
 // dove il microfono dell'app non funziona: dalla barra il campo per scrivere, nel pasto la ricerca (lì si detta con il 🎤 della tastiera)
 // c'è un pasto aperto (il suo pannello, con il campo di ricerca)? allora si detta in quello
 const pastoApertoPerDetta = () => !!(liberoCtx && liberoCtx.vivo && !document.getElementById("modal").hidden && document.getElementById("lib-input"));
@@ -2623,6 +2655,8 @@ function micRipiego(modo, nota) {
   apriDettaTesto(nota);
 }
 function micTesto(modo, testo) {
+  // con la lista della spesa aperta quello che dici va in lista («latte scremato tre confezioni»), anche senza «alla spesa»
+  if (document.getElementById("spesa-nuova") && !document.getElementById("modal").hidden) { apriConfermaSpesa(testo); return; }
   if (pastoApertoPerDetta()) modo = "pasto";
   if (modo === "pasto" && liberoCtx && SPESA_COMANDO.test(fraseDetta(testo))) { apriConfermaSpesa(testo); return; }   // «aggiungi albumi alla spesa» anche da dentro un pasto
   if (modo === "pasto" && liberoCtx) {   // dentro un pasto si resta in quel pasto: «a cena…» detto nel pranzo va nel pranzo
@@ -2632,89 +2666,172 @@ function micTesto(modo, testo) {
 }
 (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null, premuto = false, testoFinale = "", testoParziale = "", velo = null, errore = null, partito = false, finito = true, modo = "barra", bottone = null, attesa = null, timerPromemoria = null;
-  // un riquadro solo: su iPhone il tocco può arrivare due volte e ne restava uno «Ti ascolto…» sopra la scelta del pasto
+  // stato: null (spento) · "avvio" (il microfono si sta accendendo: NON ti sente ancora) · "ascolto" (ti sente) · "chiudo" (finito, aspetto le ultime parole)
+  let stato = null, rec = null, testoGiri = "", testoGiro = "", errore = null, partito = false, modo = "barra", bottone = null;
+  let ultimoTocco = 0, inizioAscolto = 0, giri = 0, timerFine = null, timerOnda = null, timerAvvio = null, timerSente = null;
+  let premuto = false, premutoDa = 0, daRiprovare = false, toccoFinito = false;   // tenuto premuto · il telefono non ha acceso il microfono col dito appoggiato: si riprova al rilascio
+  // l'onda sonora si muove con la voce che il telefono sta riconoscendo (niente secondo microfono: su iPhone fermava il riconoscimento)
+  let livello = 0, storia = [];
+  const N_BARRE = 28;
+  const testoTutto = () => (testoGiri + " " + testoGiro).replace(/\s+/g, " ").trim();
+  const disegnaOnda = () => {
+    const box = document.querySelector(".detta-velo .detta-barre"); if (!box) return;
+    const vivo = stato === "ascolto";
+    livello *= 0.8;
+    storia.push(vivo ? livello : 0); if (storia.length > N_BARRE) storia.shift();
+    const barre = box.children, t = Date.now();
+    for (let i = 0; i < barre.length; i++) {
+      const v = storia[i - (N_BARRE - storia.length)] || 0;
+      // nel silenzio le barre «respirano» un poco: si vede che il microfono è acceso e aspetta
+      const h = vivo ? Math.max(0.14 + 0.08 * Math.sin(t / 240 + i * 0.6), v) : 0.08;
+      barre[i].style.transform = `scaleY(${h.toFixed(3)})`;
+    }
+  };
   const togliTuttiVeli = () => document.querySelectorAll(".detta-velo").forEach(v => v.remove());
+  // il riquadro: l'onda sonora e la frase che si scrive mentre parli. Tenendo premuto si finisce lasciando; con un tocco, ritoccando 🎤
+  const aggiornaVelo = () => {
+    const velo = document.querySelector(".detta-velo"); if (!velo) return;
+    velo.dataset.stato = stato || "";
+    const t = testoTutto(), l = velo.querySelector(".detta-live");
+    if (l) { l.textContent = t || (stato === "ascolto" ? (premuto ? "Parla… poi lascia" : "Parla… poi tocca 🎤 per finire") : ""); l.classList.toggle("vuoto", !t); l.scrollTop = l.scrollHeight; }
+  };
   const mostraVelo = () => {
     togliTuttiVeli();
-    velo = document.createElement("div"); velo.className = "detta-velo";
-    velo.innerHTML = `<div class="detta-bolla"><div class="detta-onda">🎤</div><p class="detta-stato">Ti ascolto… rilascia per finire</p><p class="detta-live"></p></div>`;
+    const velo = document.createElement("div"); velo.className = "detta-velo";
+    velo.innerHTML = `<div class="detta-bolla" role="status" aria-live="polite">
+      <div class="detta-barre" aria-hidden="true">${"<i></i>".repeat(N_BARRE)}</div>
+      <p class="detta-live"></p></div>`;
     document.body.appendChild(velo);
+    storia = []; clearInterval(timerOnda); timerOnda = setInterval(disegnaOnda, 70);
+    aggiornaVelo();
   };
-  const aggiornaVelo = () => { const l = velo && velo.querySelector(".detta-live"); if (l) l.textContent = (testoFinale + " " + testoParziale).trim(); };
-  const togliVelo = () => { togliTuttiVeli(); velo = null; };
-  // tocco breve: il riquadro grande con «Tieni premuto per parlare» per un paio di secondi, come WhatsApp (niente schermate)
-  const promemoria = () => {
-    togliTuttiVeli(); clearTimeout(timerPromemoria);
-    const p = document.createElement("div"); p.className = "detta-velo promemoria";
-    p.innerHTML = `<div class="detta-bolla"><div class="detta-onda">🗣️</div><p class="detta-stato">Tieni premuto e parla</p><p class="detta-live">es. «a pranzo 150 g di riso e un'insalata»</p></div>`;
-    document.body.appendChild(p);
-    timerPromemoria = setTimeout(() => p.remove(), 3000);   // c'è anche l'esempio da leggere
+  const staccaRec = () => { if (rec) { const r = rec; rec = null; r.onend = null; r.onresult = null; r.onerror = null; r.onstart = null; r.onaudiostart = null; try { r.abort(); } catch (e) {} } };
+  const spegni = () => {
+    stato = null; premuto = false; daRiprovare = false; clearTimeout(timerFine); clearTimeout(timerAvvio); clearTimeout(timerSente); clearInterval(timerOnda); timerOnda = null;
+    if (bottone) bottone.classList.remove("ascolta", "avvio");
+    togliTuttiVeli();
   };
   const finisci = () => {
-    if (finito) return; finito = true;
-    const testo = (testoFinale + " " + testoParziale).trim();
-    togliVelo();
-    // un tocco solo un po' più lungo (il dito tolto entro un secondo, nessuna parola): è un tocco, non un microfono che non va → solo il promemoria
-    if (!testo && errore !== "not-allowed" && errore !== "service-not-allowed" && Date.now() - inizioAscolto < 1200) { promemoria(); return; }
-    if (errore === "not-allowed" || errore === "service-not-allowed" || (!partito && !testo)) {
-      micRipiego(modo, errore === "not-allowed" ? "Il microfono non è permesso per questa app: usa il 🎤 della tastiera (o permettilo nelle impostazioni del telefono)." : "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return;
+    if (!stato) return;
+    const testo = testoTutto(), err = errore, ok = partito;
+    staccaRec(); spegni();
+    if (testo) { micTesto(modo, testo); return; }
+    if (!ok && err === "service-not-allowed") {   // su iPhone: la Dettatura è spenta
+      micRipiego(modo, "Il riconoscimento vocale è spento: su iPhone attiva Impostazioni → Generali → Tastiera → Abilita dettatura. Intanto puoi usare il 🎤 della tastiera."); return;
     }
-    if (!testo) { avviso("Non ho sentito niente: tieni premuto mentre parli"); return; }
-    micTesto(modo, testo);
+    if (!ok && err === "not-allowed") {
+      micRipiego(modo, "Il microfono non è permesso per questa app: permettilo nelle impostazioni del telefono (Safari → Microfono). Intanto puoi usare il 🎤 della tastiera."); return;
+    }
+    if (!ok) { micRipiego(modo, "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
+    avviso("Non ho sentito niente, riprova");
   };
-  // un «giro» di ascolto. L'iPhone smette di ascoltare da solo dopo un attimo di silenzio: finché tieni premuto si riparte,
+  // di nuovo 🎤: il telefono consegna le ultime parole, poi si va avanti
+  const fatto = () => {
+    if (!stato || stato === "chiudo") return;
+    if (stato === "avvio" && !partito) { annulla(); return; }   // ritoccato prima che si accendesse: si annulla e basta
+    stato = "chiudo"; aggiornaVelo();
+    if (bottone) bottone.classList.remove("ascolta", "avvio");
+    if (typeof vibra === "function") vibra();
+    try { rec ? rec.stop() : finisci(); } catch (e) { finisci(); }
+    clearTimeout(timerFine); timerFine = setTimeout(finisci, 1200);   // se il telefono non avvisa della fine, si va avanti lo stesso
+  };
+  const annulla = () => { if (!stato) return; staccaRec(); spegni(); };
+  const sente = () => {
+    if (stato !== "avvio") return;
+    partito = true; stato = "ascolto"; clearTimeout(timerAvvio); clearTimeout(timerSente);
+    if (bottone) { bottone.classList.remove("avvio"); bottone.classList.add("ascolta"); }
+    if (typeof vibra === "function") vibra();   // un tic: ora ti sente
+    aggiornaVelo();
+  };
+  // un «giro» di ascolto. L'iPhone smette di ascoltare da solo dopo un attimo di silenzio: finché non tocchi Fatto si riparte,
   // e quello già sentito resta (così si può fare una pausa, o cominciare a parlare con calma)
-  let inizioAscolto = 0, giri = 0;
   const ascolta = () => {
     const r = new SR(); rec = r; r.lang = "it-IT"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
-    r.onstart = () => { partito = true; };
-    r.onresult = (e) => { if (rec !== r) return; testoParziale = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const x = e.results[i]; if (x.isFinal) testoFinale += " " + x[0].transcript; else testoParziale += x[0].transcript; } aggiornaVelo(); };
+    testoGiro = "";
+    // «Ti sento» quando il microfono è davvero acceso (audiostart); dove non c'è, poco dopo l'avvio
+    r.onaudiostart = () => { if (rec === r) sente(); };
+    r.onstart = () => { if (rec === r && stato === "avvio") { clearTimeout(timerSente); timerSente = setTimeout(sente, 300); } };
+    r.onspeechstart = r.onsoundstart = () => { if (rec === r) livello = Math.max(livello, 0.4); };
+    r.onresult = (e) => {
+      if (rec !== r) return;
+      sente();
+      // il testo del giro si ricostruisce ogni volta da tutti i risultati: su iPhone gli stessi risultati arrivano più volte e il testo si raddoppiava
+      const pezzi = [];
+      for (let i = 0; i < e.results.length; i++) {
+        const x = (e.results[i][0] && e.results[i][0].transcript || "").trim(); if (!x) continue;
+        const prima = pezzi[pezzi.length - 1];
+        if (prima && (x === prima || x.startsWith(prima))) pezzi[pezzi.length - 1] = x;   // lo stesso pezzo ripetuto (o allungato)
+        else if (!(prima && prima.endsWith(x))) pezzi.push(x);
+      }
+      const nuovo = pezzi.join(" ");
+      if (nuovo.length !== testoGiro.length) livello = Math.max(livello, 0.55 + Math.random() * 0.45);
+      testoGiro = nuovo;
+      aggiornaVelo();
+    };
     r.onerror = (e) => { if (rec === r) errore = e.error || "errore"; };
     r.onend = () => {
       if (rec !== r) return;
-      if (testoParziale) { testoFinale += " " + testoParziale; testoParziale = ""; }   // l'ultima frase non ancora «definitiva» non si perde
-      const bloccato = errore === "not-allowed" || errore === "service-not-allowed";
-      if (premuto && !bloccato && giri < 20 && Date.now() - inizioAscolto < 60000) { giri++; errore = null; try { ascolta(); } catch (e) { finisci(); } return; }
-      if (premuto) { premuto = false; if (bottone) bottone.classList.remove("ascolta"); }   // un minuto (o il microfono bloccato): si chiude da solo, il riquadro non resta mai aperto
+      if (testoGiro) { testoGiri = (testoGiri + " " + testoGiro).trim(); testoGiro = ""; }
+      const bloccato = errore === "not-allowed" || errore === "service-not-allowed" || errore === "audio-capture";
+      // l'iPhone può rifiutare il microfono finché il dito è appoggiato (non è ancora un «tocco»): si aspetta il rilascio e si riprova lì
+      // (se il tocco è già finito non c'è più niente da aspettare: il microfono è proprio bloccato)
+      if (errore === "not-allowed" && !partito && !daRiprovare && !toccoFinito && stato === "avvio" && Date.now() - inizioAscolto < 1500) { daRiprovare = true; rec = null; return; }
+      // si riparte anche se si è fermato prima di sentirti (su iPhone capita un «no-speech» appena acceso): al massimo 5 secondi, poi il campo per scrivere
+      if ((stato === "ascolto" || stato === "avvio") && !bloccato && giri < 40 && Date.now() - inizioAscolto < 90000) {
+        giri++; errore = null;
+        try { ascolta(); } catch (x) { finisci(); }   // se il telefono non lascia ripartire: si tiene quello già detto
+        return;
+      }
       finisci();
     };
     r.start();
   };
-  const avvia = () => {
-    testoFinale = ""; testoParziale = ""; errore = null; partito = false; giri = 0; inizioAscolto = Date.now();
-    if (rec) { try { rec.onend = null; rec.abort(); } catch (e) {} rec = null; }   // un ascolto alla volta
-    try {
-      ascolta(); mostraVelo();
-    } catch (e) { rec = null; finito = true; togliVelo(); micRipiego(modo, "Su questo telefono il microfono dell'app non è disponibile: usa il 🎤 della tastiera."); }
+  const avvia = (b) => {
+    modo = b.dataset.mic; bottone = b;
+    if (!SR) { micRipiego(modo); return; }
+    testoGiri = ""; testoGiro = ""; errore = null; partito = false; giri = 0; inizioAscolto = Date.now(); livello = 0; daRiprovare = false;
+    staccaRec();   // un ascolto alla volta
+    stato = "avvio"; b.classList.add("avvio");
+    mostraVelo();
+    try { ascolta(); }
+    catch (e) { staccaRec(); spegni(); micRipiego(modo, "Su questo telefono il microfono dell'app non è disponibile: usa il 🎤 della tastiera."); return; }
+    // il microfono non si accende entro 5 secondi: il campo per scrivere (o dettare con la tastiera)
+    timerAvvio = setTimeout(() => { if (stato === "avvio") finisci(); }, 5000);
   };
-  const rilascia = () => {
-    if (!premuto) return; premuto = false; if (bottone) bottone.classList.remove("ascolta");
-    if (!attesa && typeof vibra === "function") vibra();   // un tic al rilascio (dentro il tocco: su iPhone si sente)
-    if (attesa) { clearTimeout(attesa); attesa = null; finito = true; if (SR) promemoria(); else micRipiego(modo); return; }   // tocco breve
-    try { rec ? rec.stop() : finisci(); } catch (e) { finisci(); }
-    setTimeout(finisci, 1500);   // se il telefono non avvisa della fine, si va avanti lo stesso
-  };
+  // 🎤 Detta: tieni premuto e parla, lascia per finire (come i vocali di WhatsApp). Con un tocco breve resta in ascolto: ritocchi 🎤 per finire.
   document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest("[data-mic]")) e.preventDefault(); });
   document.addEventListener("pointerdown", (e) => {
     const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
-    e.preventDefault(); if (premuto) return;   // il doppio tocco dell'iPhone: uno solo
-    if (attesa) clearTimeout(attesa);
-    modo = b.dataset.mic; bottone = b; premuto = true; finito = false;
-    if (typeof vibra === "function") vibra();   // un tic appena premi, come WhatsApp (nell'istante del tocco: su iPhone si sente)
-    if (!SR) { attesa = setTimeout(() => {}, 0); return; }   // senza riconoscimento vocale: al rilascio il ripiego
-    b.classList.add("ascolta");
-    // il microfono parte solo se tieni premuto un attimo: un tocco breve mostra solo il promemoria (senza chiedere il permesso del microfono)
-    attesa = setTimeout(() => { attesa = null; if (premuto) avvia(); }, 250);
+    e.preventDefault();
+    if (Date.now() - ultimoTocco < 400) return;   // il doppio tocco dell'iPhone: uno solo
+    ultimoTocco = Date.now();
+    if (stato) { fatto(); return; }   // in ascolto dopo un tocco breve: questo tocco finisce
+    if (typeof vibra === "function") vibra();
+    premuto = true; premutoDa = Date.now(); toccoFinito = false;
+    avvia(b);   // subito, senza attese: si parla appena compare l'onda
   });
-  document.addEventListener("pointerup", rilascia); document.addEventListener("pointercancel", rilascia);
-  // sicurezze: su iPhone a volte il rilascio non arriva come «pointer»; e se l'app va in secondo piano si chiude tutto
-  document.addEventListener("touchend", rilascia); document.addEventListener("touchcancel", rilascia);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) rilascia(); });
-  // il riquadro «Ti ascolto…» si può anche toccare per finire (se il telefono non ha avvisato del rilascio)
+  const rilascia = () => {
+    if (!premuto) return; premuto = false;
+    if (!stato || stato === "chiudo") return;
+    if (Date.now() - premutoDa > 600 && partito) { fatto(); return; }   // tenuto premuto mentre parlavi: lasciando è finito
+    aggiornaVelo();   // tocco breve (o microfono non ancora acceso): resta in ascolto, si finisce ritoccando 🎤
+  };
+  document.addEventListener("pointerup", rilascia); document.addEventListener("touchend", rilascia);
+  // il telefono «perde» il dito (es. una notifica): resta in ascolto, si finisce ritoccando 🎤
+  document.addEventListener("pointercancel", () => { if (premuto) { premuto = false; aggiornaVelo(); } });
+  // il rilascio è un vero tocco: se col dito appoggiato il telefono non ha acceso il microfono, si riprova qui
   document.addEventListener("click", (e) => {
-    if (!(e.target.closest && e.target.closest(".detta-velo:not(.promemoria)"))) return;
-    premuto = false; if (bottone) bottone.classList.remove("ascolta");   // il dito è sul riquadro: non sta più tenendo premuto «Detta»
-    try { rec && rec.stop(); } catch (x) {} setTimeout(finisci, 600);
+    const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
+    e.preventDefault(); toccoFinito = true;
+    if (stato === "avvio" && daRiprovare) { daRiprovare = false; errore = null; try { ascolta(); } catch (x) { finisci(); } }
   });
+  // l'app va in secondo piano: quello già detto si tiene
+  document.addEventListener("visibilitychange", () => { if (document.hidden && stato) fatto(); });
+  // mentre ascolta i tocchi sul resto della pagina non fanno niente (niente pasti aperti per sbaglio); il riquadro toccato finisce, come 🎤
+  document.addEventListener("click", (e) => {
+    if (!stato || !e.target.closest) return;
+    if (e.target.closest(".detta-bolla")) { e.preventDefault(); fatto(); return; }
+    if (e.target.closest("[data-mic]")) return;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
 })();
