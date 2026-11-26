@@ -264,10 +264,18 @@ function vpAlimentazione(t) {
 }
 
 // ---------- 9) I pasti che fai: «non faccio più lo spuntino», «faccio anche la merenda» ----------
+// le sole parole che possono esserci in questo comando (tutto il resto è un cibo: allora non è questo comando)
+const PAROLE_PASTI_SCELTI = new Set(("il lo la l i gli le un una uno a ad al alla allo ai agli alle di del della dello dei degli delle da dal dalla dallo dai dagli dalle e ed anche più piu sempre ora " +
+  "miei mie mio mia tra fra nei nel nella negli nelle per favore grazie ogni giorno giorni tutti tutte voglio vorrei faccio fare fai comincio cominciare inizio rimetti rimettimi metti mettimi aggiungi aggiungimi " +
+  "togli toglimi elimina eliminami salto saltare niente non no pasto pasti mattina mattutino pomeriggio pomeridiano pomeridiana sera serale dopo cena dopocena spuntino spuntini merenda colazione pranzo cena " +
+  "quello quella lista miei").split(/\s+/));
 function vpPastiScelti(t) {
   const togli = /\b(?:non faccio(?: più)?|salto(?: sempre)?|niente più|togli(?:mi)?|elimina|non voglio più)\b/.test(t), metti = /\b(?:faccio anche|aggiungi(?:mi)?|da ora faccio|comincio a fare|voglio anche|rimetti)\b/.test(t);
   if (!(togli || metti) || !/\b(?:pasti|pasto|faccio|salto|spuntino|merenda|colazione|dopo\s*cena|dopocena)\b/.test(t)) return false;
   if (togli && !/\b(?:non faccio|salto|niente più|non voglio più|dai (?:miei )?pasti|pasto)\b/.test(t)) return false;
+  // c'è un cibo nella frase («aggiungi brownie a colazione», «togli il pane dal pranzo»): è un alimento del pasto, non i pasti che fai
+  const resto = t.replace(/[.,!?;:']/g, " ").split(/\s+/).filter(w => w && !PAROLE_PASTI_SCELTI.has(w));
+  if (resto.length) return false;
   const pf = leggiProfilo(), prima = Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_BASE.slice();
   const p = vpTrovaPasti(t.replace(/\bpasti\b/g, " ")).map(x => x.p).filter((x, i, a) => a.indexOf(x) === i);
   // trovaPasti sceglie lo spuntino «del momento»: qui «spuntino» da solo è quello della mattina

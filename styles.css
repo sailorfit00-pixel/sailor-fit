@@ -2404,3 +2404,4 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 /* Detta: l'onda e, sotto, la frase che si scrive mentre parli */
 .detta-bolla { max-width: 420px; padding: 14px 18px; border-radius: 22px; }
 .detta-barre { height: 44px; }
+.detta-diag { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); opacity: .8; word-break: break-all; }
