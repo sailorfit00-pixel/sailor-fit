@@ -2234,8 +2234,7 @@ function comandoSostituisci(testo) {
     const nn = norm(i.nome), ok = nn.includes(norm(x)) || nn.includes(xn) || norm(x).split(" ").filter(w => w.length > 2).every(w => nn.includes(w.replace(/i$|e$/, "")));
     if (ok) trovati.push({ pi, ii, nome: i.nome, qta: g, pasto: p.pasto });
   }); });
-  const dove = `${pasto ? nomePasto(pasto, data) + " di " : "pasti di "}${nomeGiornoDetta(data)}`;
-  if (!trovati.length) { avviso(`Non trovo «${x}» nei ${pasto ? "" : ""}${dove}`); return true; }
+  if (!trovati.length) { avviso(`Non trovo «${x}» ${dovePastoDetta(pasto, data)}`); return true; }
   // il nuovo alimento (con i grammi, se li hai detti)
   let r = null; try { r = leggiRigaIngrediente(y); } catch (e) {}
   let nuovo = r && r.nome && A[r.nome] ? r.nome : (cercaAlimenti(y) || []).find(n => A[n]);
@@ -2330,7 +2329,7 @@ function comandoAllenamento(testo) {
   const g = giorniNellaFrase(t), data = g.length ? dataDelGiorno(g[0], /\b(?:ho fatto|ho corso|ho camminato|mi sono allenat|ho nuotato|ho pedalato|ho ballato)/.test(t) ? -1 : 1) : dataDetta();
   if (riposo) { vaiAlGiornoDetta(data); apriAllenamentiGiorno(data, "riposo"); return true; }
   const mancanti = sport.filter(s => !s.sp);
-  if (mancanti.length && mancanti.length === sport.length) { avviso(`«${mancanti[0].parola}» non è tra i tuoi sport: aggiungilo nel Profilo`); return true; }
+  if (mancanti.length && mancanti.length === sport.length) { avviso(`«${mancanti[0].parola}» non è tra i tuoi sport: di' «aggiungi lo sport ${mancanti[0].parola}»`); return true; }
   let ids = sport.filter(s => s.sp).map(s => s.sp.id);
   if (!ids.length) ids = sportDelTipo(giornoDiario(data).tipo);   // solo l'ora («mi alleno alle 18»): gli sport già scelti per quel giorno
   if (!ids.length) { avviso("Dimmi anche che sport fai (es. «alle 18 pesi»)"); return true; }
@@ -2403,6 +2402,66 @@ function comandoKcalGiorni(testo) {
   return true;
 }
 
+// 9) TOGLI o CAMBIA LA QUANTITÀ di un alimento già scritto: «togli il pane dal pranzo», «togli il pollo dalla cena di ieri», «porta il riso a 200 grammi», «metti 150 g di pollo a cena»
+// gli alimenti di quel giorno (solo quel pasto, se lo dici) che corrispondono alla parola detta
+// «nel pranzo di oggi», «nella cena di ieri», «nello spuntino di domani», «nei pasti di oggi»
+function dovePastoDetta(p, data) {
+  const g = nomeGiornoDetta(data); if (!p) return `nei pasti di ${g}`;
+  const n = nomePasto(p, data), art = /^(?:cena|colazione|merenda)$/.test(n) ? "nella" : /^s[^aeiou]/.test(n) ? "nello" : "nel";
+  return `${art} ${n} di ${g}`;
+}
+function ingredientiDetti(x, data, pasto) {
+  const xn = norm(x).replace(/i$|e$/, ""), out = [];
+  (giornoDiario(data).pasti || []).forEach((p, pi) => { if (pasto && p.pasto !== pasto) return; (p.ingredienti || []).forEach((i, ii) => {
+    const g = grammiIng(i); if (!(g > 0) || i.unita === "q.b.") return;
+    const nn = norm(i.nome), ok = nn.includes(norm(x)) || nn.includes(xn) || norm(x).split(" ").filter(w => w.length > 2).every(w => nn.includes(w.replace(/i$|e$/, "")));
+    if (ok) out.push({ pi, ii, nome: i.nome, qta: g, pasto: p.pasto });
+  }); });
+  return out;
+}
+function comandoTogliPorta(testo) {
+  let t = fraseDetta(testo), m, tipo = null, x = null, nuovaQ = 0;
+  if ((m = t.match(/^\s*(?:togli|toglimi|rimuovi|elimina|cancella|leva|levami)\s+(.+)$/))) { tipo = "togli"; x = m[1]; }
+  else if ((m = t.match(/^\s*(?:porta|porti|metti|aumenta|diminuisci|riduci|cambia)\s+(.+?)\s+(?:a|da\s+\d+\s+a)\s+(\d{1,4}(?:[.,]\d)?)\s*(?:g|grammi|gr|ml|millilitri)\b(.*)$/))) { tipo = "porta"; x = m[1] + " " + m[3]; nuovaQ = Math.round(parseFloat(m[2].replace(",", "."))); }
+  if (!tipo) return false;
+  const giorni = giorniNellaFrase(t), data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta();
+  let s = togliGiorni(" " + x + " ", giorniNellaFrase(" " + x + " "));
+  const pasti = pastiNellaFrase(" " + s + " ", data), pasto = pasti.length ? pasti[0].p : null;
+  pasti.slice().sort((a, b) => b.i - a.i).forEach(p => { s = (" " + s + " ").slice(0, p.i) + " " + (" " + s + " ").slice(p.i + p.l); });
+  s = s.replace(/\b(?:dal|dalla|dallo|dai|dalle|del|della|dello|di|nel|nella|in|a|al|alla)\s*$/, "").replace(/\s+(?:dal|dalla|dallo|dai|dalle|del|della|nel|nella|in)\s*$/, "").replace(/[.,!?]/g, " ").trim().replace(ARTICOLI_DETTA, "").trim();
+  if (normCibo(s).length < 3) return false;
+  const trovati = ingredientiDetti(s, data, pasto);
+  if (!trovati.length) {
+    if (tipo === "togli" && !pasto && !giorni.length) return false;   // non è nei pasti: forse è altro (si prova con gli altri comandi)
+    avviso(`Non trovo «${s}» ${dovePastoDetta(pasto, data)}`); return true;
+  }
+  if (tipo === "porta" && !(nuovaQ >= 1 && nuovaQ <= 2000)) return false;
+  const conferma = (v) => {
+    const d0 = macroAlimento(v.nome, v.qta), d1 = tipo === "togli" ? { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 } : macroAlimento(v.nome, nuovaQ);
+    const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
+    openModal(`<h3 class="modal-title">${tipo === "togli" ? "🗑️" : "⚖️"} ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
+      <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span>${tipo === "togli" ? "<b>tolto</b>" : `<b>${nuovaQ} g</b>`}</span></div>
+      <p class="hint">${numeriMossa(d)}</p>
+      <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn${tipo === "togli" ? " btn-danger" : ""}" id="voce-tp-ok">${tipo === "togli" ? "Togli" : "Salva"}</button></div></div>`);
+    document.getElementById("voce-tp-ok").addEventListener("click", () => {
+      const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
+      const ingrPrima = clone(p.ingredienti);
+      if (tipo === "togli") p.ingredienti.splice(v.ii, 1);
+      else p.ingredienti[v.ii] = { nome: ing.nome, qta: nuovaQ, unita: UNITA_LIQUIDI.test(ing.nome) ? "ml" : "g", lock: true, cercato: ing.cercato || ing.nome };
+      if (!p.ingredienti.length) g.pasti.splice(v.pi, 1); else { delete p.auto; rinominaLibero(p, ingrPrima); aggiornaMacro(p); }
+      scriviGiorno(data, g);
+      closeModal(true); if (typeof renderOggi === "function") renderOggi();
+      avviso(tipo === "togli" ? `Tolto: ${v.nome.toLowerCase()}` : `${v.nome}: ${nuovaQ} g`);
+    });
+  };
+  editCtx = null; liberoCtx = null; vaiAlGiornoDetta(data);
+  if (trovati.length === 1) { conferma(trovati[0]); return true; }
+  openModal(`<h3 class="modal-title">Quale ${esc(s)}?</h3>
+    <div class="detta-pasti">${trovati.map((v, k) => `<button class="btn-sec" data-voce-tp="${k}">${ICONA_PASTO[v.pasto] || "🍽️"} ${esc(NomePasto(v.pasto, data))}: ${esc(v.nome.toLowerCase())} ${Math.round(v.qta)} g</button>`).join("")}</div>`);
+  document.querySelectorAll("[data-voce-tp]").forEach(b => b.addEventListener("click", () => conferma(trovati[+b.dataset.voceTp])));
+  return true;
+}
+
 function inviaDettato(testo) {
   document.querySelectorAll(".detta-velo").forEach(v => v.remove());   // sicurezza: niente «Ti ascolto…» sopra la scelta del pasto
   testo = String(testo || "").trim();
@@ -2411,8 +2470,10 @@ function inviaDettato(testo) {
   if (comandoDomanda(testo)) return;
   if (comandoPeso(testo)) return;
   if (comandoKcalGiorni(testo)) return;
+  if (typeof comandoProfilo === "function" && comandoProfilo(testo)) return;   // Profilo e spostamenti (voce-profilo.js)
   if (SPESA_COMANDO.test(fraseDetta(testo))) { apriConfermaSpesa(testo); return; }
   if (comandoSostituisci(testo)) return;
+  if (comandoTogliPorta(testo)) return;
   const cp = comandoCopia(testo); if (cp) { eseguiCopia(cp); return; }
   if (comandoAllenamento(testo)) return;
   // un altro giorno («domani a pranzo…», «giovedì a cena…»): si scrive in quel giorno
@@ -2448,6 +2509,8 @@ const COMANDI_VOCALI = [
     ["rifai il pranzo di ieri anche oggi", "ripeti la colazione di ieri", "copia la cena di lunedì su giovedì", "copia il pranzo di oggi anche a cena", "metti domani lo stesso pranzo di oggi", "rifai come ieri a cena"]],
   ["🔄", "Sostituire un alimento", "Carne, pesce, uova e latticini: stesse proteine. Il resto: stesse calorie. Se dici i grammi valgono quelli. Funziona sui pasti già scritti.",
     ["sostituisci il pollo con il tacchino", "cambia il riso con le patate a cena", "metti il merluzzo al posto del pollo domani", "tacchino invece del pollo", "sostituisci il pollo con 150 g di tacchino"]],
+  ["✂️", "Togliere o cambiare la quantità", "Su un alimento già scritto: prima vedi cosa cambia, poi confermi.",
+    ["togli il pane dal pranzo", "togli il pollo dalla cena di ieri", "porta il riso a 200 grammi", "porta il riso del pranzo a 150 g", "metti l'olio a 5 grammi"]],
   ["🛒", "Lista della spesa", "Vedi le voci capite (con il cestino ne togli una), poi tocchi Aggiungi.",
     ["aggiungi albumi alla spesa", "mi manca il pollo", "devo comprare gli albumi e le zucchine", "ho finito lo yogurt greco", "non c'è più il pane", "scrivi nella spesa detersivo piatti e carta forno"]],
   ["⚖️", "Peso", "Vale per oggi o per i giorni passati. Vedi la differenza dall'ultima pesata, poi Salva.",
@@ -2460,6 +2523,26 @@ const COMANDI_VOCALI = [
     ["imposta martedì e mercoledì 1800 calorie, giovedì e venerdì 1200", "sabato 2000 kcal", "domani 1500 calorie", "metti 1600 calorie a lunedì prossimo"]],
   ["🏋️", "Allenamento", "Si apre la scheda Allenamenti del giorno già compilata: controlli e tocchi ✓ Salva. Lo sport deve essere tra i tuoi (Profilo).",
     ["oggi ho fatto un'ora di CrossFit", "ho corso 6 km", "45 minuti di pesi e mezz'ora di camminata", "domani alle 7 di sera CrossFit", "mi alleno alle 18", "domani riposo", "oggi niente allenamento"]],
+  ["🗓️", "Settimana tipo", "Gli sport di ogni giorno della settimana tipo (vale per tutte le settimane). «Aggiungi» o «anche» aggiunge allo sport che c'è già.",
+    ["di solito il lunedì CrossFit e il giovedì equitazione", "il mercoledì riposo", "il sabato CrossFit e pesi", "dal lunedì al venerdì camminata", "nel weekend riposo", "il sabato CrossFit 90 minuti", "aggiungi pesi al venerdì di solito"]],
+  ["⏱️", "Durata e orario di solito degli sport", "La durata normale di uno sport e l'ora in cui ti alleni di solito (decide il pasto prima e quello dopo).",
+    ["la sala pesi di solito dura 75 minuti", "la corsa di solito 8 km", "di solito mi alleno alle 18", "il CrossFit di solito alle 7"]],
+  ["🏅", "I tuoi sport", "Aggiungere uno sport nuovo (con l'intensità) o toglierne uno.",
+    ["aggiungi lo sport arrampicata intensità media", "aggiungi lo sport nuoto intensa", "togli il ballo dai miei sport"]],
+  ["⏰", "Orari e pasti che fai", "A che ora mangi e quali pasti fai ogni giorno.",
+    ["pranzo alle 13:30", "di solito ceno alle 20", "la merenda alle 17", "colazione alle 7 e cena alle 20:30", "non faccio più lo spuntino", "faccio anche la merenda", "aggiungi il dopo cena ai miei pasti"]],
+  ["🥗", "Alimentazione e allergie", "Le ricette e i consigli con questi cibi non ti vengono più proposti.",
+    ["non mangio i funghi", "non mi piacciono i kiwi e i finocchi", "sono intollerante al lattosio", "sono allergica alle noci", "sono celiaca", "sono vegetariana", "non sono più vegetariana", "adesso mangio i funghi", "non sono più allergica alle noci"]],
+  ["✨", "Obiettivo e numeri", "Obiettivo, deficit, proteine, grassi, calorie scritte a mano, metabolismo basale.",
+    ["voglio mettere massa", "passa a mantenimento", "voglio definire", "deficit 15%", "proteine 2 grammi per chilo", "grassi 0,8 per chilo", "proteine 120 grammi al giorno", "obiettivo 1800 calorie al giorno", "calcolo automatico", "basale 1350", "basale automatico", "reintegra il 60% dell'allenamento"]],
+  ["🙋", "I tuoi dati", "Il metabolismo basale (se lo calcola l'app) si aggiorna da solo.",
+    ["ho 35 anni", "sono alta 1,68", "sono un uomo", "peso 61,4"]],
+  ["🔥", "Obiettivo della settimana", "Il totale delle calorie della settimana (i giorni se lo dividono).",
+    ["obiettivo della settimana 12000 calorie", "settimana prossima 12500 calorie", "12000 calorie ogni settimana", "togli l'obiettivo della settimana"]],
+  ["🎨", "Personalizza", "Colore, tema, nome e icona dell'app, il tuo nome, vibrazione.",
+    ["colore azzurro", "tema chiaro", "chiama l'app Fit di Anna", "chiamami Anna", "icona fiore", "togli la vibrazione", "attiva la vibrazione"]],
+  ["🧭", "Spostarsi nell'app", "Apre la sezione che dici.",
+    ["apri la lista della spesa", "apri il profilo", "vai alle ricette", "apri l'andamento", "vai alla settimana prossima", "apri la cena di domani", "vai a ieri", "apri il backup", "rifai il questionario"]],
 ];
 function apriComandiVocali() {
   editCtx = null; liberoCtx = null;

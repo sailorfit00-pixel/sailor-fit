@@ -2304,3 +2304,9 @@ body.tastiera .qz-backup { display: none; }
 .sport-riga:not(.nuovo) .sr-dur { width: 50px; }
 .sport-riga:not(.nuovo) > em:not(.sr-kcal) { text-align: left; }
 .sport-riga:not(.nuovo) .sr-kcal { margin-left: 0; text-align: right; }
+/* Comandi a voce per il Profilo: «prima → dopo» */
+.voce-cambi { display: grid; gap: 8px; margin: 4px 0 14px; }
+.voce-cambio { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: 14px; background: var(--card2); }
+.voce-cambio span { color: var(--muted); font-size: 13px; }
+.voce-cambio b { font-size: 16px; }
+.voce-cambio s { color: var(--muted); font-weight: 400; }
