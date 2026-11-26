@@ -2262,6 +2262,7 @@ function comandoSostituisci(testo) {
     if (grammiDetti) return grammiDetti;
     const a0 = A[v.nome], a1 = A[nuovo];
     const prot = a0[1] * 4 / Math.max(1, a0[0]) >= 0.25 && a1[1] >= 8;
+    if (!prot && (a0[0] < 45 || a1[0] < 45)) return Math.round(v.qta / 5) * 5 || 5;   // frutta e verdura (banana → zucca): gli stessi grammi, non 400 g di zucca per avere le stesse calorie
     const g = prot ? v.qta * a0[1] / a1[1] : v.qta * a0[0] / Math.max(1, a1[0]);
     return Math.max(5, Math.min(GRAMMI_MAX_FONTI[nuovo] || 400, Math.round(g / 5) * 5));
   };
@@ -2270,7 +2271,7 @@ function comandoSostituisci(testo) {
     const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
     openModal(`<h3 class="modal-title">🔄 ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
       <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span>${esc(nuovo)} <b>${q} g</b></span></div>
-      <p class="hint">${numeriMossa(d)}${grammiDetti ? "" : ` · ${A[v.nome][1] * 4 / Math.max(1, A[v.nome][0]) >= 0.25 && A[nuovo][1] >= 8 ? "stesse proteine" : "stesse calorie"}`}</p>
+      <p class="hint">${numeriMossa(d)}${grammiDetti ? "" : ` · ${A[v.nome][1] * 4 / Math.max(1, A[v.nome][0]) >= 0.25 && A[nuovo][1] >= 8 ? "stesse proteine" : A[v.nome][0] < 45 || A[nuovo][0] < 45 ? "stessi grammi" : "stesse calorie"}`}</p>
       <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="voce-sost-ok">Sostituisci</button></div></div>`);
     document.getElementById("voce-sost-ok").addEventListener("click", () => {
       const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
