@@ -2466,23 +2466,30 @@ function comandoTogliPorta(testo) {
     avviso(`Non trovo «${s}» ${dovePastoDetta(pasto, data)}`); return true;
   }
   if (tipo === "porta" && !(nuovaQ >= 1 && nuovaQ <= 2000)) return false;
+  const applica = (v) => {
+    const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
+    const ingrPrima = clone(p.ingredienti);
+    if (tipo === "togli") p.ingredienti.splice(v.ii, 1);
+    else p.ingredienti[v.ii] = { nome: ing.nome, qta: nuovaQ, unita: UNITA_LIQUIDI.test(ing.nome) ? "ml" : "g", lock: true, cercato: ing.cercato || ing.nome };
+    if (!p.ingredienti.length) g.pasti.splice(v.pi, 1); else { delete p.auto; rinominaLibero(p, ingrPrima); aggiornaMacro(p); }
+    scriviGiorno(data, g);
+    closeModal(true); if (typeof renderOggi === "function") renderOggi();
+    avviso(tipo === "togli" ? `Tolto: ${v.nome.toLowerCase()}` : `${v.nome}: ${nuovaQ} g`);
+  };
   const conferma = (v) => {
-    const d0 = macroAlimento(v.nome, v.qta), d1 = tipo === "togli" ? { kcal: 0, proteine: 0, carboidrati: 0, grassi: 0 } : macroAlimento(v.nome, nuovaQ);
+    if (tipo === "togli") {   // togliere: solo la domanda, «Annulla» o «Togli»
+      const sx = leggiProfilo().sesso, sic = sx === "uomo" ? "Sicuro" : sx === "donna" ? "Sicura" : "Sicuro/a";
+      const nm = /.[A-ZÀ-Ý]/.test(v.nome) ? v.nome : v.nome.toLowerCase();
+      chiediConferma(`${sic} di voler eliminare ${nm} ${Math.round(v.qta)} ${UNITA_LIQUIDI.test(v.nome) ? "ml" : "g"}?`, "", "Togli", () => applica(v));
+      return;
+    }
+    const d0 = macroAlimento(v.nome, v.qta), d1 = macroAlimento(v.nome, nuovaQ);
     const d = { kcal: d1.kcal - d0.kcal, proteine: d1.proteine - d0.proteine, carboidrati: d1.carboidrati - d0.carboidrati, grassi: d1.grassi - d0.grassi };
-    openModal(`<h3 class="modal-title">${tipo === "togli" ? "🗑️" : "⚖️"} ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
-      <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span>${tipo === "togli" ? "<b>tolto</b>" : `<b>${nuovaQ} g</b>`}</span></div>
+    openModal(`<h3 class="modal-title">⚖️ ${esc(NomePasto(v.pasto, data))} di ${esc(nomeGiornoDetta(data))}</h3>
+      <div class="voce-scambio"><span>${esc(v.nome)} <b>${Math.round(v.qta)} g</b></span><i>→</i><span><b>${nuovaQ} g</b></span></div>
       <p class="hint">${numeriMossa(d)}</p>${avvisoPassatoDetta(v.pasto, data)}
-      <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn${tipo === "togli" ? " btn-danger" : ""}" id="voce-tp-ok">${tipo === "togli" ? "Togli" : "Salva"}</button></div></div>`);
-    document.getElementById("voce-tp-ok").addEventListener("click", () => {
-      const g = giornoDiario(data), p = g.pasti[v.pi], ing = p && (p.ingredienti || [])[v.ii]; if (!ing) { closeModal(true); return; }
-      const ingrPrima = clone(p.ingredienti);
-      if (tipo === "togli") p.ingredienti.splice(v.ii, 1);
-      else p.ingredienti[v.ii] = { nome: ing.nome, qta: nuovaQ, unita: UNITA_LIQUIDI.test(ing.nome) ? "ml" : "g", lock: true, cercato: ing.cercato || ing.nome };
-      if (!p.ingredienti.length) g.pasti.splice(v.pi, 1); else { delete p.auto; rinominaLibero(p, ingrPrima); aggiornaMacro(p); }
-      scriviGiorno(data, g);
-      closeModal(true); if (typeof renderOggi === "function") renderOggi();
-      avviso(tipo === "togli" ? `Tolto: ${v.nome.toLowerCase()}` : `${v.nome}: ${nuovaQ} g`);
-    });
+      <div class="lib-detta"><div class="barra-due"><button class="btn-sec" data-chiudi>Annulla</button><button class="btn" id="voce-tp-ok">Salva</button></div></div>`);
+    document.getElementById("voce-tp-ok").addEventListener("click", () => applica(v));
   };
   editCtx = null; liberoCtx = null; vaiAlGiornoDetta(data);
   if (trovati.length === 1) { conferma(trovati[0]); return true; }
