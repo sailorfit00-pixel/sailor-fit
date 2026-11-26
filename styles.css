@@ -2376,3 +2376,15 @@ body.tastiera .qz-backup { display: none; }
 .sett-tipo .st-riga .tipo-sport { justify-content: flex-start; gap: 5px; }
 .sett-tipo .tipo-chip { padding: 6px 10px; font-size: 13px; background: var(--card); max-width: 100%; white-space: normal; }
 .sett-tipo .tipo-chip.tipo-piu { padding: 4px 12px; min-width: 40px; }
+/* lista della spesa: ogni voce su una riga sola (nome tagliato con «…» se è lungo, quantità sempre intera a destra) */
+#spesa .spesa-riga .spesa-nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#spesa .spesa-riga .spesa-qta { max-width: none; }
+.spesa-mod-nota { margin: 6px 0 0; font-size: 12px; color: var(--muted); line-height: 1.35; }
+.spesa-mod-nota .btn-link { display: inline; padding: 0; margin: 0; font-size: 12px; min-height: 0; }
+
+#spesa .spesa-del-posto { flex: 0 0 36px; height: 36px; }   /* righe senza cestino: la quantità resta in colonna con le altre */
+/* la quantità di ogni voce: sfondo scuro, bordo tratteggiato e scritta nel colore dell'app (si capisce che si tocca); aperta: bordo pieno */
+#spesa .spesa-riga .spesa-qta { background: transparent; border: 1.5px dashed rgba(var(--lilla-rgb), .65); color: var(--lilla); padding: 2px 9px; font-weight: 600; }
+#spesa .spesa-riga .spesa-qta.mia { color: var(--lilla); font-weight: 700; }
+#spesa li.voce.in-mod .spesa-qta { background: var(--lilla-bg); border-style: solid; border-color: var(--lilla); color: var(--lilla); }
+html[data-tema="chiaro"] #spesa .spesa-riga .spesa-qta { border-color: rgba(var(--lilla-rgb), .9); }

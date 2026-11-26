@@ -2095,13 +2095,15 @@ let _vociSpesaDetta = [];
 function apriConfermaSpesa(testo) {
   _vociSpesaDetta = vociSpesaDaFrase(testo);
   if (!_vociSpesaDetta.length) { avviso("Non ho capito cosa aggiungere alla spesa: riprova"); return true; }
+  // senza quantità detta: quella suggerita (quanto ne mangi di solito, o una confezione), che puoi cambiare
+  _vociSpesaDetta.forEach(v => { if (!v.qta && typeof suggerisciQtaSpesa === "function") { v.sugg = qtaBreve(suggerisciQtaSpesa(v.nome).info.replace(/^~\s*/, "")); v.qta = v.sugg; } });
   editCtx = null; liberoCtx = null;
   const disegna = () => {
     const c = document.getElementById("detta-spesa"); if (!c) return;
     c.innerHTML = _vociSpesaDetta.map((v, i) => `<li class="voce detta-spesa-v">
       <div class="detta-spesa-r"><input class="qta-input detta-spesa-nome" data-detta-spesa-nome="${i}" value="${esc(v.nome)}" aria-label="Nome" autocomplete="off"><button class="lib-del" data-detta-spesa-del="${i}" aria-label="Togli ${esc(v.nome)}">${ICONA_CESTINO}</button></div>
       <div class="spesa-mod-r"><span class="detta-spesa-l">Quantità</span><button class="spesa-step" data-detta-spesa-step="${i}|-1" aria-label="Meno">−</button>
-      <input class="qta-input" data-detta-spesa-qta="${i}" value="${esc(v.qta)}" placeholder="facoltativa" autocomplete="off"><button class="spesa-step" data-detta-spesa-step="${i}|1" aria-label="Più">＋</button></div></li>`).join("") || `<li class="hint">Niente da aggiungere</li>`;
+      <input class="qta-input" data-detta-spesa-qta="${i}" value="${esc(v.qta)}" placeholder="es. 2 confezioni" autocomplete="off"><button class="spesa-step" data-detta-spesa-step="${i}|1" aria-label="Più">＋</button></div></li>`).join("") || `<li class="hint">Niente da aggiungere</li>`;
     const b = document.getElementById("detta-spesa-ok"); if (b) b.disabled = !_vociSpesaDetta.length;
   };
   openModal(`<h3 class="modal-title">🛒 Aggiungo alla lista della spesa</h3>
@@ -2121,10 +2123,11 @@ function apriConfermaSpesa(testo) {
     if (st) { const [i, d] = st.dataset.dettaSpesaStep.split("|"), v = _vociSpesaDetta[+i]; if (!v) return; v.qta = cambiaQtaSpesa(v.qta, +d, v.nome); const inp = lista.querySelector(`[data-detta-spesa-qta="${i}"]`); if (inp) inp.value = v.qta; }
   });
   document.getElementById("detta-spesa-ok").addEventListener("click", () => {
-    const voci = _vociSpesaDetta.map(v => ({ nome: String(v.nome || "").trim(), qta: String(v.qta || "").trim() })).filter(v => v.nome);
+    // la quantità suggerita non cambiata non si fissa: in lista resta «suggerita» e segue quanto ne mangi
+    const voci = _vociSpesaDetta.map(v => ({ nome: String(v.nome || "").trim(), qta: String(v.qta || "").trim(), sugg: v.sugg })).filter(v => v.nome);
     if (!voci.length) { closeModal(true); return; }
     const extra = leggiExtraSpesa(), presi = leggiPresi();
-    voci.forEach(v => { if (!extra.some(x => x.toLowerCase() === v.nome.toLowerCase())) extra.push(v.nome); presi.delete(v.nome); if (v.qta) impostaQtaSpesa(v.nome, v.qta); });
+    voci.forEach(v => { if (!extra.some(x => x.toLowerCase() === v.nome.toLowerCase())) extra.push(v.nome); presi.delete(v.nome); if (v.qta && v.qta !== v.sugg) impostaQtaSpesa(v.nome, v.qta); });
     salvaExtraSpesa(extra); salvaPresi(presi);
     closeModal(true);
     // si apre la lista: vedi dove sono finite (illuminate) e puoi ancora cambiarne la quantità
@@ -2612,7 +2615,7 @@ function apriComandiVocali() {
   editCtx = null; liberoCtx = null;
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
-    <p class="hint">Tocca <b>🎤 Detta</b> (in basso) e parla quando vedi «Ti sento»; poi tocca ✓ Fatto (oppure tieni premuto mentre parli e rilascia). Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
+    <p class="hint">Tocca <b>🎤 Detta</b> (in basso) e parla quando vedi «Ti sento» e l'onda che si muove; poi tocca ✓ Fatto. Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
     <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es], k) => `<details class="cv-sez"${k === 0 ? " open" : ""}>
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
@@ -2664,47 +2667,22 @@ function micTesto(modo, testo) {
 (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   // stato: null (spento) · "avvio" (il microfono si sta accendendo: NON ti sente ancora) · "ascolto" (ti sente) · "chiudo" (finito, aspetto le ultime parole)
-  let stato = null, rec = null, testoFinale = "", testoParziale = "", errore = null, partito = false, modo = "barra", bottone = null;
-  let premutoDa = 0, premuto = false, ultimoTocco = 0, inizioAscolto = 0, giri = 0, timerFine = null, timerOnda = null;
-  // l'onda sonora: con il livello vero del microfono quando il telefono lo permette; altrimenti si muove con le parole capite
-  let audioCtx = null, metro = null, livEvento = 0, storia = [];
+  let stato = null, rec = null, testoGiri = "", testoGiro = "", errore = null, partito = false, modo = "barra", bottone = null;
+  let ultimoTocco = 0, inizioAscolto = 0, giri = 0, timerFine = null, timerOnda = null, timerAvvio = null, timerSente = null;
+  // l'onda sonora si muove con la voce che il telefono sta riconoscendo (niente secondo microfono: su iPhone fermava il riconoscimento)
+  let livello = 0, storia = [];
   const N_BARRE = 28;
-  const NO_METRO = "mp_detta_nometro";   // su alcuni telefoni misurare il volume ferma il riconoscimento: allora non si misura più
-  const metroVietato = () => { try { return localStorage.getItem(NO_METRO) === "1"; } catch (e) { return false; } };
-  const fermaMetro = () => {
-    if (metro) { try { metro.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { metro.src.disconnect(); } catch (e) {} }
-    metro = null;
-  };
-  const avviaMetro = () => {
-    if (metro || metroVietato() || !audioCtx || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return;
-    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(stream => {
-      if (!stato || stato === "chiudo") { stream.getTracks().forEach(t => t.stop()); return; }
-      try {
-        const src = audioCtx.createMediaStreamSource(stream), an = audioCtx.createAnalyser(); an.fftSize = 512; src.connect(an);
-        metro = { stream, src, an, buf: new Uint8Array(an.fftSize), da: Date.now() };
-        if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
-      } catch (e) { stream.getTracks().forEach(t => t.stop()); }
-    }).catch(() => {});
-  };
-  const livello = () => {
-    let v = 0;
-    if (metro) {
-      metro.an.getByteTimeDomainData(metro.buf);
-      let s = 0; for (let i = 0; i < metro.buf.length; i++) { const x = (metro.buf[i] - 128) / 128; s += x * x; }
-      v = Math.min(1, Math.sqrt(s / metro.buf.length) * 5);
-    }
-    livEvento *= 0.78;
-    return Math.max(v, livEvento);
-  };
+  const testoTutto = () => (testoGiri + " " + testoGiro).replace(/\s+/g, " ").trim();
   const disegnaOnda = () => {
     const box = document.querySelector(".detta-velo .detta-barre"); if (!box) return;
     const vivo = stato === "ascolto";
-    storia.push(vivo ? livello() : 0); if (storia.length > N_BARRE) storia.shift();
-    const barre = box.children;
+    livello *= 0.8;
+    storia.push(vivo ? livello : 0); if (storia.length > N_BARRE) storia.shift();
+    const barre = box.children, t = Date.now();
     for (let i = 0; i < barre.length; i++) {
       const v = storia[i - (N_BARRE - storia.length)] || 0;
-      // anche nel silenzio le barre «respirano» un poco: si vede che il microfono è acceso
-      const h = vivo ? Math.max(0.12 + 0.06 * Math.sin(Date.now() / 260 + i * 0.7), v) : 0.08;
+      // nel silenzio le barre «respirano» un poco: si vede che il microfono è acceso e aspetta
+      const h = vivo ? Math.max(0.14 + 0.08 * Math.sin(t / 240 + i * 0.6), v) : 0.08;
       barre[i].style.transform = `scaleY(${h.toFixed(3)})`;
     }
   };
@@ -2714,8 +2692,8 @@ function micTesto(modo, testo) {
     velo.dataset.stato = stato || "";
     const st = velo.querySelector(".detta-stato");
     if (st) st.innerHTML = stato === "ascolto" ? `<i class="detta-rec"></i>Ti sento, parla pure` : stato === "chiudo" ? "Un attimo…" : "Accendo il microfono… aspetta";
-    const t = (testoFinale + " " + testoParziale).trim(), l = velo.querySelector(".detta-live");
-    if (l) { l.textContent = t || (stato === "ascolto" ? "es. «a pranzo 150 g di riso e un'insalata»" : ""); l.classList.toggle("vuoto", !t); }
+    const t = testoTutto(), l = velo.querySelector(".detta-live");
+    if (l) { l.textContent = t || (stato === "ascolto" ? "es. «a pranzo 150 g di riso e un'insalata»" : ""); l.classList.toggle("vuoto", !t); l.scrollTop = l.scrollHeight; }
   };
   const mostraVelo = () => {
     togliTuttiVeli();
@@ -2724,105 +2702,108 @@ function micTesto(modo, testo) {
       <p class="detta-stato"></p>
       <div class="detta-barre" aria-hidden="true">${"<i></i>".repeat(N_BARRE)}</div>
       <p class="detta-live"></p>
-      <div class="detta-tasti"><button class="btn-sec" data-detta-annulla>Annulla</button><button class="btn" data-detta-fatto>✓ Fatto</button></div>
-      <p class="detta-aiuto">Tocca ✓ Fatto quando hai finito (o tieni premuto 🎤 mentre parli e rilascia)</p></div>`;
+      <div class="detta-tasti"><button class="btn-sec" data-detta-annulla>Annulla</button><button class="btn" data-detta-fatto>✓ Fatto</button></div></div>`;
     document.body.appendChild(velo);
     storia = []; clearInterval(timerOnda); timerOnda = setInterval(disegnaOnda, 70);
     aggiornaVelo();
   };
+  const staccaRec = () => { if (rec) { const r = rec; rec = null; r.onend = null; r.onresult = null; r.onerror = null; r.onstart = null; r.onaudiostart = null; try { r.abort(); } catch (e) {} } };
   const spegni = () => {
-    stato = null; premuto = false; clearTimeout(timerFine); clearInterval(timerOnda); timerOnda = null;
+    stato = null; clearTimeout(timerFine); clearTimeout(timerAvvio); clearTimeout(timerSente); clearInterval(timerOnda); timerOnda = null;
     if (bottone) bottone.classList.remove("ascolta", "avvio");
-    fermaMetro(); togliTuttiVeli();
+    togliTuttiVeli();
   };
   const finisci = () => {
-    if (stato !== "chiudo" && stato !== "ascolto" && stato !== "avvio") return;
-    const testo = (testoFinale + " " + testoParziale).trim(), err = errore, ok = partito;
-    if (rec) { const r = rec; rec = null; r.onend = null; r.onresult = null; r.onerror = null; try { r.abort(); } catch (e) {} }
-    spegni();
-    if (err === "not-allowed" || err === "service-not-allowed") {
+    if (!stato) return;
+    const testo = testoTutto(), err = errore, ok = partito;
+    staccaRec(); spegni();
+    if (testo) { micTesto(modo, testo); return; }
+    if (!ok && (err === "not-allowed" || err === "service-not-allowed")) {
       micRipiego(modo, "Il microfono non è permesso per questa app: usa il 🎤 della tastiera (o permettilo nelle impostazioni del telefono)."); return;
     }
-    if (!ok && !testo) { micRipiego(modo, "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
-    if (!testo) { avviso("Non ho sentito niente: tocca 🎤 e riprova"); return; }
-    micTesto(modo, testo);
+    if (!ok) { micRipiego(modo, "Qui il microfono dell'app non funziona: usa il 🎤 della tastiera."); return; }
+    avviso("Non ho sentito niente: tocca 🎤 e riprova");
   };
-  // ✓ Fatto (o il rilascio dopo aver tenuto premuto): il telefono consegna le ultime parole, poi si va avanti
+  // ✓ Fatto (o di nuovo 🎤): il telefono consegna le ultime parole, poi si va avanti
   const fatto = () => {
     if (!stato || stato === "chiudo") return;
-    stato = "chiudo"; premuto = false; aggiornaVelo();
+    if (stato === "avvio" && !partito) { finisci(); return; }
+    stato = "chiudo"; aggiornaVelo();
     if (bottone) bottone.classList.remove("ascolta", "avvio");
     if (typeof vibra === "function") vibra();
     try { rec ? rec.stop() : finisci(); } catch (e) { finisci(); }
-    clearTimeout(timerFine); timerFine = setTimeout(finisci, 1500);   // se il telefono non avvisa della fine, si va avanti lo stesso
+    clearTimeout(timerFine); timerFine = setTimeout(finisci, 1200);   // se il telefono non avvisa della fine, si va avanti lo stesso
   };
-  const annulla = () => {
-    if (!stato) return;
-    if (rec) { const r = rec; rec = null; r.onend = null; r.onresult = null; r.onerror = null; try { r.abort(); } catch (e) {} }
-    spegni();
+  const annulla = () => { if (!stato) return; staccaRec(); spegni(); };
+  const sente = () => {
+    if (stato !== "avvio") return;
+    partito = true; stato = "ascolto"; clearTimeout(timerAvvio); clearTimeout(timerSente);
+    if (bottone) { bottone.classList.remove("avvio"); bottone.classList.add("ascolta"); }
+    if (typeof vibra === "function") vibra();   // un tic: ora ti sente
+    aggiornaVelo();
   };
   // un «giro» di ascolto. L'iPhone smette di ascoltare da solo dopo un attimo di silenzio: finché non tocchi Fatto si riparte,
   // e quello già sentito resta (così si può fare una pausa, o cominciare a parlare con calma)
   const ascolta = () => {
     const r = new SR(); rec = r; r.lang = "it-IT"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
-    const sente = () => {
-      if (rec !== r || stato !== "avvio") return;
-      partito = true; stato = "ascolto"; if (bottone) { bottone.classList.remove("avvio"); bottone.classList.add("ascolta"); }
-      aggiornaVelo(); setTimeout(avviaMetro, 200);   // il volume si misura solo quando il riconoscimento è già partito
-    };
-    r.onstart = sente; r.onaudiostart = sente;
-    r.onspeechstart = () => { if (rec === r) livEvento = Math.max(livEvento, 0.45); };
+    testoGiro = "";
+    // «Ti sento» quando il microfono è davvero acceso (audiostart); dove non c'è, poco dopo l'avvio
+    r.onaudiostart = () => { if (rec === r) sente(); };
+    r.onstart = () => { if (rec === r && stato === "avvio") { clearTimeout(timerSente); timerSente = setTimeout(sente, 300); } };
+    r.onspeechstart = r.onsoundstart = () => { if (rec === r) livello = Math.max(livello, 0.4); };
     r.onresult = (e) => {
       if (rec !== r) return;
-      if (stato === "avvio") sente();
-      testoParziale = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const x = e.results[i]; if (x.isFinal) testoFinale += " " + x[0].transcript; else testoParziale += x[0].transcript; }
-      livEvento = Math.max(livEvento, 0.55 + Math.random() * 0.4);
+      sente();
+      // il testo del giro si ricostruisce ogni volta da tutti i risultati: su iPhone gli stessi risultati arrivano più volte e il testo si raddoppiava
+      const pezzi = [];
+      for (let i = 0; i < e.results.length; i++) {
+        const x = (e.results[i][0] && e.results[i][0].transcript || "").trim(); if (!x) continue;
+        const prima = pezzi[pezzi.length - 1];
+        if (prima && (x === prima || x.startsWith(prima))) pezzi[pezzi.length - 1] = x;   // lo stesso pezzo ripetuto (o allungato)
+        else if (!(prima && prima.endsWith(x))) pezzi.push(x);
+      }
+      const nuovo = pezzi.join(" ");
+      if (nuovo.length !== testoGiro.length) livello = Math.max(livello, 0.55 + Math.random() * 0.45);
+      testoGiro = nuovo;
       aggiornaVelo();
     };
     r.onerror = (e) => { if (rec === r) errore = e.error || "errore"; };
     r.onend = () => {
       if (rec !== r) return;
-      if (testoParziale) { testoFinale += " " + testoParziale; testoParziale = ""; }   // l'ultima frase non ancora «definitiva» non si perde
-      const bloccato = errore === "not-allowed" || errore === "service-not-allowed";
-      // il riconoscimento si è fermato appena acceso il misuratore del volume: su questo telefono non vanno insieme
-      if (metro && !bloccato && Date.now() - metro.da < 2500 && !testoFinale.trim()) { fermaMetro(); try { localStorage.setItem(NO_METRO, "1"); } catch (x) {} }
-      if ((stato === "ascolto" || stato === "avvio") && !bloccato && giri < 30 && Date.now() - inizioAscolto < 60000) {
-        giri++; errore = null; try { ascolta(); } catch (x) { finisci(); } return;
+      if (testoGiro) { testoGiri = (testoGiri + " " + testoGiro).trim(); testoGiro = ""; }
+      const bloccato = errore === "not-allowed" || errore === "service-not-allowed" || errore === "audio-capture";
+      if (stato === "ascolto" && !bloccato && giri < 40 && Date.now() - inizioAscolto < 90000) {
+        giri++; errore = null;
+        try { ascolta(); } catch (x) { finisci(); }   // se il telefono non lascia ripartire: si tiene quello già detto
+        return;
       }
-      finisci();   // Fatto, un minuto passato o il microfono bloccato: si chiude, il riquadro non resta mai aperto
+      finisci();
     };
     r.start();
   };
   const avvia = (b) => {
     modo = b.dataset.mic; bottone = b;
     if (!SR) { micRipiego(modo); return; }
-    testoFinale = ""; testoParziale = ""; errore = null; partito = false; giri = 0; inizioAscolto = Date.now(); livEvento = 0;
-    if (rec) { try { rec.onend = null; rec.abort(); } catch (e) {} rec = null; }   // un ascolto alla volta
-    // l'audio si prepara dentro il tocco (su iPhone dopo non si può più)
-    try { const AC = window.AudioContext || window.webkitAudioContext; if (AC && !metroVietato()) { audioCtx = audioCtx || new AC(); if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {}); } } catch (e) { audioCtx = null; }
+    testoGiri = ""; testoGiro = ""; errore = null; partito = false; giri = 0; inizioAscolto = Date.now(); livello = 0;
+    staccaRec();   // un ascolto alla volta
     stato = "avvio"; b.classList.add("avvio");
-    try { ascolta(); mostraVelo(); }
-    catch (e) { rec = null; spegni(); micRipiego(modo, "Su questo telefono il microfono dell'app non è disponibile: usa il 🎤 della tastiera."); }
+    mostraVelo();
+    try { ascolta(); }
+    catch (e) { staccaRec(); spegni(); micRipiego(modo, "Su questo telefono il microfono dell'app non è disponibile: usa il 🎤 della tastiera."); return; }
+    // il microfono non si accende entro 5 secondi: il campo per scrivere (o dettare con la tastiera)
+    timerAvvio = setTimeout(() => { if (stato === "avvio") finisci(); }, 5000);
   };
-  // un tocco su 🎤 Detta: parte subito e resta in ascolto finché non tocchi ✓ Fatto (o di nuovo 🎤).
-  // Tenendo premuto: al rilascio finisce da solo, come i vocali di WhatsApp.
+  // 🎤 Detta: un tocco accende (il tocco intero: su iPhone il microfono parte solo così), un altro tocco o ✓ Fatto finisce
   document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest("[data-mic]")) e.preventDefault(); });
-  document.addEventListener("pointerdown", (e) => {
+  document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
     e.preventDefault();
-    if (Date.now() - ultimoTocco < 450) return;   // il doppio tocco dell'iPhone: uno solo
+    if (Date.now() - ultimoTocco < 400) return;   // il doppio tocco dell'iPhone: uno solo
     ultimoTocco = Date.now();
-    if (typeof vibra === "function") vibra();   // un tic appena premi (nell'istante del tocco: su iPhone si sente)
-    if (stato) { fatto(); return; }   // secondo tocco su 🎤: fatto
-    premuto = true; premutoDa = Date.now();
+    if (stato) { fatto(); return; }
+    if (typeof vibra === "function") vibra();
     avvia(b);
   });
-  const rilascia = () => {
-    if (!premuto) return; premuto = false;
-    if (stato && stato !== "chiudo" && Date.now() - premutoDa > 700) fatto();   // tenuto premuto mentre parlavi: al rilascio è finito
-  };
-  document.addEventListener("pointerup", rilascia); document.addEventListener("pointercancel", () => { premuto = false; });
-  document.addEventListener("touchend", rilascia);
   // l'app va in secondo piano: quello già detto si tiene
   document.addEventListener("visibilitychange", () => { if (document.hidden && stato) fatto(); });
   // mentre ascolta: i tasti del riquadro; i tocchi sul resto della pagina non fanno niente (niente pasti aperti per sbaglio)

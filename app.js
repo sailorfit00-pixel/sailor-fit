@@ -1219,7 +1219,7 @@ function segnaInCasa(nome, si, grammi) {
 // Quanto ne hai in casa: alla spesa si assume una confezione tipica (in grammi, per il riso e la pasta da crudo);
 // ogni volta che lo scrivi nel diario si sottrae. Quando è quasi finito torna da solo in lista; se non lo usi, comunque dopo qualche giorno.
 const PACCO_TIPICO = [
-  [/^albume/i, 500], [/^uova/i, 330], [/^latte(?! di cocco)|^bevanda di (avena|soia|riso|mandorla)/i, 1000], [/^skyr/i, 450], [/^yogurt/i, 250], [/^fiocchi di latte/i, 200], [/^ricotta/i, 250], [/^mozzarella|^burrata|^scamorza|^feta/i, 250],
+  [/^albume/i, 500], [/^uova/i, 330], [/^latte(?! di cocco)|^bevanda di (avena|soia|riso|mandorla)/i, 1000], [/^skyr/i, 450], [/^yogurt/i, 250], [/^fiocchi di latte/i, 200], [/^ricotta/i, 250], [/^mozzarella|^burrata/i, 125], [/^scamorza|^feta/i, 200],
   [/^petto di pollo|^coscia/i, 500], [/^fesa di tacchino|^bresaola|^prosciutto/i, 150], [/^tofu|^seitan|^tempeh/i, 200], [/^proteine in polvere/i, 900],
   [/^riso|^pasta|^couscous|^quinoa|^farro|^noodles|^orzo|^bulgur|^miglio/i, 500], [/^fiocchi d'avena|^farina|^granola|^muesli/i, 500], [/^pane|^piadina|^tortilla|^crackers|^gallette/i, 300],
   [/^olio|^aceto|^salsa di soia/i, 500], [/^parmigiano|^grana|^pecorino/i, 200], [/^mandorle|^noci|^nocciole|^anacardi|^pistacchi|^arachidi|^semi|^burro d'arachidi|^burro di mandorle/i, 200],
@@ -1490,23 +1490,25 @@ function qtaSpesaInGrammi(nome, testo, qBase) {
 }
 let _spesaMod = null;   // la voce della lista di cui stai cambiando la quantità (si apre toccando la riga)
 let _spesaNuove = [];   // le voci appena aggiunte (a voce): si illuminano un attimo quando si apre la lista
+// la quantità nella pastiglia della riga, corta perché stia su una riga: «2 confezioni da 500 g» → «2 conf. da 500 g»
+const qtaBreve = (t) => String(t).replace(/^~?\s*(\d+(?:[.,]\d+)?)\s+confezion[ei]\s+da\s+/i, "$1 conf. da ").replace(/\s+da crudo$/i, " crudo");
 // una riga della lista: si spunta SOLO toccando la casella (prima bastava toccare il nome e la voce spariva tra i «già presi»);
 // toccando il nome o la quantità si cambia la quantità
 function voceSpesaHTML(nome, preso, info, extra, q, mia) {
   const inMod = !preso && _spesaMod && _spesaMod.toLowerCase() === nome.toLowerCase(), nuova = _spesaNuove.some(x => x.toLowerCase() === nome.toLowerCase());
   const riga = preso ? `<span class="spesa-riga"><span class="spesa-nome">${esc(nome)}</span></span>`
-    : `<button class="spesa-riga" data-spesa-mod="${esc(nome)}" aria-label="Cambia la quantità di ${esc(nome)}"><span class="spesa-nome">${esc(nome)}</span><em class="spesa-qta${mia ? " mia" : ""}">${info ? esc(info) : "＋ quantità"}</em></button>`;
+    : `<button class="spesa-riga" data-spesa-mod="${esc(nome)}" aria-label="Cambia la quantità di ${esc(nome)}"><span class="spesa-nome">${esc(nome)}</span><em class="spesa-qta${mia ? " mia" : ""}">${info ? esc(qtaBreve(info)) : "＋ quantità"}</em></button>`;
   let h = `<li class="voce${preso ? " preso" : ""}${inMod ? " in-mod" : ""}${nuova ? " nuova" : ""}"><label class="spesa-spunta" aria-label="${preso ? "Togli la spunta" : "Preso"}: ${esc(nome)}">
     <input type="checkbox" data-spesa="${esc(nome)}" ${q ? `data-q="${Math.round(q)}"` : ""} ${preso ? "checked" : ""}></label>${riga}
-    ${extra ? `<button class="lib-del" data-spesa-del="${esc(nome)}" aria-label="Togli dalla lista">${ICONA_CESTINO}</button>` : ""}</li>`;
+    ${extra ? `<button class="lib-del" data-spesa-del="${esc(nome)}" aria-label="Togli dalla lista">${ICONA_CESTINO}</button>` : `<span class="spesa-del-posto" aria-hidden="true"></span>`}</li>`;
   if (inMod) {
-    const val = mia || (info && info !== "aggiunto da te" ? info.replace(/^~\s*/, "") : "");
+    const val = mia || (info ? qtaBreve(info.replace(/^~\s*/, "")) : "");
     h += `<li class="spesa-mod"><div class="spesa-mod-r">
       <button class="spesa-step" data-spesa-step="-1" aria-label="Meno">−</button>
       <input id="spesa-mod-qta" class="qta-input" value="${esc(val)}" placeholder="es. 3 confezioni" autocomplete="off" enterkeyhint="done" data-nome="${esc(nome)}">
       <button class="spesa-step" data-spesa-step="1" aria-label="Più">＋</button>
       <button class="btn spesa-mod-ok" data-spesa-mod-ok>OK</button></div>
-      ${mia && !extra ? `<button class="btn-link" data-spesa-mod-reset>↺ Usa quella calcolata dai tuoi pasti</button>` : ""}</li>`;
+      <p class="spesa-mod-nota">${mia ? `Scelta da te. <button class="btn-link" data-spesa-mod-reset>↺ Torna a quella suggerita</button>` : `Suggerita da quanto ne mangi di solito${frescoDi(nome) ? ", al massimo per una settimana (scade presto)" : ""}.`}</p></li>`;
   }
   return h;
 }
@@ -1517,6 +1519,8 @@ const nomeSpesa = (n) => /prosciutto/i.test(n) ? n : n.replace(/ (cotto|cotta|co
 // Se ne serve meno di un terzo di una confezione (granola 30 g, pesto 20 g, lievito…), di solito ce l'hai: va in «Da controllare se c'è».
 const SPESA_A_PESO = new Set(["Frutta e verdura", "Carne e pesce"]);
 const PACCO_UOVA = 6;
+// il peso di una confezione si scrive esatto (mozzarella 125 g, non «130 g»)
+const fmtPacco = (g, u) => g >= 1000 ? fmtPeso(g, u) : `${Math.round(g)} ${u}`;
 function compraSpesa(nome, nome0, g0) {
   const rep = repartoDi(nome), g = qtaSettimanaG(nome0, g0);
   if (SPESA_A_PESO.has(rep)) return { info: qtaSettimanaLabel(nome0, g0), q: g };
@@ -1528,7 +1532,38 @@ function compraSpesa(nome, nome0, g0) {
   const n = Math.max(1, Math.ceil(g / pacco - 0.1));   // 1,05 confezioni = 1; 1,4 = 2
   if (/^uova$/i.test(nome)) return { info: `${n * PACCO_UOVA} uova`, q: n * pacco };
   const noto = PACCO_TIPICO.some(([re]) => re.test(nome));
-  return { info: `${n} ${n === 1 ? "confezione" : "confezioni"}${noto ? ` da ${fmtPeso(pacco, UNITA_LIQUIDI.test(nome) ? "ml" : "g")}` : ""}`, q: n * pacco };
+  return { info: `${n} ${n === 1 ? "confezione" : "confezioni"}${noto ? ` da ${fmtPacco(pacco, UNITA_LIQUIDI.test(nome) ? "ml" : "g")}` : ""}`, q: n * pacco };
+}
+// Freschi (latticini freschi, frutta e verdura, carne e pesce, pane fresco): scadono presto, quindi mai più di una settimana di consumo
+// anche con la spesa per 2 settimane (lo yogurt di 14 giorni scade prima di finirlo)
+const FRESCO_MAX_GIORNI = 7;
+const FRESCO_LATTICINI = /^(yogurt|skyr|kefir|latte(?! di cocco| in polvere| condensato)|ricotta|mozzarella|burrata|stracchino|squacquerone|fiocchi di latte|mascarpone|panna fresca|primo sale|feta)/i;
+const frescoDi = (nome) => { const rep = repartoDi(nome); return !durataLunga(nome) && (rep === "Frutta e verdura" || rep === "Carne e pesce" || FRESCO_LATTICINI.test(nome) || /^(pane|focaccia|piadina fresca)/i.test(nome)) && !/scatola|scatolame|in vetro|surgelat|secc|uht|a lunga conservazione/i.test(nome); };
+const gPerFresco = (nome, g) => { const N = giorniSpesaScelti(); return frescoDi(nome) && N > FRESCO_MAX_GIORNI ? g * FRESCO_MAX_GIORNI / N : g; };
+// quanto comprare di una voce aggiunta da te (scritta o detta senza quantità): quanto ne mangi di solito nei giorni della spesa
+// (dalle ultime 4 settimane del diario); se non lo mangi mai, il minimo: una confezione (o qualche pezzo / un po' a peso)
+let _memoSugg = { k: "", st: null };
+function suggerisciQtaSpesa(nome) {
+  const chiave = (() => { try { return (localStorage.getItem("mp_diario") || "").length + "|" + giorniSpesaScelti() + "|" + oggiISO(); } catch (e) { return ""; } })();
+  if (_memoSugg.k !== chiave || !_memoSugg.st) {
+    const giorni = []; for (let k = 0; k < 28; k++) giorni.push(addGiorniISO(oggiISO(), -k));
+    _memoSugg = { k: chiave, st: consumiPerAlimento(giorni, giorniSpesaScelti()).st };
+  }
+  const n = String(nome).toLowerCase();
+  // «Yogurt greco» detto o scritto vale anche per lo «Yogurt greco 0%» che scrivi nel diario
+  let fonti = Object.entries(_memoSugg.st).filter(([k]) => nomeSpesa(k).toLowerCase() === n);
+  if (!fonti.length) fonti = Object.entries(_memoSugg.st).filter(([k]) => nomeSpesa(k).toLowerCase().startsWith(n + " "));
+  if (fonti.length) {
+    const g = gPerFresco(nome, fonti.reduce((a, [k, e]) => { const f = /cott/i.test(k) && (window.CRUDO_FATTORE || []).find(([re]) => re.test(k)); return a + (f ? e.g / f[1] : e.g); }, 0));
+    const c = compraSpesa(nome, fonti.length === 1 ? fonti[0][0] : nome, fonti.length === 1 && /cott/i.test(fonti[0][0]) ? gPerFresco(nome, fonti[0][1].g) : g);
+    if (!c.controllare && c.info) return { info: c.info, q: c.q };
+  }
+  const rep = repartoDi(nome), pz = (window.PESO_PZ || {})[nome];
+  if (rep === "Frutta e verdura") return pz && pz < 300 ? { info: `${Math.max(1, Math.round(500 / pz))} pz`, q: Math.max(1, Math.round(500 / pz)) * pz } : { info: "~500 g", q: 500 };
+  if (rep === "Carne e pesce") return { info: "~300 g", q: 300 };
+  if (/^uova$/i.test(nome)) return { info: `${PACCO_UOVA} uova`, q: paccoG(nome) };
+  const pacco = paccoG(nome), noto = PACCO_TIPICO.some(([re]) => re.test(nome));
+  return { info: `1 confezione${noto ? ` da ${fmtPacco(pacco, UNITA_LIQUIDI.test(nome) ? "ml" : "g")}` : ""}`, q: pacco };
 }
 function spesaHTML() {
   const stat = statSpesa(), { st } = stat;
@@ -1544,12 +1579,14 @@ function spesaHTML() {
   });
   const voci = Object.values(unite).map(u => {
     const [nome0, g0] = u.fonti.length === 1 ? u.fonti[0] : [u.nome, u.g];   // una fonte sola: etichetta di sempre ("~200 g da crudo")
-    return Object.assign({ nome: u.nome, giorni: u.giorni }, compraSpesa(u.nome, nome0, g0));
+    return Object.assign({ nome: u.nome, giorni: u.giorni }, compraSpesa(u.nome, nome0, gPerFresco(u.nome, g0)));
   });
+  // le voci aggiunte da te hanno comunque una quantità suggerita (quanto ne mangi di solito, o una confezione): la cambi toccandola
   leggiExtraSpesa().forEach(nome => {
     const v = voci.find(x => x.nome.toLowerCase() === nome.toLowerCase());
-    if (!v) voci.push({ nome, giorni: -1, info: "aggiunto da te", extra: true });
-    else if (v.controllare) { v.controllare = false; v.extra = true; v.info = "aggiunto da te"; }   // dalla dispensa (o detto a voce): l'hai messo tu in lista, va comprato
+    if (!v) voci.push(Object.assign({ nome, giorni: -1, extra: true }, suggerisciQtaSpesa(nome)));
+    else if (v.controllare) { v.controllare = false; v.extra = true; Object.assign(v, suggerisciQtaSpesa(nome)); }   // dalla dispensa (o detto a voce): l'hai messo tu in lista, va comprato
+    else v.extra = true;
   });
   // la quantità che hai scelto tu (detta, scritta o cambiata con + e −) vale più di quella calcolata
   voci.forEach(v => { const mia = qtaSpesaDi(v.nome); if (mia) { v.mia = mia; v.q = qtaSpesaInGrammi(v.nome, mia, v.q); v.info = mia; } });
