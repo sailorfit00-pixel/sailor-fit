@@ -927,6 +927,17 @@ function grammiTonnoSettimana(data) {
 }
 // il tonno in scatola si propone solo se resti sotto il limite settimanale (scriverlo a mano si può sempre: in quel caso compare un ⚠ sulla riga)
 const tonnoOk = (data) => grammiTonnoSettimana(data) < TONNO_MAX_SETT_G;
+// il tonno del pasto aperto che non è ancora nel diario: tutta la bozza, oppure le righe appena aggiunte (scritte o dette)
+const tonnoNonSalvato = (c) => (c.items || []).filter(x => TONNO_SCATOLA.test(x.nome) && (c.bozza || x.nuovo)).reduce((s, x) => s + (grammiIng(x) || +x.qta || 0), 0);
+// tonno in 7 giorni contando anche il pasto aperto (come l'avviso ⚠ sulla riga) e, se data, la quantità nuova di una riga:
+// un consiglio «porta il tonno a 200 g» o «aggiungi tonno» si dà solo se poi resti nel consigliato (prima l'avviso diceva «troppo» e il consiglio «di più»)
+function tonnoSettimanaConPasto(c, riga, nuovaQta) {
+  let tot = grammiTonnoSettimana(c.data);
+  tot += tonnoNonSalvato(c);
+  if (riga && nuovaQta != null) { const g0 = grammiIng(riga) || +riga.qta || 0, g1 = grammiIng(Object.assign({}, riga, { qta: nuovaQta })) || nuovaQta; tot += g1 - g0; }
+  return Math.round(tot);
+}
+const tonnoStaNelConsigliato = (c, riga, nuovaQta) => tonnoSettimanaConPasto(c, riga, nuovaQta) <= TONNO_MAX_SETT_G;
 // al posto del tonno: pesce magro con le stesse proteine
 function alternativeTonno(it, k) {
   const A = window.ALIMENTI || {}, tonno = A[it.nome]; if (!tonno) return [];
@@ -937,7 +948,7 @@ function alternativeTonno(it, k) {
 function avvisoTonnoRiga(c, it) {
   if (!c || !c.data || !it || !TONNO_SCATOLA.test(it.nome)) return "";
   let tot = grammiTonnoSettimana(c.data);
-  if (c.bozza) tot += (c.items || []).filter(x => TONNO_SCATOLA.test(x.nome)).reduce((s, x) => s + (grammiIng(x) || +x.qta || 0), 0);   // la bozza non è ancora nel diario
+  tot += tonnoNonSalvato(c);   // quello appena scritto o detto non è ancora nel diario
   return tot > TONNO_MAX_SETT_G ? `Tonno: ${tot} g in 7 giorni · consigliati max ${TONNO_MAX_SETT_G} g` : "";
 }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -1729,6 +1740,7 @@ function mosseProteine(data, p, m, scritto) {
     try { ingredientiPastoTutti(data, p).forEach(r => {
       const a = A[r.nome]; if (!a || a[1] * 4 / Math.max(1, a[0]) < 0.25 || !(a[1] >= 10)) return;      // solo fonti di proteine vere
       const extra = grammiCheCi(r.nome, need * 100 / a[1], Math.min(Math.round(r.qta * 0.7), 120), m); if (!extra || extra.d.proteine < Math.min(need * 0.5, 8)) return;
+      if (TONNO_SCATOLA.test(r.nome) && grammiTonnoSettimana(data) + extra.g > TONNO_MAX_SETT_G) return;   // il tonno in scatola non si aumenta oltre il consigliato della settimana
       const nuova = Math.round((r.qta + extra.g) / 5) * 5;
       out.push({ key: `${p}|por|${r.rif[0]}|${r.rif[1]}|${nuova}`, testa: `Porta <b>${esc(r.nome.toLowerCase())}</b> da ${Math.round(r.qta)} a <b>${nuova} g</b>`, d: extra.d, _p: Math.abs(extra.d.proteine - need) - 3 });
     }); } catch (e) {}
@@ -1737,6 +1749,7 @@ function mosseProteine(data, p, m, scritto) {
   (FONTI_PROT_PASTO[tipoFontiPasto(data, p)] || []).forEach(([nome, massimo]) => {
     if (!A[nome] || giaNelPasto.has(nome) || (TONNO_SCATOLA.test(nome) && !tonnoOk(data))) return;
     const r = grammiCheCi(nome, need * 100 / A[nome][1], massimo, m); if (!r || r.d.proteine < Math.min(need * 0.5, 8)) return;
+    if (TONNO_SCATOLA.test(nome) && grammiTonnoSettimana(data) + r.g > TONNO_MAX_SETT_G) return;   // aggiungerlo porterebbe oltre il consigliato della settimana
     out.push({ key: `${p}|agg|${nome}|${r.g}`, testa: `Aggiungi <b>${r.g} g di ${esc(nome.toLowerCase())}</b>`, d: r.d, _p: Math.abs(r.d.proteine - need) + (TONNO_SCATOLA.test(nome) ? 6 : 0) });   // tonno: mai in testa
   });
   const ruota = hashStr(data + p);
@@ -2026,6 +2039,12 @@ document.addEventListener("change", (e) => {   // quanto dura uno sport quel gio
   const sh = document.querySelector("#modal .modal-sheet"), sc = sh ? sh.scrollTop : 0;
   document.getElementById("modal-content").innerHTML = sceltaAllenHTML(); if (sh) sh.scrollTop = sc;
 });
+document.addEventListener("click", (e) => {   // Oggi: l'ora di uno sport con − e ＋, solo per quel giorno
+  const b = e.target.closest && e.target.closest('[data-ora-step^="oggi|"]'); if (!b || !sceltaAllen || !sceltaAllen.ore) return;
+  const [, id, dir] = b.dataset.oraStep.split("|");
+  sceltaAllen.ore[id] = passoOra(typeof sceltaAllen.ore[id] === "number" ? sceltaAllen.ore[id] : null, +dir);
+  const v = b.closest(".ora-step").querySelector(".ora-val"); if (v) { v.textContent = fmtOra(sceltaAllen.ore[id]); v.classList.remove("vuota"); }   // senza ridisegnare: niente salti
+});
 document.addEventListener("change", (e) => {   // Oggi: l'ora di uno sport, solo per quel giorno
   if (!sceltaAllen || !sceltaAllen.ore || !e.target.matches || !e.target.matches("[data-allen-ora-sport]")) return;
   const h = oraDa(e.target.value); if (h === null) delete sceltaAllen.ore[e.target.dataset.allenOraSport]; else sceltaAllen.ore[e.target.dataset.allenOraSport] = h;
@@ -2064,7 +2083,10 @@ function sceltaAllenHTML() {
     </div>
     ${c.sel.size ? `<p class="hint">${c.ore ? "Quanto dura e a che ora, più o meno: servono a calcolare le calorie e a capire quale pasto viene prima e quale dopo." : "Quanto dura, di solito: serve a calcolare le calorie del giorno."}</p>
       <div class="allen-ore">${leggiProfilo().sport.filter(sp => c.sel.has(sp.id)).map(sp => { const v = durataSport(sp, c.dur[sp.id]);
-        return `<div class="allen-riga"><span>${sp.icona} ${esc(sp.nome)}</span><label class="allen-dur"><input class="qta-input" type="text" inputmode="decimal" autocomplete="off" data-allen-dur="${sp.id}" value="${sp.perKm ? fmtKm(v) : v}"><em>${sp.perKm ? "km" : "min"}</em></label>${c.ore && sp.id !== "camminata" ? `<input class="qta-input" type="time" step="900" data-allen-ora-sport="${sp.id}" value="${typeof c.ore[sp.id] === "number" ? fmtOra(c.ore[sp.id]).padStart(5, "0") : ""}">` : c.ore ? "<i></i>" : ""}</div>`; }).join("")}</div>` : ""}
+        // due righe chiare: il nome; sotto «Durata [60] min» e «Ora − 18:30 ＋»
+        return `<div class="allen-riga"><span class="allen-nome">${sp.icona} ${esc(sp.nome)}</span>
+          <div class="allen-campi"><label class="allen-dur"><small>Durata</small><input class="qta-input" type="text" inputmode="decimal" autocomplete="off" data-allen-dur="${sp.id}" value="${sp.perKm ? fmtKm(v) : v}"><em>${sp.perKm ? "km" : "min"}</em></label>
+          ${c.ore && sp.id !== "camminata" ? `<div class="allen-ora"><small>Ora</small>${oraStepHTML("oggi", sp.id, typeof c.ore[sp.id] === "number" ? c.ore[sp.id] : null)}</div>` : ""}</div></div>`; }).join("")}</div>` : ""}
     <div class="allen-anteprima">Obiettivo del giorno: <b>${info.target.kcal} kcal</b> · P ${info.target.proteine} · C ${info.target.carboidrati} · G ${info.target.grassi} g</div>
     <button class="btn-link link-ricette" data-azione="profilo">Aggiungi o modifica gli sport (Profilo) ›</button>
     <div class="lib-footer"><button class="btn lib-salva" data-allen-salva>✓ Salva</button></div>`;

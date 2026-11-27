@@ -148,11 +148,10 @@ function recuperoHTML(data) {
   const quando = r.data === addGiorniISO(data, -1) ? "Ieri" : fmtGiornoLungo(r.data);
   const sopra = r.diff > 0;
   const alGiorno = Math.round(Math.abs(r.diff) / r.giorni / 10) * 10;
-  // scritto chiaro: cosa è successo e cosa ti propongo; «No» / «Sì»
+  // compatto: a sinistra cosa è successo e cosa propongo, a destra «No» / «Sì» piccoli
   const giorni = r.giorni === 1 ? "domani" : `in ${r.giorni} giorni`;
   return `<div class="recupero">
-    <p>${quando} hai mangiato <b>${Math.abs(r.diff)} kcal in ${sopra ? "più" : "meno"}</b>.<br>
-      <span>${sopra ? "Toglierle" : "Recuperarle"} ${giorni}? (${sopra ? "−" : "+"}${alGiorno} al giorno)</span></p>
+    <p><b>${quando} ${sopra ? "+" : "−"}${Math.abs(r.diff)} kcal</b><span>${sopra ? "Toglierle" : "Recuperarle"} ${giorni}? ${sopra ? "−" : "+"}${alGiorno}/giorno</span></p>
     <div class="recupero-btn"><button class="btn-sec" data-recupero="no" data-giorno="${r.data}">No</button><button class="btn" data-recupero="si" data-giorno="${r.data}">Sì</button></div>
   </div>`;
 }
@@ -298,8 +297,8 @@ function apriGiornoSett(data, kcal) {
     </div>
     <p class="bsp-media" id="gd-diff"></p>
     <div class="bsp-azioni">
-      <button class="btn-sec" data-gd-salva="compensa">Compensa negli altri giorni</button>
-      <button class="btn" data-gd-salva="totale">Cambia anche il totale</button>
+      <button class="btn-sec" data-gd-salva="compensa">Bilancia la settimana</button>
+      <button class="btn" data-gd-salva="totale">Cambia il totale</button>
     </div>
     ${p.fisso[i] !== null ? `<button class="btn-link bsp-reset" data-gd-reset="${data}">↺ Come previsto</button>` : ""}`);
   aggiornaDiffGiorno();
