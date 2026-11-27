@@ -2261,6 +2261,46 @@ function comandoPeso(testo) {
 
 // 5) DOMANDE: «quanto mi manca?», «quante proteine mi mancano?», «cosa mangio a cena?», «cosa aggiungo?»
 const DOMANDA_MANCA = /\b(?:quant[oaie]|cosa|che cosa|come)\b[^?]*\b(?:manca|mancano|resta|restano|rimane|rimangono|posso ancora|sono messa|sono messo|sto messa|sto messo)\b|\ba che punto sono\b|\bcome sto andando oggi\b/;
+// RICETTE A VOCE: «consigliami una ricetta per pranzo con il pollo», «una ricetta con il tonno», «idee per la cena con le zucchine»,
+// «cosa posso cucinare con salmone e patate?». Apre 📖 Ricette già filtrate per il pasto detto e cercate per i cibi detti
+// (i cibi NON vanno nel pasto: è una domanda). Con «Ricette e idee per i pasti» spenta lo dice e spiega dove accenderla.
+const RICETTA_IDEA = /\b(?:consigliami|consigliatemi|suggeriscimi|proponimi|dammi|mi dai|mi consigli|mi suggerisci|mi proponi|idee|idea|consigli|suggerimenti|suggerimento)\b|\b(?:cosa|che cosa|che)\s+(?:posso |potrei |si può )?(?:cucinare|preparare|fare|mangiare|cucino|preparo|faccio|mangio)\b/;
+const RICETTA_NO = /\b(?:nuova|crea|creare|salva|salvare|scrivi|importa|esporta|elimina|cancella|togli|rinomina|modifica)\b/;
+const eRicettaDetta = (t) => { t = String(t || ""); const ric = /\bricett[ae]\b/.test(t); if (ric && RICETTA_NO.test(t)) return false;
+  return (ric && (/\bcon\s+\S/.test(t) || RICETTA_IDEA.test(t) || pastiNellaFrase(" " + t + " ").length > 0)) || (RICETTA_IDEA.test(t) && /\bcon\s+\S/.test(t)); };
+function comandoRicetta(testo, ctx) {
+  let t = " " + fraseDetta(testo).replace(/[?!.]/g, " ").replace(/\bieri sera\b/g, "ieri a cena").replace(/\bstasera\b/g, "a cena").replace(/\b(?:stamattina|stamani)\b/g, "a colazione").replace(/\s+/g, " ").trim() + " ";
+  if (!eRicettaDetta(t)) return false;
+  const ric = /\bricett[ae]\b/.test(t);
+  if (!funzioneAttiva("ricette")) { if (!ric && DOMANDA_IDEE.test(t)) return false; funzioneSpenta("ricette"); return true; }   // «idee per la cena con…» senza ricettario: come prima (le idee del pasto); il resto è una domanda, mai cibo da scrivere
+  const giorni = giorniNellaFrase(t), data = giorni.length ? dataDelGiorno(giorni[0], 1) : (ctx && ctx.data) || dataDetta();
+  const pasti = pastiNellaFrase(t, data), pasto = pasti.length ? pasti[0].p : (ctx && ctx.pasto) || null;
+  // i cibi: quello che viene dopo «con» (senza pasti, giorni e parole di contorno)
+  let cibi = [];
+  const k = t.search(/\bcon\s+\S/);
+  if (k >= 0) {
+    let x = " " + t.slice(k).replace(/^con\s+/, "") + " ";
+    x = togliGiorni(x, giorniNellaFrase(x));
+    pastiNellaFrase(x, data).sort((a, b) => b.i - a.i).forEach(p => { x = x.slice(0, p.i) + " " + x.slice(p.i + p.l); });
+    x = x.replace(/\b(?:per|a|al|alla|da|di|oggi|domani|stasera|ricett[ae]|qualcosa|una|un|uno)\s*$/g, " ").replace(/\b(?:per|a|al|alla)\s*$/g, " ");
+    cibi = x.split(/\s*(?:,|\be\b|\bed\b|\boppure\b|\bo\b)\s*/).map(z => z.replace(/\b(?:per|a|al|alla)\s*$/, "").trim().replace(ARTICOLI_DETTA, "").trim())
+      .filter(z => normCibo(z).length >= 3);
+  }
+  vaiAlGiornoDetta(data);
+  const apri = (filtro) => {
+    contestoAgg = pasto ? { data, pasto, fatte: new Set() } : { data, pasto: null, fatte: new Set(), auto: true };   // ＋ aggiunge a quel pasto
+    filtroRicetteCorr = filtro;
+    apriListaRicette(true);
+    const inp = document.getElementById("cerca-ingredienti");
+    if (inp && cibi.length) { inp.value = cibi.join(", "); aggiornaListaRicette(); }
+    return !document.querySelector("#lista-ricette .riga-ricetta");
+  };
+  const vuota = apri(pasto ? filtroPerPasto(pasto) : "tutte");
+  if (vuota && pasto && cibi.length) {   // per quel pasto non c'è niente: si guarda tra tutte le ricette
+    if (!apri("tutte")) avviso(`Per ${NomePasto(pasto, data).toLowerCase()} niente con ${cibi.join(" e ")}: ecco quelle degli altri pasti`);
+  }
+  return true;
+}
 const DOMANDA_IDEE = /\b(?:cosa|che cosa|che)\s+(?:mangio|posso mangiare|mi consigli|mi suggerisci|aggiungo|posso aggiungere|preparo|cucino|faccio)\b|\b(?:idee|consigli|suggerimenti)\b/;
 function comandoDomanda(testo) {
   const t = fraseDetta(testo), idee = DOMANDA_IDEE.test(t), manca = DOMANDA_MANCA.test(t);
@@ -2577,6 +2617,7 @@ function inviaDettato(testo) {
   testo = pastoDalVerbo(String(testo || "").trim());
   if (!testo) { avviso("Non ho sentito niente: riprova"); return; }
   // l'ordine conta: «quanto mi manca?» è una domanda, non la spesa; «peso 61» prima degli sport («pesi»)
+  if (comandoRicetta(testo)) return;   // «consigliami una ricetta per pranzo con il pollo»: prima delle domande («idee…», «cosa preparo…»)
   if (comandoDomanda(testo)) return;
   if (comandoPeso(testo)) return;
   if (comandoKcalGiorni(testo)) return;
@@ -2651,6 +2692,8 @@ const COMANDI_VOCALI = [
     ["quanto mi manca?", "quante proteine mi mancano?", "quanti carboidrati mi restano?", "a che punto sono?"]],
   ["💡", "Idee e consigli", "Con un pasto: quel pasto con le sue idee. Senza: i consigli furbi della giornata.",
     ["cosa mangio a cena?", "cosa preparo a pranzo?", "idee per la merenda", "cosa aggiungo?", "cosa mi consigli?"]],
+  ["📖", "Ricette", "Apre le ricette già scelte per il pasto e i cibi che dici. Tocchi ＋ per metterne una nel pasto.",
+    ["consigliami una ricetta per pranzo con il pollo", "una ricetta con il tonno", "cosa posso cucinare a cena con il salmone?", "idee per la cena con pollo e zucchine"]],
   ["🔥", "Calorie dei giorni", "Cambia le calorie di uno o più giorni: poi scegli se compensare negli altri giorni o cambiare il totale della settimana. In Settimana valgono i giorni della settimana che stai guardando. Mai sotto il metabolismo basale.",
     ["imposta martedì e mercoledì 1800 calorie, giovedì e venerdì 1200", "sabato 2000 kcal", "domani 1500 calorie", "metti 1600 calorie a lunedì prossimo"]],
   ["🏋️", "Allenamento", "Si apre la scheda Allenamenti del giorno già compilata: controlli e tocchi ✓ Salva. Lo sport deve essere tra i tuoi (Profilo).",
@@ -2681,7 +2724,7 @@ function apriComandiVocali() {
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
     <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla: vedi l'onda e la frase mentre parli; lascia per finire. (Con un tocco breve resta in ascolto: ritocca 🎤 per finire.) Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
-    <div class="cv-lista">${COMANDI_VOCALI.filter(([, tit]) => !(["Allenamento", "Settimana tipo", "Durata e orario di solito degli sport", "I tuoi sport"].includes(tit) && !funzioneAttiva("allenamenti")) && !(tit === "Lista della spesa" && !funzioneAttiva("spesa")) && !(tit === "Idee e consigli" && !funzioneAttiva("ricette") && !funzioneAttiva("consigli"))).map(([ico, tit, nota, es]) => `<details class="cv-sez">
+    <div class="cv-lista">${COMANDI_VOCALI.filter(([, tit]) => !(["Allenamento", "Settimana tipo", "Durata e orario di solito degli sport", "I tuoi sport"].includes(tit) && !funzioneAttiva("allenamenti")) && !(tit === "Lista della spesa" && !funzioneAttiva("spesa")) && !(tit === "Idee e consigli" && !funzioneAttiva("ricette") && !funzioneAttiva("consigli")) && !(tit === "Ricette" && !funzioneAttiva("ricette"))).map(([ico, tit, nota, es]) => `<details class="cv-sez">
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
       <ul class="cv-es">${es.map(x => `<li>«${esc(x)}»</li>`).join("")}</ul></details>`).join("")}</div>
@@ -2786,6 +2829,7 @@ function micTesto(modo, testo) {
   const t = fraseDetta(testo), domanda = DOMANDA_MANCA.test(t) || DOMANDA_IDEE.test(t);
   if (modo === "pasto" && liberoCtx) {   // dentro un pasto si resta in quel pasto: «a cena…» detto nel pranzo va nel pranzo
     if (modificaPastoAVoce(liberoCtx, testo)) return;   // «togli il pane», «porta il riso a 100 g», «sostituisci…»
+    if (eRicettaDetta(t)) { const c0 = { data: liberoCtx.data, pasto: liberoCtx.pasto }; esciPoiDettato(() => { if (!comandoRicetta(testo, c0)) inviaDettato(testo); }); return; }   // «una ricetta con il pollo» detto nel pasto: le ricette per quel pasto
     if (!domanda && SPESA_COMANDO.test(t)) { esciPoiDettato(() => inviaDettato(testo)); return; }   // «aggiungi albumi alla spesa» anche da dentro un pasto (passa da inviaDettato: «apri la lista della spesa» resta un comando per aprirla)
     if (domanda || COMANDO_FUORI_PASTO.test(t)) { esciPoiDettato(() => inviaDettato(testo)); return; }   // «quanto mi manca?», «peso 61,4», «apri l'andamento»…
     aggiungiDaParlato(pastoDaFrase(testo).resto || testo); rirenderLibero(); return;
