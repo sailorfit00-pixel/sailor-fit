@@ -2000,7 +2000,7 @@ function macroCompattoHTML(nome, k, val, tot, pct) {
   const sopra = Math.round(val) > tot;                    // contorno bianco e "+N" appena superi l'obiettivo, anche di poco
   const piu = sopra ? Math.round(val) - tot : 0;
   return `<div class="mc">
-    <div class="mc-top"><span><i class="dot-${k}"></i>${nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b>${Math.round(val)}</b>/${tot}<span class="mc-u"> g</span></span></div>
+    <div class="mc-top"><span><i class="dot-${k}"></i>${nome === "Carboidrati" ? `<span class="mc-lungo">Carboidrati</span><span class="mc-corto">Carbo</span>` : nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b>${Math.round(val)}</b>/${tot}<span class="mc-u"> g</span></span></div>
     <div class="mc-bar"><span class="mb-${k}${sopra ? " sopra" : ""}" style="width:${w}%"></span></div>
   </div>`;
 }
@@ -2081,7 +2081,7 @@ function vaiA(dove, data) {
   else if (dove === "settimana") { vistaHome = "settimana"; offsetSettHome = 0; }
   else if (dove === "settimana-prossima") { vistaHome = "settimana"; offsetSettHome = 1; }
   if (typeof giornoSelSett !== "undefined") giornoSelSett = null;
-  renderOggi(); window.scrollTo(0, 0);
+  renderOggi(); paginaInCima();
 }
 function renderSettimanaHome(cont) {
   const oggi = oggiISO();
@@ -2253,7 +2253,7 @@ function cambiaGiornoDiario(delta) {
 
 // -------- Viste: Oggi (principale) / Piano settimana --------
 // (resta una sola vista: Oggi)
-function mostraVista() { window.scrollTo(0, 0); renderOggi(); }
+function mostraVista() { paginaInCima(); renderOggi(); }
 const vistaCorrente = () => "oggi";
 
 document.addEventListener("DOMContentLoaded", () => {
