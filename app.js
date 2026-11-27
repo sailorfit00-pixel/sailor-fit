@@ -2609,7 +2609,7 @@ function apriProfilo(scheda) {
     <h4>I tuoi orari</h4>
     <p class="campo-nota">Servono a capire quale pasto è il prossimo e quando un pasto è passato (si spunta da solo).</p>
     ${(() => { const o = orariPasti(), hh = (h) => fmtOra(h).padStart(5, "0");
-      return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].concat((pf.pasti || []).includes("sera") ? [["sera", esc(NomePasto("sera"))]] : []).map(([k, l]) =>
+      return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", funzioneAttiva("allenamenti") ? "Merenda / pre-workout" : "Merenda"], ["cena", "Cena"]].concat((pf.pasti || []).includes("sera") ? [["sera", esc(NomePasto("sera"))]] : []).map(([k, l]) =>
         `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
     </div>
     <div ${sk("app")}>

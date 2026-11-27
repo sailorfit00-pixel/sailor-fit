@@ -32,10 +32,10 @@ const NON_SERA = /uov|albume|tonno|bresaola|prosciutto|tacchino|pollo|salmone|sg
 const adattoSera = (nomi) => !NON_SERA.test([].concat(nomi).join("|"));
 const pastoRicetta = (p) => p === "mattina" || p === "sera" ? "spuntino" : p;   // le ricette della mattina e del dopo cena sono gli spuntini
 // Il pomeriggio è "pre-workout" nei giorni di sport e "merenda" nei giorni di riposo (se si passa la data)
-const nomePasto = (p, data) => p === "sera" ? nomeSera() : p === "spuntino" && data && !preSera(data) ? "merenda" : p === "mattina" && data && preMattina(data) ? "pre-workout" : (NOME_PASTO[p] || p);   // «merenda»: non si confonde con lo spuntino della mattina
+const nomePasto = (p, data) => p === "sera" ? nomeSera() : p === "spuntino" && (data ? !preSera(data) : !funzioneAttiva("allenamenti")) ? "merenda" : p === "mattina" && data && preMattina(data) ? "pre-workout" : (NOME_PASTO[p] || p);   // «merenda»: non si confonde con lo spuntino della mattina
 const NomePasto = (p, data) => { const n = nomePasto(p, data); return n.charAt(0).toUpperCase() + n.slice(1); };
 // giorno con sport: lo spuntino del pomeriggio è il pre-workout
-const conSport = (data) => sportDelTipo(giornoDiario(data).tipo).some(id => id !== "camminata");   // una semplice camminata non cambia i pasti (niente pre-workout)
+const conSport = (data) => funzioneAttiva("allenamenti") && sportDelTipo(giornoDiario(data).tipo).some(id => id !== "camminata");   // allenamenti spenti: mai pre-workout né post-workout   // una semplice camminata non cambia i pasti (niente pre-workout)
 // a che ora ti alleni: quello scelto per quel giorno, altrimenti il tuo orario abituale (Profilo);
 // senza orario abituale (i profili di prima): di sera tranne il sabato mattina
 const orarioAllen = (data) => {
