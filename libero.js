@@ -2440,12 +2440,12 @@ function comandoKcalGiorni(testo) {
     <div class="voce-mancano">${righe.map(r => `<div class="voce-manca"><span>${esc(nomeG(r.data))}</span><b>${kIt(r.v)} kcal</b><small>previste ${kIt(r.prima)} kcal${r.v !== r.voluto ? ` · ${kIt(r.voluto)} ${r.voluto < r.v ? `è sotto il tuo metabolismo basale: metto ${kIt(r.v)}` : `è troppo (al massimo +50%): metto ${kIt(r.v)}`}` : ""}</small></div>`).join("")}</div>
     ${passati.length ? `<p class="hint">${passati.map(nomeG).join(", ")}: già passato, non si cambia.</p>` : ""}
     <p class="hint">Compensando, gli altri giorni della settimana si adattano e il totale resta uguale. Altrimenti cambia anche il totale della settimana.</p>
-    <div class="bsp-azioni"><button class="btn-sec" data-voce-kcal="compensa">Compensa negli altri giorni</button><button class="btn" data-voce-kcal="totale">Cambia anche il totale</button></div>`);
+    <div class="bsp-azioni"><button class="btn-sec" data-voce-kcal="compensa">Bilancia la settimana</button><button class="btn" data-voce-kcal="totale">Cambia il totale</button></div>`);
   document.querySelectorAll("[data-voce-kcal]").forEach(b => b.addEventListener("click", () => {
     const modo = b.dataset.voceKcal;
     righe.forEach(r => {
       const p = pianoSettimana(r.data), i = p.date.indexOf(r.data), d = r.v - p.target[i];
-      if (modo === "totale" && d) { const bs = leggiBudgetSett(); bs.settimane[p.date[0]] = p.budget + d; salvaBudgetSett(bs); }
+      if (modo === "totale" && d) aggiungiAlTotale(p.date[0], d);
       const p2 = pianoSettimana(r.data); impostaSpostamento(r.data, r.v - p2.base[p2.date.indexOf(r.data)]);
     });
     giornoSelSett = null; closeModal(true); aggiornaSettimana();

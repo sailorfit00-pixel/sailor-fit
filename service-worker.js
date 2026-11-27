@@ -1,5 +1,5 @@
 // Cache di base per far funzionare l'app anche offline
-const CACHE = "piano-pasti-v463";
+const CACHE = "piano-pasti-v464";
 const FILES = [
   "./", "index.html", "styles.css", "app.js", "libero.js", "codice-barre.js", "foto-ricetta.js", "diario.js", "benvenuto.js", "settimana.js", "andamento.js", "swipe.js", "voce-profilo.js", "recipes.js", "nutrition.js",
   "sortable.min.js", "manifest.json", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"
