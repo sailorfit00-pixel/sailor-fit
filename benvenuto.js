@@ -339,7 +339,7 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#qz-avanti")) { qzAvanti(); return; }
   const lv = e.target.closest("[data-qz-lev]");
   if (lv) { const k = lv.dataset.qzLev, cur = (qz.R[q.k] || []).filter(x => x !== QZ_NESSUNO && x !== "compila"); qz.R[q.k] = cur.includes(k) ? cur.filter(x => x !== k) : cur.concat(k); qzSalva(); qzRender(); return; }
-  if (e.target.closest("#qz-salta-tutto")) { if (qzValido(q)) qzFine(); return; }   // il resto si completa dopo nel Profilo
+  if (e.target.closest("#qz-salta-tutto")) { if (qzValido(q)) { qz.step = QZ.findIndex(x => x.t === "riepilogo"); qzSalva(); qzRender(); } return; }   // salta al riepilogo con le calorie (poi «Avanti» → Tutto pronto)   // il resto si completa dopo nel Profilo
   const ob = e.target.closest("[data-qz-o]");
   if (ob) {
     const val = q.o[+ob.dataset.qzO][2];
