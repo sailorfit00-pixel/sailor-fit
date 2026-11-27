@@ -2523,3 +2523,7 @@ html[data-tema="chiaro"] .levetta:not(.on) { background: #d9dde1; }
 .qz-levette .pers-funz { padding: 12px 0; }
 .qz-levette .pers-funz b { font-size: 16px; }
 .qz-levette .pers-funz small { font-size: 13px; }
+/* lista della spesa: le voci aggiunte a mano stanno dentro il contenitore per lo scorrimento (.sw) e risultavano «ultime»: anche loro con la linea sotto */
+#spesa .sw > li.voce { border-bottom: 1px solid var(--k-232f38); }
+#spesa .sw > li.voce.in-mod { border-bottom: none; }
+#spesa ul > .sw:last-child > li.voce { border-bottom: none; }
