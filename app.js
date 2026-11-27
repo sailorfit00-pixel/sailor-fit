@@ -1887,11 +1887,11 @@ function openModal(html) {
 // sotto (es. finire su 📊): per mezzo secondo i tocchi fuori dai pannelli si ignorano.
 // Funzioni facoltative scelte nel questionario («Cosa vuoi nella tua app?»): ricette e idee, lista della spesa. (I consigli furbi ci sono sempre.)
 // Chi usava già l'app prima di questa domanda (profilo senza «funzioni») le ha tutte. Si cambiano in Profilo → I miei dati → App.
-const FUNZIONI_APP = [["ricette", "📖", "Ricette e idee per i pasti", "ricettario, idee nei pasti, «Compila i pasti del giorno»"], ["spesa", "🛒", "Lista della spesa", "nel Profilo e con Detta («aggiungi … alla spesa»)"]];
+const FUNZIONI_APP = [["ricette", "📖", "Ricette e idee per i pasti", "ricettario, idee nei pasti, «Compila i pasti del giorno»"], ["spesa", "🛒", "Lista della spesa", "nel Profilo e con Detta («aggiungi … alla spesa»)"], ["allenamenti", "🏋️", "Allenamenti", "lo sport del giorno in Oggi e in Settimana: quando ti alleni, più calorie"]];
 function funzioneAttiva(nome) { if (nome === "consigli") return true; try { const f = leggiProfilo().funzioni; return !f || f[nome] !== false; } catch (e) { return true; } }
 function funzioneSpenta(nome) {   // chi la chiede (con Detta o un collegamento) sa dove accenderla
   const f = FUNZIONI_APP.find(x => x[0] === nome);
-  avviso(`${f ? f[2] : "Questa funzione"}: non attiva. La accendi in Profilo → I miei dati → App`);
+  avviso(`${f ? f[2] : "Questa funzione"}: funzione spenta. La accendi in Profilo → I miei dati → App`);
 }
 let _chiusoAlle = 0;
 // un comando detto mentre c'era la domanda «Salvare?»: parte appena il pannello si chiude (dopo Salva / Non salvare)
@@ -2544,11 +2544,12 @@ let _schedaProfilo = "io";
 function apriProfilo(scheda) {
   editCtx = null;
   if (scheda && SCHEDE_PROFILO.some(([k]) => k === scheda)) _schedaProfilo = scheda;
+  if (_schedaProfilo === "sport" && !funzioneAttiva("allenamenti")) _schedaProfilo = "io";   // senza allenamenti la scheda Sport non c'è
   const pf = leggiProfilo(), sk = (k) => `class="pf-scheda" data-pf-scheda="${k}" role="tabpanel"${_schedaProfilo === k ? "" : " hidden"}`;
   if (!_profiloPrima) _profiloPrima = statoProfilo();   // aperto adesso (non ridisegnato): da qui si contano le modifiche
   openModal(`
     <h3 class="modal-title">👤 I miei dati</h3>
-    <div class="pf-schede" role="tablist">${SCHEDE_PROFILO.map(([k, ic, l]) => `<button role="tab" data-pf-tab="${k}" aria-selected="${_schedaProfilo === k}"><span class="pf-tab-ico">${ic}</span>${l}</button>`).join("")}</div>
+    <div class="pf-schede" role="tablist">${SCHEDE_PROFILO.filter(([k]) => k !== "sport" || funzioneAttiva("allenamenti")).map(([k, ic, l]) => `<button role="tab" data-pf-tab="${k}" aria-selected="${_schedaProfilo === k}"><span class="pf-tab-ico">${ic}</span>${l}</button>`).join("")}</div>
     <div ${sk("io")}>
     <div id="form-profilo">
       ${CAMPI_PROFILO.map(([k, l, st, nota]) => `<label class="wiz-l">${l}</label>${nota ? `<p class="campo-nota">${nota}</p>` : ""}
@@ -2564,6 +2565,7 @@ function apriProfilo(scheda) {
     </div>
     <div ${sk("sport")}>
     <h4>I tuoi sport</h4>
+    ${pf.sport.some(sp => sp.nascosto) ? `<p class="campo-nota">Tocca uno sport per aggiungerlo, oppure scrivine uno nuovo qui sotto.</p><div class="chips sport-veloci">${pf.sport.filter(sp => sp.nascosto).map(sp => `<button class="chip" data-sport-mostra="${sp.id}">${sp.icona} ${esc(sp.nome)}</button>`).join("")}</div>` : ""}
     <div class="sport-lista">${pf.sport.filter(sp => !sp.nascosto).map(sp => `<div class="sport-riga">
         <span class="sr-ico">${sp.icona}</span><span class="sr-nome">${esc(sp.nome)}<small class="sr-kcal-sotto">≈ ${kcalSport(sp, 0, pf)} kcal</small></span>
         <input class="qta-input sr-dur" type="text" inputmode="decimal" autocomplete="off" data-sport-dur="${sp.id}" value="${sp.perKm ? fmtKm(sp.km || 5) : (sp.min || 60)}"><em>${sp.perKm ? "km" : "min"}</em>
@@ -2577,16 +2579,16 @@ function apriProfilo(scheda) {
     <h4>La tua settimana tipo</h4>
     <div class="sett-tipo">${["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"].map((n, i) => { const t = TIPI_GIORNATA[leggiTipi()[i]]; return `<div class="st-riga"><span>${n}</span>
       <button class="tipo-btn" data-scegli-allen-sett="${i}">${tipoSportHTML(t)} <span class="caret">▾</span></button></div>`; }).join("")}</div>
-    <h4>I tuoi orari</h4>
-    <p class="campo-nota">Servono a capire quale pasto è il prossimo e quando un pasto è passato (si spunta da solo).</p>
-    ${(() => { const o = orariPasti(), hh = (h) => fmtOra(h).padStart(5, "0");
-      return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].concat((pf.pasti || []).includes("sera") ? [["sera", esc(NomePasto("sera"))]] : []).map(([k, l]) =>
-        `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
     ${orariSportHTML(pf)}
     </div>
     <div ${sk("cibo")}>
     <h4>Alimentazione e allergie</h4>
     ${esclusioniHTML(pf)}
+    <h4>I tuoi orari</h4>
+    <p class="campo-nota">Servono a capire quale pasto è il prossimo e quando un pasto è passato (si spunta da solo).</p>
+    ${(() => { const o = orariPasti(), hh = (h) => fmtOra(h).padStart(5, "0");
+      return `<div class="bmr-griglia">${[["colazione", "Colazione"], ["mattina", "Spuntino"], ["pranzo", "Pranzo"], ["spuntino", "Merenda / pre-workout"], ["cena", "Cena"]].concat((pf.pasti || []).includes("sera") ? [["sera", esc(NomePasto("sera"))]] : []).map(([k, l]) =>
+        `<label class="et-campo"><span>${l}</span><input class="qta-input" type="time" step="900" data-orario="${k}" value="${hh(o[k])}"></label>`).join("")}</div>`; })()}
     </div>
     <div ${sk("app")}>
     <h4>Personalizza</h4>
@@ -2661,11 +2663,17 @@ document.addEventListener("click", (e) => {
   if (co) pf.colore = co.dataset.persColore;
   if (te) { if (te.dataset.persTema === "chiaro") pf.tema = "chiaro"; else delete pf.tema; }   // di base scuro
   if (vb) { if (vb.dataset.persVibra === "no") pf.vibrazione = false; else delete pf.vibrazione; }   // di base sì
+  if (fz && fz.dataset.persFunz === "allenamenti|si" && !funzioneAttiva("allenamenti")) _schedaProfilo = "sport";   // accesi adesso: si scelgono subito sport e giorni
   if (fz) { const [k, v] = fz.dataset.persFunz.split("|"); pf.funzioni = Object.assign(Object.fromEntries(FUNZIONI_APP.map(([x]) => [x, funzioneAttiva(x)])), pf.funzioni || {}, { [k]: v === "si" }); }
   { const x = pf.esclusioni;   // niente escluso: il profilo torna esattamente com'era (anche per la barra «Salva»)
     if (x) { ["allergie", "nonMangio", "altri", "allergieAltre"].forEach(k => { if (Array.isArray(x[k]) && !x[k].length) delete x[k]; }); if (!Object.keys(x).length) delete pf.esclusioni; } }
   salvaProfilo(pf); applicaPersonalizzazione(); riapriProfilo();
   if (typeof renderOggi === "function") renderOggi();
+});
+document.addEventListener("click", (e) => {   // Profilo → Sport: uno sport comune toccato entra tra i tuoi
+  const b = e.target.closest && e.target.closest("[data-sport-mostra]"); if (!b) return;
+  const pf = leggiProfilo(), sp = (pf.sport || []).find(x => x.id === b.dataset.sportMostra); if (!sp) return;
+  delete sp.nascosto; salvaProfilo(pf); riapriProfilo();
 });
 document.addEventListener("keydown", (e) => {   // campi «Altra allergia…» e «Altro cibo…»: Invio = aggiungi
   if (e.key === "Enter" && e.target.dataset && e.target.dataset.esclCampo) { e.preventDefault(); const b = document.querySelector(`[data-escl-aggiungi="${e.target.dataset.esclCampo}"]`); if (b) b.click(); }

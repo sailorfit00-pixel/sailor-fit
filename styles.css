@@ -2508,3 +2508,5 @@ body.tastiera .qz-salta-tutto { display: none; }
 .pers-funz .chips { flex: 0 0 auto; flex-wrap: nowrap; }
 .qz-salta-tutto:disabled { opacity: .35; }
 .pers-funz b i { font-style: normal; margin-right: 7px; }
+/* Profilo → Sport: gli sport comuni da toccare per aggiungerli */
+.sport-veloci { flex-wrap: wrap; margin-bottom: 12px; }

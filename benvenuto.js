@@ -40,7 +40,9 @@ const qzVuoleProposte = () => true;   // i consigli furbi ci sono per tutti: die
 const qzFacoltativo = (q) => !!q.opz || qzDopoPeso(q);
 const qzVuoto = (q) => { const v = qz.R[q.k]; return v == null || v === "" || (Array.isArray(v) && !v.length); };
 // senza un obiettivo scelto: mantenere il peso (né meno né più calorie)
-const qzObiettivo = (R) => QZ_OBIETTIVI.find(x => x[2] === R.obiettivo) || QZ_OBIETTIVI.find(x => x[2] === "mantenere");
+// più obiettivi: il PRIMO toccato decide le calorie, gli altri (e quello scritto a mano) restano come note
+const qzObPrincipale = (R) => Array.isArray(R.obiettivo) ? R.obiettivo[0] : R.obiettivo;
+const qzObiettivo = (R) => QZ_OBIETTIVI.find(x => x[2] === qzObPrincipale(R)) || QZ_OBIETTIVI.find(x => x[2] === "mantenere");
 const senzaSport = (R) => !(R.sport || []).length || (R.sport || []).includes(QZ_NESSUNO);
 // tipo: t testo · n numero · u una scelta · m più scelte · orari · colore · nomeApp · riepilogo
 const QZ = [
@@ -54,7 +56,8 @@ const QZ = [
   // cosa vuoi nell'app oltre a registrare i pasti: quello che non scegli non compare (si accende dopo in Profilo → I miei dati → App)
   { k: "funzioni", t: "m", e: "🧩", q: "Cosa vuoi nella tua app?", req: 1, excl: QZ_NESSUNO, o: [["Ricette e idee per i pasti", "📖", "ricette"], ["Lista della spesa", "🛒", "spesa"], ["Niente, solo registrare i pasti", "✍️", QZ_NESSUNO]],   // obbligatoria: è importante sapere cosa vuole
     nota: "Registrare i pasti, i consigli furbi, la Settimana e l'Andamento ci sono sempre. Il resto lo puoi attivare anche dopo, dal Profilo." },
-  { k: "obiettivo", t: "u", e: "✨", q: "Qual è il tuo obiettivo?", o: QZ_OBIETTIVI },
+  { k: "obiettivo", t: "m", e: "✨", q: "Qual è il tuo obiettivo?", o: QZ_OBIETTIVI, req: 1, altro: "obiettivoAltro", altroPh: "Altro, scrivilo tu (es. più energia, una gara)",
+    nota: "Il primo che tocchi decide le calorie: gli altri restano come tuoi obiettivi." },
   { k: "lavoro", t: "u", e: "💼", q: "Com'è la tua giornata?", o: QZ_LAVORO, nota: "Senza contare lo sport: serve a stimare quanto consumi ogni giorno." },
   { k: "sport", t: "m", e: "🏃‍♀️", q: "Che sport fai?", o: QZ_SPORT, excl: QZ_NESSUNO, req: 1 },
   { k: "giorni", t: "m", e: "📅", q: "In quali giorni ti alleni di solito?", o: QZ_GIORNI.map(([l, , v]) => [l, "", v]), salta: senzaSport, nota: "Quale sport fare ogni giorno lo scegli dopo, nella Settimana." },
@@ -99,7 +102,7 @@ function qzRisposteAttuali() {
   const lav = (QZ_LAVORO.find(x => x[3] === (pf.fattoreAttivita || 1.2)) || QZ_LAVORO[0])[2];
   const e = pf.esclusioni || {};
   return {
-    nome: pf.nome || "", sesso: pf.sesso || "", eta: pf.eta || "", altezza: pf.altezza || "", peso: pf.peso || "", obiettivo: ob, lavoro: lav,
+    nome: pf.nome || "", sesso: pf.sesso || "", eta: pf.eta || "", altezza: pf.altezza || "", peso: pf.peso || "", obiettivo: [ob].concat((pf.obiettiviAltri || []).filter(x => x !== ob && QZ_OBIETTIVI.some(o => o[2] === x))), obiettivoAltro: pf.obiettivoNota || "", lavoro: lav,
     sport: sport.length ? sport.map(s => daSport(s) || (pf.sport.some(x => x.id === s) ? "a:" + s : null)).filter(Boolean) : [QZ_NESSUNO],
     sportAltri: sport.filter(s => !daSport(s)).map(s => pf.sport.find(x => x.id === s)).filter(Boolean).map(sp => ({ x: "a:" + sp.id, nome: sp.nome, f: qzFaticaDi(sp.kMin || 0.075) })),
     giorni: tipi.map((t, i) => sportDelTipo(t).length ? i : -1).filter(i => i >= 0),
@@ -120,6 +123,7 @@ function apriQuestionario(rifai) {
   if (ripreso && !!ripreso.rifai === !!rifai) qz = ripreso;
   else if (rifai) qz = { R: qzRisposteAttuali(), step: 0, rifai: true };
   else qz = { R: { orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, ORARI_DEFAULT[p]])), colore: "lilla", iconaApp: "🌙", nomeApp: "Sailor Fit" }, step: 0, rifai: false };
+  if (qz.R && typeof qz.R.obiettivo === "string") qz.R.obiettivo = [qz.R.obiettivo];   // risposte salvate quando l'obiettivo era uno solo
   editCtx = null;
   if (!qzAttiva(QZ[qz.step])) qz.step = qzProssimo(qz.step, 1);
   openModal(`<div class="qz" id="qz"></div>`);
@@ -176,7 +180,7 @@ function qzMacroKg(R) {
   // contano i giorni con un allenamento vero: una camminata breve non chiede più proteine
   const giorni = senzaSport(R) ? 0 : leggeri ? (R.giorni || []).length : (R.giorni || []).filter(g => { const l = R.settimana && R.settimana[g]; return !l || !l.length || l.some(s => !qzLeggero(R, s)); }).length;
   const protKg = giorni === 0 ? 1.3 : leggeri ? 1.4 : giorni <= 3 ? 1.6 : 1.8;   // tre allenamenti a settimana (o meno) non chiedono le proteine di chi si allena tutti i giorni
-  const pk = R.obiettivo === "definire" && giorni > 0 ? Math.max(protKg, 2) : protKg;   // per definire servono più proteine, a tenere i muscoli
+  const pk = qzObPrincipale(R) === "definire" && giorni > 0 ? Math.max(protKg, 2) : protKg;   // per definire servono più proteine, a tenere i muscoli
   // vegani: al massimo 1,6 g/kg. Con legumi e cereali di più non si arriva senza proteine in polvere a ogni pasto (e le ricette non ci starebbero)
   return { protKg: R.dieta === "vegana" ? Math.min(pk, 1.6) : pk, grassiKg: 0.8 };
 }
@@ -215,7 +219,7 @@ function qzRender() {
       placeholder="${esc(q.ph || "")}" value="${esc(v ?? "")}">${q.un ? `<b>${q.un}</b>` : ""}</div>`;
   } else if (q.t === "u" || q.t === "m") {
     const sel = q.t === "m" ? (v || []) : (v ? [v] : []);
-    h += `<div class="qz-sc ${q.k === "giorni" ? "qz-giorni" : ""}">${q.o.map((o, i) => `<button class="qz-b ${sel.includes(o[2]) ? "on" : ""}" data-qz-o="${i}">${o[1] ? `<span class="qz-e">${o[1]}</span>` : ""}<span>${esc(o[0])}</span></button>`).join("")}</div>`;
+    h += `<div class="qz-sc ${q.k === "giorni" ? "qz-giorni" : ""}">${q.o.map((o, i) => `<button class="qz-b ${sel.includes(o[2]) ? "on" : ""}" data-qz-o="${i}">${o[1] ? `<span class="qz-e">${o[1]}</span>` : ""}<span>${esc(o[0])}${q.k === "obiettivo" && sel.length > 1 && sel[0] === o[2] ? `<small class="qz-sub">decide le calorie</small>` : ""}</span></button>`).join("")}</div>`;
     if (q.k === "sport") {   // sport scritti a mano: ognuno con quanto è faticoso
       h += (R.sportAltri || []).map(a => `<div class="qz-altro-sp"><div class="qz-altro-t"><b>🏅 ${esc(a.nome)}</b><button class="qz-togli" data-qz-sp-togli="${esc(a.x)}" aria-label="Togli ${esc(a.nome)}">✕</button></div>
         <p class="qz-pic">Quanto è faticoso?</p><div class="qz-fatica">${QZ_FATICA.map(([k, l, e]) => `<button class="qz-b qz-mini ${a.f === k ? "on" : ""}" data-qz-fatica="${esc(a.x)}|${k}"><span class="qz-e">${e}</span><span>${l}</span></button>`).join("")}</div>
@@ -249,9 +253,9 @@ function qzRender() {
       <p class="qz-anteprima">${esc(R.iconaApp || "🌙")} ${esc(R.nomeApp || "Sailor Fit")}</p>
       <p class="qz-pic">Il nome sotto l'icona nella schermata Home lo decide il telefono quando aggiungi l'app.</p>`;
   } else if (q.t === "riepilogo") {
-    const s = qzStima(), ob = (QZ_OBIETTIVI.find(x => x[2] === R.obiettivo) || [])[0] || "";
+    const s = qzStima(), obL = (Array.isArray(R.obiettivo) ? R.obiettivo : [R.obiettivo]).map(k => (QZ_OBIETTIVI.find(x => x[2] === k) || [])[0]).filter(Boolean).concat(String(R.obiettivoAltro || "").trim() ? [String(R.obiettivoAltro).trim()] : []), ob = obL.join(", ");
     h += `<div class="qz-riep">
-      <p>${R.nome ? `${esc(R.nome)}, il` : "Il"} tuo obiettivo: <b>${esc(ob.toLowerCase())}</b>.</p>
+      <p>${R.nome ? `${esc(R.nome)}, ${obL.length > 1 ? "i" : "il"}` : obL.length > 1 ? "I" : "Il"} tu${obL.length > 1 ? "oi obiettivi" : "o obiettivo"}: <b>${esc(ob.toLowerCase())}</b>.</p>
       <div class="qz-num"><b>${s.kcal}</b><span>kcal in un giorno di riposo</span></div>
       <p class="qz-macro">Proteine <b>${s.proteine} g</b> · Carboidrati <b>${s.carboidrati} g</b> · Grassi <b>${s.grassi} g</b></p>
       <p class="qz-pic">${senzaSport(R) ? "" : "Nei giorni di allenamento un po' di più, in base allo sport. "}Sono stime da cui partire: potrai cambiare tutto nel Profilo.</p>
@@ -387,13 +391,15 @@ function qzFine() {
     fattoreAttivita: (QZ_LAVORO.find(x => x[2] === R.lavoro) || QZ_LAVORO[0])[3],
     pasti: (R.pasti || []).length ? ORDINE_TEMPO.filter(p => (R.pasti || []).includes(p) && (p !== "sera" || String(R.pastoAltro || "").trim())) : ORDINE_BASE.slice(),   // saltato: i pasti di base
     nomeSera: String(R.pastoAltro || "").trim(),
-    funzioni: Object.fromEntries(["ricette", "spesa"].map(x => [x, (R.funzioni || []).includes(x)])),   // quello che non ha scelto non compare
+    funzioni: Object.assign(Object.fromEntries(["ricette", "spesa"].map(x => [x, (R.funzioni || []).includes(x)])), { allenamenti: !senzaSport(R) }),   // nessuno sport scelto (o saltato): niente «Riposo» né allenamenti, si accendono dal Profilo   // quello che non ha scelto non compare
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, typeof R.orari[p] === "number" ? R.orari[p] : ORARI_DEFAULT[p]])),
     esclusioni: { allergie: (R.allergie || []).filter(x => x !== QZ_NESSUNO), nonMangio: (R.nonMangio || []).filter(x => x !== QZ_NESSUNO),
       altri: String(R.nonMangioAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3),
       allergieAltre: String(R.allergieAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3) },
     colore: R.colore || "lilla", iconaApp: R.iconaApp || "🌙", nomeApp: String(R.nomeApp || "").trim() || "Sailor Fit",
-    obiettivo: R.obiettivo || "dimagrire",
+    obiettivo: qzObPrincipale(R) || "mantenere",
+    obiettiviAltri: (Array.isArray(R.obiettivo) ? R.obiettivo.slice(1) : []),   // gli altri scelti (non cambiano le calorie)
+    obiettivoNota: String(R.obiettivoAltro || "").trim(),
   });
   if (R.dieta) pf.esclusioni.dieta = R.dieta;
   else if (R.piattiVeg === "no") pf.esclusioni.senzaVeg = true;   // niente tofu, seitan, bevande vegetali… (chi è vegetariano o vegano li vuole)

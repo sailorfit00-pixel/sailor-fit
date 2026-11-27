@@ -2168,7 +2168,7 @@ function renderOggi() {
     <div class="oggi-nav">
       <button class="nav-btn" data-oggi-giorno="-1" aria-label="Giorno precedente">‹</button>
       <div class="oggi-data"><b>${isOggi ? "Oggi" : fmtGiornoLungo(data)}</b>
-        <button class="tipo-btn" data-scegli-allen-data="${data}">${TIPI_GIORNATA[g.tipo].icone} ${esc(TIPI_GIORNATA[g.tipo].label)} <span class="caret">▾</span></button></div>
+        ${funzioneAttiva("allenamenti") ? `<button class="tipo-btn" data-scegli-allen-data="${data}">${TIPI_GIORNATA[g.tipo].icone} ${esc(TIPI_GIORNATA[g.tipo].label)} <span class="caret">▾</span></button>` : ""}</div>
       <button class="nav-btn" data-oggi-giorno="1" aria-label="Giorno successivo">›</button>
     </div>
     <div class="oggi-card riepilogo">

@@ -227,7 +227,7 @@ function giorniSettimanaHTML(dataRif) {
           <button class="nav-btn" data-sett-passo="1" data-giorno="${d}" ${p.target[i] >= hi ? "disabled" : ""} aria-label="100 kcal in più">＋</button>
         </div>
       </div>
-      <button class="tipo-btn gs-tipo" data-scegli-allen-data="${d}">${tipoSportHTML(TIPI_GIORNATA[giornoDiario(d).tipo])} <span class="caret">▾</span></button>
+      ${funzioneAttiva("allenamenti") ? `<button class="tipo-btn gs-tipo" data-scegli-allen-data="${d}">${tipoSportHTML(TIPI_GIORNATA[giornoDiario(d).tipo])} <span class="caret">▾</span></button>` : ""}
     </div>`;
   }).join("");
   return futuriHTML;

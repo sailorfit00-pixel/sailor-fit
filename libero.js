@@ -2388,6 +2388,10 @@ function oraDetta(t) {
 }
 function comandoAllenamento(testo) {
   const t = fraseDetta(testo), pf = leggiProfilo();
+  if (!funzioneAttiva("allenamenti")) {   // allenamenti spenti: chi parla di sport sa dove accenderli
+    if (!pastiNellaFrase(t).length && /\b(?:sport|allen\w*|alleno|riposo|crossfit|palestra|pesi|funzionale|corsa|corso|camminata|bici|nuoto|yoga|pilates|padel|tennis|ballo|equitazione|calcio|pallavolo|basket|arrampicata)\b/.test(t)) { funzioneSpenta("allenamenti"); return true; }
+    return false;
+  }
   if (pastiNellaFrase(t).length && !/\balleno|allenamento\b/.test(t)) return false;   // «a pranzo…»: è un pasto
   const riposo = RIPOSO_COMANDO.test(t), sport = riposo ? [] : sportDetti(t, pf), durate = durateDette(t), ora = oraDetta(t);
   if (!riposo && !sport.length && !(ora !== null && /\balleno|allenamento|allenarmi|palestra\b/.test(t))) return false;
@@ -2640,7 +2644,7 @@ function apriComandiVocali() {
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
     <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla: vedi l'onda e la frase mentre parli; lascia per finire. (Con un tocco breve resta in ascolto: ritocca 🎤 per finire.) Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
-    <div class="cv-lista">${COMANDI_VOCALI.filter(([, tit]) => !(tit === "Lista della spesa" && !funzioneAttiva("spesa")) && !(tit === "Idee e consigli" && !funzioneAttiva("ricette") && !funzioneAttiva("consigli"))).map(([ico, tit, nota, es]) => `<details class="cv-sez">
+    <div class="cv-lista">${COMANDI_VOCALI.filter(([, tit]) => !(["Allenamento", "Settimana tipo", "Durata e orario di solito degli sport", "I tuoi sport"].includes(tit) && !funzioneAttiva("allenamenti")) && !(tit === "Lista della spesa" && !funzioneAttiva("spesa")) && !(tit === "Idee e consigli" && !funzioneAttiva("ricette") && !funzioneAttiva("consigli"))).map(([ico, tit, nota, es]) => `<details class="cv-sez">
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
       <ul class="cv-es">${es.map(x => `<li>«${esc(x)}»</li>`).join("")}</ul></details>`).join("")}</div>

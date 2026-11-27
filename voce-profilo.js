@@ -463,5 +463,5 @@ let vpOrig = "";
 function comandoProfilo(testo) {
   const t = fraseDetta(testo); vpOrig = String(testo || "").trim();
   return vpQuestionario(t) || vpNaviga(t) || vpBudgetSettimana(t) || vpPersonalizza(t) || vpDati(t) || vpObiettivo(t) || vpMacro(t)
-    || vpAlimentazione(t) || vpPastiScelti(t) || vpSport(t) || vpSettimanaTipo(t) || vpDurataSport(t) || vpOrarioAllen(t) || vpOrariPasti(t);
+    || vpAlimentazione(t) || vpPastiScelti(t) || (funzioneAttiva("allenamenti") && (vpSport(t) || vpSettimanaTipo(t) || vpDurataSport(t) || vpOrarioAllen(t))) || vpOrariPasti(t);   // senza allenamenti: ci pensa comandoAllenamento (dice dove accenderli)
 }
