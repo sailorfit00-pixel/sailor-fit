@@ -1885,6 +1885,8 @@ function openModal(html) {
 // Dopo la chiusura di un pannello, su iPhone un tocco può "ripetersi" sulla schermata
 // sotto (es. finire su 📊): per mezzo secondo i tocchi fuori dai pannelli si ignorano.
 let _chiusoAlle = 0;
+// un comando detto mentre c'era la domanda «Salvare?»: parte appena il pannello si chiude (dopo Salva / Non salvare)
+var _dettatoPoi = null;
 document.addEventListener("click", (e) => {
   // (la scelta di un file, es. "Ripristina da un backup", parte subito dopo la chiusura del pannello e non va bloccata)
   // solo i tocchi veri: i comandi vocali («apri l'andamento», «vai alla settimana») aprono la sezione subito dopo aver chiuso il pannello
@@ -1935,6 +1937,7 @@ function closeModal(forza) {
   }
   // ✕ (o tocco fuori) sulla domanda «Salvare il pasto?»: si torna al pasto, niente si perde
   if (!forza && typeof liberoCtx !== "undefined" && liberoCtx && liberoCtx.vivo && document.querySelector("#modal-content [data-pasto-salva]")) {
+    _dettatoPoi = null;   // si torna al pasto: il comando detto non parte più
     rirenderLibero(); const sh = document.querySelector("#modal .modal-sheet"); if (sh) sh.classList.add("foglio-pieno"); return;
   }
   // chiudendo un pasto con modifiche non salvate (o alimenti scelti ma non aggiunti): prima si chiede
@@ -1947,6 +1950,7 @@ function closeModal(forza) {
   segnaTab(typeof vistaHome !== "undefined" ? vistaHome : "oggi");
   _chiusoAlle = Date.now();
   document.getElementById("modal").hidden = true;
+  if (_dettatoPoi) { const f = _dettatoPoi; _dettatoPoi = null; setTimeout(f, 0); }
   if (document.body.classList.contains("no-scroll")) { document.body.classList.remove("no-scroll"); document.body.style.top = ""; window.scrollTo(0, _scrollSotto); }
   editCtx = null;
   if (nuovaRic && nuovaRic === bozzaRic) bozzaStep = wizStep;   // la ricetta nuova a metà resta nella bozza

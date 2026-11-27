@@ -245,7 +245,7 @@ function qzRender() {
   if (q.nota && q.t !== "ora") h += `<p class="qz-pic">${esc(q.nota)}</p>`;
   if (q.t === "intro") h += `<button class="btn-link qz-backup" data-azione="ripristina">Hai già usato l'app? Ripristina un backup ›</button>`;
   const ultimo = q.t === "riepilogo";
-  h += `<div class="qz-foot"><button class="btn block" id="qz-avanti" ${qzValido(q) ? "" : "disabled"}>${ultimo ? "✓ Inizia" : q.t === "intro" ? "Iniziamo →" : q.opz && !v && !(q.altro && String(R[q.altro] || "").trim()) ? "Salta →" : "Avanti →"}</button></div>`;
+  h += `<div class="qz-foot"><button class="btn block" id="qz-avanti" ${qzValido(q) ? "" : "disabled"}>${ultimo ? (qz.rifai ? "✓ Inizia" : "Avanti →") : q.t === "intro" ? "Iniziamo →" : q.opz && !v && !(q.altro && String(R[q.altro] || "").trim()) ? "Salta →" : "Avanti →"}</button></div>`;
   box.innerHTML = h;
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = 0;
   if (sh) sh.classList.toggle("qz-sheet-intro", q.t === "intro");
@@ -433,13 +433,58 @@ function qzFine() {
   localStorage.setItem("mp_benvenuto", "fatto");
   try { sessionStorage.removeItem(QZ_CHIAVE); } catch (e) {}
   qz = null;
+  // persona nuova: resta a schermo intero (senza la barra in basso) per l'ultima schermata con «Inizia»; colore e icona sono già quelli scelti
+  if (nuovo) { applicaPersonalizzazione(); qzTuttoPronto(); return; }
   // anche «qz-primo» (questionario a schermo intero): prima restava sul body e la barra in basso spariva finché non riaprivi l'app
   document.getElementById("modal").classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo", "qz-aperto");
   closeModal();
   applicaPersonalizzazione();
   if (typeof renderOggi === "function") renderOggi();
-  avviso(nuovo ? "Tutto pronto! 🎉" : "Profilo aggiornato");
+  avviso("Profilo aggiornato");
 }
+// ---- Ultima schermata della prima volta: «Tutto pronto!» e come mettere l'app sulla schermata Home (secondo telefono e browser) ----
+// Solo un suggerimento: «Inizia» porta sempre a Oggi. Su iPhone l'icona aggiunta ora ha il colore scelto (la prepara applicaIconaHome).
+function qzDispositivo() {
+  const ua = navigator.userAgent || "";
+  if (navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches)) return "installata";
+  if (/Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|TikTok|musical_ly|Snapchat|Pinterest/i.test(ua)) return "social";   // link aperto dentro un'app: lì non si installa
+  if (/Android/i.test(ua)) return "android";
+  const ipad = /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);   // l'iPad si presenta come un Mac, ma con lo schermo touch
+  if (ipad || /iPhone|iPod/.test(ua)) return /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua) || ipad ? "iosAlto" : "iosSafari";   // Safari su iPhone: Condividi in basso; Chrome/Edge/Firefox e iPad: in alto a destra
+  if (/Firefox\//.test(ua)) return "installata";   // Firefox sul computer non installa le app web: niente passi
+  return "computer";
+}
+function qzTuttoPronto() {
+  const box = document.getElementById("qz") || document.getElementById("modal-content"); if (!box) return;
+  const ico = (document.querySelector('link[rel="apple-touch-icon"]') || {}).href || "apple-touch-icon.png";
+  const cond = `<span class="qz-tp-cond">⬆︎</span>`;
+  const home = "Per aprirla come un'app, mettila sulla schermata Home:";
+  const casi = {
+    iosSafari: [home, [`Tocca <b>Condividi</b> ${cond} in basso`, "Scegli <b>Aggiungi alla schermata Home</b>", "Tocca <b>Aggiungi</b>: l'icona avrà il tuo colore"]],
+    iosAlto: [home, [`Tocca <b>Condividi</b> ${cond} in alto a destra`, "Scegli <b>Aggiungi alla schermata Home</b>", "Tocca <b>Aggiungi</b>: l'icona avrà il tuo colore"]],
+    android: [home, ["Tocca il menu <b>⋮</b> in alto a destra", "Scegli <b>Aggiungi a schermata Home</b> (o <b>Installa app</b>)", "Conferma con <b>Aggiungi</b>"]],
+    computer: ["Puoi tenerla anche sul computer, come un'app:", ["Chrome o Edge: icona <b>Installa</b> nella barra dell'indirizzo", "Safari su Mac: menu <b>File → Aggiungi al Dock</b>"]],
+    social: ["Da qui non si può mettere sulla schermata Home.", ["Tocca <b>⋯</b> (o <b>⋮</b>) in alto", "Scegli di aprire la pagina in <b>Safari</b> (o <b>Chrome</b>)", "Lì trovi i passi per metterla sulla Home"]],
+    installata: ["Le calorie e i pasti sono su misura per te. Buon inizio!", []],
+  };
+  const [sotto, passi] = casi[qzDispositivo()] || casi.installata;
+  box.innerHTML = `<div class="qz-pronto"><div class="qz-tp-corpo">
+      <img class="qz-tp-ico" src="${esc(ico)}" alt="">
+      <h2 class="qz-tp-t">🎉 Tutto pronto!</h2>
+      <p class="qz-tp-sotto">${sotto}</p>
+      ${passi.length ? `<ol class="qz-tp-passi">${passi.map((h, i) => `<li><b class="qz-tp-n">${i + 1}</b><span>${h}</span></li>`).join("")}</ol>` : ""}
+    </div>
+    <div class="qz-foot"><button class="btn block" id="qz-inizia">Inizia</button></div></div>`;
+  const sh = document.querySelector("#modal .modal-sheet"); if (sh) { sh.scrollTop = 0; sh.classList.remove("qz-sheet-intro"); }
+  document.getElementById("qz-inizia").addEventListener("click", () => {
+    document.getElementById("modal").classList.remove("modal-qz", "qz-primo"); document.body.classList.remove("qz-primo", "qz-aperto");
+    closeModal(true);
+    if (typeof segnaTab === "function") segnaTab("oggi");
+    if (typeof renderOggi === "function") renderOggi();
+    window.scrollTo(0, 0);
+  });
+}
+
 // chiudendo il questionario a metà: le risposte restano per quando lo riapri; il colore torna quello salvato
 { const m = document.getElementById("modal");
   if (m) new MutationObserver(() => {

@@ -35,7 +35,7 @@ const PREFERITI = {
   "latte di avena": "Bevanda di avena", "latte di soia": "Bevanda di soia", "latte di mandorla": "Bevanda di mandorla",
   "olio di girasole": "Olio di semi", "olio di avocado": "Olio di semi", "farina di grano integrale": "Farina integrale",
   "cioccolato fondente": "Cioccolato fondente", "cocco": "Cocco grattugiato",
-  "petto di tacchino": "Fesa di tacchino", "fesa di tacchino": "Fesa di tacchino", spigola: "Branzino", bistecca: "Manzo magro", filetto: "Manzo magro", brioche: "Cornetto", croissant: "Cornetto", stevia: "Dolcificante", camomilla: "Tisana", songino: "Valeriana", amatriciana: "Pasta all'amatriciana", "omega 3": "Omega 3 (capsule)", merendine: "Merendina al cacao", merendina: "Merendina al cacao", gelatina: "Gelatina in fogli", porcini: "Funghi porcini", lupini: "Lupini", frullato: "Smoothie di frutta", smoothie: "Smoothie di frutta", centrifugato: "Smoothie di frutta", crepes: "Crepes dolci", gatorade: "Bevanda isotonica", powerade: "Bevanda isotonica", "integratori salini": "Bevanda isotonica", caseina: "Caseina in polvere", cheeseburger: "Panino hamburger", magnesio: "Magnesio (integratore)", "vitamina c": "Vitamina C (integratore)", ginseng: "Ginseng (bevanda)", collagene: "Collagene in polvere", "gel energetico": "Gel energetico", nuggets: "Nuggets di pollo", "pad thai": "Pad thai",
+  "petto di tacchino": "Fesa di tacchino", "fesa di tacchino": "Fesa di tacchino", spigola: "Branzino", bistecca: "Manzo magro", filetto: "Manzo magro", brioche: "Cornetto", croissant: "Cornetto", stevia: "Dolcificante", camomilla: "Tisana", songino: "Valeriana", amatriciana: "Pasta all'amatriciana", "omega 3": "Omega 3 (capsule)", merendine: "Merendina al cacao", merendina: "Merendina al cacao", "te verde": "Tè", "zuppa di verdure": "Minestrone", "zuppa di verdura": "Minestrone", "minestra": "Minestrone", "minestra di verdure": "Minestrone", cioccolato: "Cioccolato fondente", "te nero": "Tè", "te caldo": "Tè", "tazza di te": "Tè", torta: "Torta (ciambellone)", "fetta di torta": "Torta (ciambellone)", "latte macchiato": "Latte parzialmente scremato", "caffe latte": "Latte parzialmente scremato", "caffelatte": "Latte parzialmente scremato", "caffellatte": "Latte parzialmente scremato", gelatina: "Gelatina in fogli", porcini: "Funghi porcini", lupini: "Lupini", frullato: "Smoothie di frutta", smoothie: "Smoothie di frutta", centrifugato: "Smoothie di frutta", crepes: "Crepes dolci", gatorade: "Bevanda isotonica", powerade: "Bevanda isotonica", "integratori salini": "Bevanda isotonica", caseina: "Caseina in polvere", cheeseburger: "Panino hamburger", magnesio: "Magnesio (integratore)", "vitamina c": "Vitamina C (integratore)", ginseng: "Ginseng (bevanda)", collagene: "Collagene in polvere", "gel energetico": "Gel energetico", nuggets: "Nuggets di pollo", "pad thai": "Pad thai",
 };
 // "cappuccino con latte di soia", "2 cappuccini interi", "cappuccino scremato"…: tutte le forme portano alla variante giusta
 [["scremato", "scremati"], ["parzialmente scremato", "parzialmente scremati"], ["intero", "interi"], ["di soia"], ["di avena"], ["di mandorla"], ["soia"], ["avena"], ["mandorla"]].forEach(([k, plur]) => {
@@ -1424,7 +1424,7 @@ function nomeAutomatico(items) {
 // "un cucchiaio di olio". Con una quantità il peso resta fisso; senza, lo calcola l'app
 // (ma pizza, bevande e simili valgono 1 porzione intera).
 // Quantità "di solito": la mediana di ciò che hai scelto tu altre volte per quell'alimento (almeno 2 volte); se non c'è storia, una porzione normale per i più comuni.
-const QTA_USUALE = { "Yogurt greco 0%": 150, "Yogurt greco": 150, "Yogurt bianco": 125, "Latte scremato": 150, "Fiocchi di latte": 100, "Skyr": 150 };
+const QTA_USUALE = { "Yogurt greco 0%": 150, "Yogurt greco": 150, "Yogurt bianco": 125, "Latte scremato": 150, "Fiocchi di latte": 100, "Skyr": 150, "Marmellata": 20, "Miele": 15 };   // marmellata e miele: un cucchiaio, non 150 g
 function quantitaUsuale(nome) {
   const v = [];
   try { Object.values(leggiDiario()).forEach(g => (g.pasti || []).forEach(p => (p.ingredienti || []).forEach(i => { if (i.nome === nome && i.lock && i.qta > 0 && (i.unita || "g") !== "q.b.") v.push(+i.qta); }))); } catch (e) { /* senza storia */ }
@@ -1476,6 +1476,7 @@ const numParola = (w) => w === undefined || w === "" ? 1 : NUMERI_PAROLA[w] !== 
 // misure «a voce» → grammi o millilitri; le porzioni («un piatto di…») → la dose solita
 const MISURE_PARLATO = [
   [/^(?:etto|etti)$/, 100, "g"], [/^(?:manciata|manciate)$/, 30, "g"], [/^(?:bicchiere|bicchieri)$/, 200, "ml"], [/^(?:tazza|tazze)$/, 250, "ml"],
+  [/^(?:quadratino|quadratini|quadretto|quadretti)$/, 5, "g"],
   [/^(?:tazzina|tazzine)$/, 40, "ml"], [/^(?:lattina|lattine)$/, 330, "ml"], [/^(?:bottiglietta|bottigliette)$/, 500, "ml"], [/^(?:calice|calici)$/, 150, "ml"],
   [/^(?:piatto|piatti|piattino|ciotola|ciotole|porzione|porzioni|scodella|scodelle|coppetta|coppette)$/, 0, "porz"],
 ];
@@ -1493,14 +1494,37 @@ function credibile(r) {
   const ok = parole.filter(tocca).length;
   return tocca(parole[0]) && ok >= Math.ceil(parole.length / 2);   // la prima parola (in italiano quella che conta: «spigola al forno») deve esserci
 }
+// numeri detti in lettere prima di una misura («cento grammi», «duecentocinquanta ml»): l'iPhone a volte li scrive così
+function numeroItaliano(w) {
+  const U = { uno: 1, un: 1, una: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9 };
+  const D = { dieci: 10, undici: 11, dodici: 12, tredici: 13, quattordici: 14, quindici: 15, sedici: 16, diciassette: 17, diciotto: 18, diciannove: 19 };
+  const T = { vent: 20, trent: 30, quarant: 40, cinquant: 50, sessant: 60, settant: 70, ottant: 80, novant: 90 };
+  let r = String(w || ""), n = 0;
+  if (r.startsWith("mille")) { n += 1000; r = r.slice(5); }
+  const c = r.match(/^(due|tre|quattro|cinque|sei|sette|otto|nove)?cento/); if (c) { n += (c[1] ? U[c[1]] : 1) * 100; r = r.slice(c[0].length); }
+  if (D[r] !== undefined) return n + D[r];
+  const t = Object.keys(T).find(k => r.startsWith(k)); if (t) { n += T[t]; r = r.slice(t.length).replace(/^[ia]/, ""); }
+  if (r && U[r] !== undefined) { n += U[r]; r = ""; }
+  return r === "" && n > 0 ? n : null;
+}
+function sistemaNumeriParlati(t) {
+  return t
+    .replace(/\b([a-z]+)\s+(?=(?:g|gr|grammi|ml|millilitri)\b)/g, (m, w) => { const n = numeroItaliano(w); return n ? n + " " : m; })
+    // «un etto e mezzo di prosciutto» → 150 g
+    .replace(/\b(un|uno|due|tre|quattro|cinque|\d+)\s+(?:etto|etti)\s+e\s+mezzo\s+(di|d')\s*/g, (m, n, di) => `${Math.round((numParola(n) || 1) * 100 + 50)} g di `)
+    // «riso 150 g pollo 100 g»: dopo una quantità senza «di» comincia un alimento nuovo
+    .replace(/(\d+(?:[.,]\d+)?\s*(?:g|gr|grammi|ml|millilitri)\.?)\s+(?!(?:di|d'|e|ed)\b)(?=[a-zà-ù])/g, "$1, ")
+    // «150 g di riso 100 g di pollo» (senza virgole, come spesso scrive l'iPhone): ogni quantità con «di» comincia un alimento nuovo
+    .replace(/([a-zà-ù])(?:\s+(?:e|ed|poi|anche))*\s+(?=\d+(?:[.,]\d+)?\s*(?:g|gr|grammi|ml|millilitri|cucchiai|cucchiaini|cucchiaio|cucchiaino)\.?\s+(?:di\b|d'))/g, "$1, ");
+}
 function righeDaParlato(testo) {
-  let t = String(testo || "").toLowerCase().replace(/[’`]/g, "'").replace(/[.!?\n]+/g, ",").replace(/\b(?:e poi|poi|e dopo|dopo|e anche|inoltre)\b/g, ",").replace(RIEMPITIVI_PARLATO, " ").replace(/\bun paio di\b/g, "2").replace(/\bun (?:po'|pochino|pochettino) d(?:i\s*|')/g, "mezza porzione di ").replace(/\s+/g, " ");
+  let t = sistemaNumeriParlati(String(testo || "").toLowerCase().replace(/[’`]/g, "'")).replace(/[’`]/g, "'").replace(/[.!?\n]+/g, ",").replace(/\b(?:e poi|poi|e dopo|dopo|e anche|inoltre)\b/g, ",").replace(RIEMPITIVI_PARLATO, " ").replace(/\bun paio di\b/g, "2").replace(/\bun (?:po'|pochino|pochettino) d(?:i\s*|')/g, "mezza porzione di ").replace(/\s+/g, " ");
   const intera = (x) => { const r = leggiRigaIngrediente(x); if (!r || !r.nome) return false; const a = norm(r.nome), b = norm(r.cercato); return a === b || a.includes(b) || PREFERITI[b] === r.nome; };
   // si divide su virgole, «e», «più», «con» (ma «pizza funghi e speck» o «pane con pomodoro», se sono un alimento solo, restano interi)
   const parti = t.split(/[,;+]/).map(s => s.trim()).filter(Boolean)
     .flatMap(x => /\s(e|ed|più|piu)\s/.test(x) && !intera(x) ? x.split(/\s(?:e|ed|più|piu)\s/) : [x])
     .flatMap(x => /\scon\s/.test(x) && !intera(x) ? x.split(/\scon\s+(?:(?:il|lo|la|le|gli|i|una|uno|un|della|dello|delle|del|dei|degli)\s+|l'|un'|dell')?/) : [x])
-    .map(x => x.trim().replace(/^(?:e|ed|di|il|lo|la|le|gli|i)\s+/, "").replace(/^l'/, "").trim()).filter(x => x.length >= 2);
+    .map(x => x.trim().replace(/^con\s+(?:(?:il|lo|la|le|gli|i|della|dello|delle|del|dei|degli)\s+|l'|dell')?/, "").replace(/^(?:e|ed|di|il|lo|la|le|gli|i)\s+/, "").replace(/^l'/, "").replace(/\s+(?:e|ed)$/, "").trim()).filter(x => x.length >= 2);   // «a pranzo con riso e pollo»: il «con» iniziale non fa parte del cibo
   return parti.map(p => {
     // «un etto di bresaola», «due bicchieri di latte», «un piatto di pasta al pomodoro»
     const m = p.match(new RegExp("^" + NUM_PAROLA_RE + "?\\s*([a-zà-ù]+)\\s+(?:di|d')\\s*(.+)$"));
@@ -2501,9 +2525,11 @@ function comandoTogliPorta(testo) {
   return true;
 }
 
+// «ho pranzato con riso e pollo», «stasera ho cenato con una pizza»: il pasto detto con il verbo
+const pastoDalVerbo = (t) => String(t || "").replace(/\b(?:ho|abbiamo)\s+pranzato\b/gi, "a pranzo").replace(/\b(?:ho|abbiamo)\s+cenato\b/gi, "a cena").replace(/\bpranzato\b/gi, "pranzo").replace(/\bcenato\b/gi, "cena").replace(/\b(?:ho|abbiamo)\s+fatto\s+(colazione|merenda|spuntino)\b/gi, "a $1");
 function inviaDettato(testo) {
   document.querySelectorAll(".detta-velo").forEach(v => v.remove());   // sicurezza: niente «Ti ascolto…» sopra la scelta del pasto
-  testo = String(testo || "").trim();
+  testo = pastoDalVerbo(String(testo || "").trim());
   if (!testo) { avviso("Non ho sentito niente: riprova"); return; }
   // l'ordine conta: «quanto mi manca?» è una domanda, non la spesa; «peso 61» prima degli sport («pesi»)
   if (comandoDomanda(testo)) return;
@@ -2521,7 +2547,11 @@ function inviaDettato(testo) {
   if (giorni.length) testo = togliGiorni(t0, giorni) || testo;
   let { pasto, resto } = pastoDaFrase(testo, data);
   // «stasera ho mangiato una pizza»: senza un pasto detto, «stasera» è la cena
-  if (!pasto && /\bstasera\b/.test(t0) && momentiGiorno(data).includes("cena")) pasto = "cena";
+  // senza un pasto detto: «stasera» / «ieri sera» → cena, «stamattina» / «ieri mattina» → colazione (le parole del momento non sono cibo)
+  if (!pasto) {
+    const p2 = /\b(?:stasera|sera)\b/.test(t0) ? "cena" : /\b(?:stamattina|stamani|mattina)\b/.test(t0) ? "colazione" : null;
+    if (p2 && momentiGiorno(data).includes(p2)) { pasto = p2; resto = String(resto || testo).replace(/\b(?:stasera|sera|stamattina|stamani|mattina)\b/g, " ").replace(/\s+/g, " ").trim(); }
+  }
   if (pasto && resto) { apriPastoConDettato(pasto, resto, data); return; }
   // né un comando né un cibo che conosco («che tempo fa», «accendi la luce»): lo si dice, invece di chiedere in quale pasto scriverlo
   if (!righeDaParlato(resto || testo).some(x => x.r)) { nonCapitoDetta(testo, () => sceltaPastoDettato(testo, resto, data, giorni.length)); return; }
@@ -2564,9 +2594,9 @@ const COMANDI_VOCALI = [
     ["domani a pranzo riso basmati e tonno", "giovedì a cena 150 g di pollo e zucchine", "dopodomani a colazione yogurt greco", "lunedì prossimo a pranzo pasta al pomodoro"]],
   ["📋", "Copiare un pasto", "I piatti finiscono in «Da aggiungere» del pasto di destinazione: li controlli e tocchi ✓ Aggiungi.",
     ["rifai il pranzo di ieri anche oggi", "ripeti la colazione di ieri", "copia la cena di lunedì su giovedì", "copia il pranzo di oggi anche a cena", "metti domani lo stesso pranzo di oggi", "rifai come ieri a cena"]],
-  ["🔄", "Sostituire un alimento", "Carne, pesce, uova e latticini: stesse proteine. Il resto: stesse calorie. Se dici i grammi valgono quelli. Funziona sui pasti già scritti.",
+  ["🔄", "Sostituire un alimento", "Carne, pesce, uova e latticini: stesse proteine. Il resto: stesse calorie. Se dici i grammi valgono quelli. Funziona sui pasti già scritti e, con un pasto aperto, sui suoi alimenti.",
     ["sostituisci il pollo con il tacchino", "cambia il riso con le patate a cena", "metti il merluzzo al posto del pollo domani", "tacchino invece del pollo", "sostituisci il pollo con 150 g di tacchino"]],
-  ["✂️", "Togliere o cambiare la quantità", "Su un alimento già scritto: prima vedi cosa cambia, poi confermi.",
+  ["✂️", "Togliere o cambiare la quantità", "Su un alimento già scritto: prima vedi cosa cambia, poi confermi. Con un pasto aperto vale per i suoi alimenti, anche quelli ancora da aggiungere.",
     ["togli il pane dal pranzo", "togli il pollo dalla cena di ieri", "porta il riso a 200 grammi", "porta il riso del pranzo a 150 g", "metti l'olio a 5 grammi"]],
   ["🛒", "Lista della spesa", "Vedi le voci capite (con il cestino ne togli una), poi tocchi Aggiungi.",
     ["aggiungi albumi alla spesa", "mi manca il pollo", "devo comprare gli albumi e le zucchine", "ho finito lo yogurt greco", "non c'è più il pane", "scrivi nella spesa detersivo piatti e carta forno"]],
@@ -2650,15 +2680,62 @@ function micRipiego(modo, nota) {
   }
   apriDettaTesto(nota);
 }
+// ---- Detta con un pasto aperto: comandi sugli alimenti del pasto ----
+// «togli il pane», «porta il riso a 100 g», «sostituisci il riso con le patate» (anche «patate invece del riso», «metti le patate al posto del riso»):
+// valgono per gli alimenti del pannello aperto (anche quelli ancora da aggiungere), come toccare 🗑️ o il contatore. Se non c'è, falso: ci pensano gli altri comandi
+function modificaPastoAVoce(c, testo) {
+  const t = fraseDetta(testo).replace(/[.!?]/g, " ").replace(/\s+/g, " ");
+  let m, tipo = null, x = null, y = null, q = 0;
+  if ((m = t.match(/^\s*(?:togli|toglimi|rimuovi|elimina|cancella|leva|levami)\s+(.+)$/))) { tipo = "togli"; x = m[1]; }
+  else if ((m = t.match(/^\s*(?:porta|porti|metti|aumenta|diminuisci|riduci|cambia)\s+(.+?)\s+(?:a|da\s+\d+\s+a)\s+(\d{1,4}(?:[.,]\d)?)\s*(?:g|grammi|gr|ml|millilitri)\b/))) { tipo = "porta"; x = m[1]; q = Math.round(parseFloat(m[2].replace(",", "."))); }
+  else if ((m = t.match(/^\s*(?:sostituisci|sostituire|sostituiscimi|cambia|cambiami|scambia|rimpiazza)\s+(.+?)\s+(?:con|in)\s+(.+)$/))) { tipo = "sost"; x = m[1]; y = m[2]; }
+  else if ((m = t.match(/^\s*(?:metti|mettimi|usa)\s+(.+?)\s+al posto\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { tipo = "sost"; y = m[1]; x = m[2]; }
+  else if ((m = t.match(/^\s*(?:metti|mettimi|usa)?\s*(.+?)\s+invece\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { tipo = "sost"; y = m[1]; x = m[2]; }
+  if (!tipo) return false;
+  // un altro pasto o un altro giorno nominato («…a cena», «…di ieri»): non è questo pannello, ci pensano gli altri comandi
+  if (pastiNellaFrase(t, c.data).some(p => p.p !== c.pasto) || /\b(?:ieri|altroieri|domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)(?![a-zà-ù])/.test(t)) return false;
+  // via «dal pranzo», «della cena»…: si parla del pasto aperto
+  const pulisci = (v) => String(v || "").replace(/\b(?:dal|dalla|dallo|del|della|dello|nel|nella|in|a|al|alla|di)\s+(?:colazione|pranzo|cena|merenda|spuntino|dopo cena)\b.*$/, "").trim().replace(ARTICOLI_DETTA, "").trim();
+  x = pulisci(x);
+  const parole = normCibo(x).split(" ").filter(w => w.length > 2).map(w => w.replace(/[ie]$/, ""));
+  if (!parole.length) return false;
+  const k = c.items.findIndex(it => it.grp == null && parole.every(w => (normCibo(it.nome) + " " + normCibo(it.cercato || "")).includes(w)));
+  if (k < 0) return false;
+  const it = c.items[k];
+  if (tipo === "porta") {
+    if (!(q >= 1 && q <= 2000)) return false;
+    it.qta = q; it.unita = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g"; it.lock = true; c.ultimoAgg = it.nome;
+    ricalcolaLibero(); rirenderLibero(); avviso(`${it.nome}: ${q} ${it.unita}`); return true;
+  }
+  c.items.splice(k, 1);
+  if (tipo === "sost") { aggiungiDaParlato(pulisci(y)); avviso(`${it.nome} → ${pulisci(y)}`); }
+  else { ricalcolaLibero(); avviso(`Tolto: ${String(it.nome).toLowerCase()}`); }
+  rirenderLibero(); return true;
+}
+// frasi che non sono cibo da scrivere nel pasto aperto: domande, peso, spostarsi, allenamento, profilo, calorie dei giorni, togli/sostituisci altrove
+const COMANDO_FUORI_PASTO = /^\s*(?:quant[aeio]|a che punto|peso|pesavo|mi sono pesat\w*|apri|aprimi|vai|torna|portami|mostra|mostrami|fammi vedere|cosa|che cosa|idee|rifai|ripeti|copia|imposta|togli|toglimi|rimuovi|elimina|cancella|leva|porta|sostituisci|cambia|scambia|ho fatto|ho corso|ho camminato|ho nuotato|mi alleno|di solito|colore|tema|chiama|chiamami|icona|voglio|passa a|deficit|obiettivo|basale|calcolo|reintegra|sono|non sono|non mangio|non mi piac\w*|adesso mangio|non faccio|faccio anche|attiva|disattiva)\b|\b(?:stamattina|ieri|oggi) pesavo\b|\b\d{3,5}\s*(?:calorie|kcal)\b|\b(?:minuti|mezz'ora|un'ora|ore|km|chilometri)\b|\b(?:riposo|allenamento|vibrazione|questionario|andamento|backup|ricette|al posto|invece)\b|^\s*(?:proteine|grassi|carboidrati)\s+\d|\balle\s+\d|\b(?:sport|intensit\w*|per chilo|al giorno|miei pasti)\b|\b(?:crossfit|palestra|pesi|funzionale|corsa|camminata|bici|nuoto|yoga|pilates|padel|tennis|ballo|equitazione|calcio|pallavolo|basket|arrampicata)\b|\b(?:ieri|altroieri|domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica|prossim[oa]|scors[oa])(?![a-zà-ù])|\b\d+\s+anni\b/;   // un altro giorno: si va in quel giorno
+// lasciare il pannello aperto per un comando senza perdere niente: con modifiche non salvate prima la domanda «Salvare?», il comando parte dopo la risposta
+function esciPoiDettato(fai) {
+  const m = document.getElementById("modal");
+  const domanda = () => !m.hidden && !!document.querySelector("#modal-content [data-pasto-nonsalvare], #modal-content [data-pf-nonsalvare]");
+  if (m.hidden) { fai(); return; }
+  if (!domanda()) closeModal();
+  if (m.hidden) { fai(); return; }
+  if (domanda()) { _dettatoPoi = fai; avviso("Prima scegli «Salva» o «Non salvare»: poi faccio quello che hai detto"); return; }
+  fai();   // pannello che non si chiude (il primo questionario): come prima
+}
 function micTesto(modo, testo) {
   // con la lista della spesa aperta quello che dici va in lista («latte scremato tre confezioni»), anche senza «alla spesa»
   if (document.getElementById("spesa-nuova") && !document.getElementById("modal").hidden) { apriConfermaSpesa(testo); return; }
   if (pastoApertoPerDetta()) modo = "pasto";
-  if (modo === "pasto" && liberoCtx && SPESA_COMANDO.test(fraseDetta(testo))) { apriConfermaSpesa(testo); return; }   // «aggiungi albumi alla spesa» anche da dentro un pasto
+  const t = fraseDetta(testo), domanda = DOMANDA_MANCA.test(t) || DOMANDA_IDEE.test(t);
   if (modo === "pasto" && liberoCtx) {   // dentro un pasto si resta in quel pasto: «a cena…» detto nel pranzo va nel pranzo
+    if (modificaPastoAVoce(liberoCtx, testo)) return;   // «togli il pane», «porta il riso a 100 g», «sostituisci…»
+    if (!domanda && SPESA_COMANDO.test(t)) { esciPoiDettato(() => apriConfermaSpesa(testo)); return; }   // «aggiungi albumi alla spesa» anche da dentro un pasto
+    if (domanda || COMANDO_FUORI_PASTO.test(t)) { esciPoiDettato(() => inviaDettato(testo)); return; }   // «quanto mi manca?», «peso 61,4», «apri l'andamento»…
     aggiungiDaParlato(pastoDaFrase(testo).resto || testo); rirenderLibero(); return;
   }
-  inviaDettato(testo);
+  esciPoiDettato(() => inviaDettato(testo));   // anche dalla barra: un pannello con modifiche non salvate non si perde
 }
 (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2730,7 +2807,7 @@ function micTesto(modo, testo) {
       micRipiego(modo, "Il riconoscimento vocale è spento: su iPhone attiva Impostazioni → Generali → Tastiera → Abilita dettatura. Intanto puoi usare il 🎤 della tastiera."); return;
     }
     if (!ok && err === "not-allowed") {
-      micRipiego(modo, "Il microfono non è permesso per questa app: permettilo nelle impostazioni del telefono (Safari → Microfono). Intanto puoi usare il 🎤 della tastiera."); return;
+      micRipiego(modo, `Il microfono non è permesso per questa app: permettilo ${IOS ? "in Impostazioni → Safari → Microfono (o, se l'hai aperta da Chrome, Impostazioni → Chrome → Microfono)" : /Android/i.test(navigator.userAgent) ? "toccando il lucchetto accanto all'indirizzo → Autorizzazioni → Microfono (nell'app sulla Home: tieni premuta l'icona → Info app → Autorizzazioni)" : "dal lucchetto accanto all'indirizzo del browser"}. Intanto puoi usare il 🎤 della tastiera.`); return;
     }
     if (!ok) { micRipiego(modo, `Qui il microfono dell'app non funziona: usa il 🎤 della tastiera.<br><small class="detta-diag">codice: ${esc(codiceDiag())}</small>`); return; }
     // il microfono era acceso ma non è arrivata nessuna parola: un avviso corto, con «Scrivi» per il campo dove dettare con il 🎤 della tastiera
