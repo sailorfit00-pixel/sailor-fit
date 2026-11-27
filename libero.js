@@ -2738,8 +2738,11 @@ function micTesto(modo, testo) {
       micRipiego(modo, "Il microfono non è permesso per questa app: permettilo nelle impostazioni del telefono (Safari → Microfono). Intanto puoi usare il 🎤 della tastiera."); return;
     }
     if (!ok) { micRipiego(modo, `Qui il microfono dell'app non funziona: usa il 🎤 della tastiera.<br><small class="detta-diag">codice: ${esc(codiceDiag())}</small>`); return; }
-    // non è arrivata nessuna parola: il campo dove dettare con il 🎤 della tastiera (sull'iPhone funziona sempre), con il codice per capire cosa è successo
-    micRipiego(modo, `Non ho sentito niente. Riprova con 🎤 Detta, oppure tocca il 🎤 della tastiera qui sotto e parla.<br><small class="detta-diag">codice: ${esc(codiceDiag())}</small>`);
+    // il microfono era acceso ma non è arrivata nessuna parola: un avviso corto, con «Scrivi» per il campo dove dettare con il 🎤 della tastiera
+    // (sull'iPhone funziona sempre) e il codice per capire cosa è successo. Se il microfono si spegneva da solo, il campo si apre subito
+    const nota = `Non ho sentito niente. Riprova con 🎤 Detta, oppure tocca il 🎤 della tastiera qui sotto e parla.<br><small class="detta-diag">codice: ${esc(codiceDiag())}</small>`;
+    if (vuotiDiFila >= MAX_VUOTI || diag.includes("bloccato")) { micRipiego(modo, nota); return; }
+    avviso("Non ho sentito niente", "⌨️ Scrivi", () => micRipiego(modo, nota));
   };
   // di nuovo 🎤: il telefono consegna le ultime parole, poi si va avanti
   const fatto = () => {
@@ -2797,7 +2800,9 @@ function micTesto(modo, testo) {
       // (se il tocco è già finito non c'è più niente da aspettare: il microfono è proprio bloccato)
       if (errore === "not-allowed" && !partito && !daRiprovare && !toccoFinito && stato === "avvio" && Date.now() - inizioAscolto < 1500) { daRiprovare = true; rec = null; return; }
       // si riparte anche se si è fermato prima di sentirti (su iPhone capita un «no-speech» appena acceso): al massimo 5 secondi, poi il campo per scrivere
-      vuotiDiFila = risultatiGiro ? 0 : vuotiDiFila + 1;
+      // conta come «a vuoto» solo un giro che non è partito o si è chiuso subito (microfono che non va); se ti sente ma stai zitta, si aspetta
+      const duratoGiro = Date.now() - (r._da || 0);
+      vuotiDiFila = risultatiGiro ? 0 : (!giroAcceso || duratoGiro < 1000) ? vuotiDiFila + 1 : 0;
       // il telefono si ferma di continuo senza aver mai dato parole: non si insiste (il microfono si spegne e si apre il campo per dettare con la tastiera).
       // Se invece hai già detto qualcosa è solo una pausa: si continua ad ascoltare
       if (vuotiDiFila >= MAX_VUOTI && !testoTutto()) { finisci(); return; }
@@ -2836,7 +2841,7 @@ function micTesto(modo, testo) {
   document.addEventListener("pointerdown", (e) => {
     const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
     e.preventDefault();
-    if (Date.now() - ultimoTocco < 400) return;   // il doppio tocco dell'iPhone: uno solo
+    if (Date.now() - ultimoTocco < 250) return;   // il doppio tocco dell'iPhone (pochi millisecondi): uno solo
     ultimoTocco = Date.now();
     if (stato) { fatto(); return; }   // in ascolto dopo un tocco breve: questo tocco finisce
     if (typeof vibra === "function") vibra();
@@ -2846,7 +2851,7 @@ function micTesto(modo, testo) {
   const rilascia = () => {
     if (!premuto) return; premuto = false;
     if (!stato || stato === "chiudo") return;
-    if (Date.now() - premutoDa > 600 && partito) { fatto(); return; }   // tenuto premuto mentre parlavi: lasciando è finito
+    if (Date.now() - premutoDa > 350 && partito) { fatto(); return; }   // tenuto premuto mentre parlavi: lasciando è finito
     aggiornaVelo();   // tocco breve (o microfono non ancora acceso): resta in ascolto, si finisce ritoccando 🎤
   };
   document.addEventListener("pointerup", rilascia); document.addEventListener("touchend", rilascia);
@@ -2856,7 +2861,10 @@ function micTesto(modo, testo) {
   document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("[data-mic]"); if (!b) return;
     e.preventDefault(); toccoFinito = true;
-    if (stato === "avvio" && daRiprovare) { daRiprovare = false; errore = null; try { ascolta(); } catch (x) { finisci(); } }
+    if (stato === "avvio" && daRiprovare) { daRiprovare = false; errore = null; segna("ritenta"); try { ascolta(); } catch (x) { finisci(); } return; }
+    // col dito appoggiato il telefono non ha fatto proprio niente (nessun errore, nessun avvio) da più di mezzo secondo:
+    // lo si riaccende ora, dentro il tocco vero (resta in ascolto: si finisce ritoccando 🎤)
+    if (stato === "avvio" && !partito && !giroAcceso && Date.now() - inizioAscolto > 600) { staccaRec(); errore = null; segna("ritenta"); try { ascolta(); } catch (x) { finisci(); } }
   });
   // l'app va in secondo piano: quello già detto si tiene
   document.addEventListener("visibilitychange", () => { if (document.hidden && stato) fatto(); });
