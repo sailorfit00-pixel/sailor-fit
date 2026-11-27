@@ -98,7 +98,7 @@ const CATEGORIE_CIBO = {
   funghi: /fungh|porcini|champignon/,
   // le alternative vegetali a carne, pesce e latticini (per chi non le vuole proposte). Non i legumi, l'edamame o la salsa di soia,
   // e nemmeno le bevande vegetali da sole: in una torta o un porridge sono un ingrediente come un altro
-  sostitutiVeg: /tofu|tempeh|seitan|yogurt di soia|proteine vegetali|shake vegetale|(burger|hamburger|polpette|cotolett[ae]|affettat[oi]|formaggi?o?|panna) vegetal|soia texturizzata|mopur|muscolo di grano/,
+  sostitutiVeg: /tofu|tempeh|seitan|edamame|yogurt di soia|proteine vegetali|proteine di pisello|shake vegetale|(burger|hamburger|polpette|cotolett[ae]|affettat[oi]|formaggi?o?|panna) vegetal|soia texturizzata|mopur|muscolo di grano/,
   piccante: /piccante|peperoncino|sriracha|harissa|diavola|wasabi|curry|kimchi|garam masala/,
   miele: /miele/,
   // bevande alcoliche (per chi non beve alcol): non le ricette, che non ne contengono
@@ -124,7 +124,7 @@ const NON_MANGIO = [["carneRossa", "Carne rossa", "🥩"], ["pollame", "Pollo/ta
 function categorieEscluse(pf = leggiProfilo()) {
   const e = pf.esclusioni || {};
   const nm = (e.nonMangio || []).flatMap(c => c === "pesce" ? ["pesce", "crostacei"] : [c]);   // «non mangio pesce» vale anche per gamberi, cozze, polpo…
-  const veg = e.senzaVeg && !e.dieta ? ["sostitutiVeg"] : [];   // «niente piatti vegani» vale solo per chi non è vegetariano o vegano
+  const veg = !e.dieta && !e.conVeg ? ["sostitutiVeg"] : [];   // tofu, tempeh, seitan… si propongono solo a chi è vegetariano/vegano o li ha chiesti («piatti vegani: sì»)
   return new Set([...(ESCLUSIONI_DIETA[e.dieta] || []), ...(e.allergie || []), ...nm, ...veg]);
 }
 // cibi scritti a mano («kiwi», «sedano»): minuscole e senza accenti; per le parole lunghe senza la vocale finale, così «fragola» esclude anche «Fragole»
@@ -167,7 +167,7 @@ function motivoEscluso(nome) {
   if (nonMangio) return `contiene ${NOMI_CATEGORIA[nonMangio] || nonMangio}`;
   const w = paroleScritte(pf).find(w => parolaTrova(w, nome));
   if (w) return radiceCibo(w).length >= 3 && normCibo(nome).startsWith(radiceCibo(w)) ? "l'hai escluso tu" : `contiene ${normCibo(w)}`;   // «Kiwi»: non «contiene kiwi»
-  if (e.senzaVeg && !e.dieta && tocca("sostitutiVeg")) return "alternativa vegetale";
+  if (!e.dieta && tocca("sostitutiVeg")) return "";   // non proposti, ma chi li scrive a mano li aggiunge senza avvisi
   return e.dieta === "vegana" ? "non è vegano" : e.dieta === "vegetariana" ? "non è vegetariano" : "escluso";
 }
 // una ricetta è esclusa se uno dei suoi ingredienti lo è (il nome della ricetta non conta: «pancake» senza uova restano)
@@ -1886,12 +1886,13 @@ function openModal(html) {
 // Dopo la chiusura di un pannello, su iPhone un tocco può "ripetersi" sulla schermata
 // sotto (es. finire su 📊): per mezzo secondo i tocchi fuori dai pannelli si ignorano.
 // Funzioni facoltative scelte nel questionario («Cosa vuoi nella tua app?»): ricette e idee, lista della spesa. (I consigli furbi ci sono sempre.)
-// Chi usava già l'app prima di questa domanda (profilo senza «funzioni») le ha tutte. Si cambiano in Profilo → I miei dati → App.
-const FUNZIONI_APP = [["ricette", "📖", "Ricette e idee per i pasti", "ricettario, idee nei pasti, «Compila i pasti del giorno»"], ["spesa", "🛒", "Lista della spesa", "nel Profilo e con Detta («aggiungi … alla spesa»)"], ["allenamenti", "🏋️", "Allenamenti", "lo sport del giorno in Oggi e in Settimana: quando ti alleni, più calorie"]];
-function funzioneAttiva(nome) { if (nome === "consigli") return true; try { const f = leggiProfilo().funzioni; return !f || f[nome] !== false; } catch (e) { return true; } }
+// Chi usava già l'app prima di questa domanda (profilo senza «funzioni») le ha tutte. Si cambiano in Profilo → Funzionalità dell'app.
+const FUNZIONI_APP = [["ricette", "📖", "Ricette e idee per i pasti", "il ricettario e le idee di piatti nei pasti"], ["spesa", "🛒", "Lista della spesa", "nel Profilo e con Detta («aggiungi … alla spesa»)"], ["allenamenti", "🏋️", "Allenamenti", "lo sport del giorno in Oggi e in Settimana: quando ti alleni, più calorie"]];
+function funzioneAttiva(nome) { if (nome === "consigli" || nome === "compila") return true;   // consigli furbi e «Compila i pasti» ci sono per tutti
+  try { const f = leggiProfilo().funzioni; return !f || f[nome] !== false; } catch (e) { return true; } }
 function funzioneSpenta(nome) {   // chi la chiede (con Detta o un collegamento) sa dove accenderla
   const f = FUNZIONI_APP.find(x => x[0] === nome);
-  avviso(`${f ? f[2] : "Questa funzione"}: funzione spenta. La accendi in Profilo → I miei dati → App`);
+  avviso(`${f ? f[2] : "Questa funzione"}: funzione spenta. La accendi in Profilo → Funzionalità dell'app`);
 }
 let _chiusoAlle = 0;
 // un comando detto mentre c'era la domanda «Salvare?»: parte appena il pannello si chiude (dopo Salva / Non salvare)
@@ -2394,6 +2395,29 @@ function spesaInBreve() {
     return ul.querySelector("li.voce.preso") ? "tutto preso ✓" : "ancora vuota";
   } catch (e) { return ""; }
 }
+// ---- Profilo → «Funzionalità dell'app»: accendere o spegnere ricette, lista della spesa, allenamenti (si salva subito) ----
+function funzioniInBreve() { const on = FUNZIONI_APP.filter(([k]) => funzioneAttiva(k)).map(([k]) => k); return on.length ? "accese: " + on.join(", ") : "solo registrare i pasti"; }
+function apriFunzioni() {
+  editCtx = null; liberoCtx = null;
+  openModal(`<button class="btn-link modal-indietro" data-funz-indietro>‹ Profilo</button>
+    <h3 class="modal-title">🧩 Funzionalità dell'app</h3>
+    <p class="hint">Registrare i pasti, «Compila i pasti», i consigli furbi, la Settimana e l'Andamento ci sono sempre. Il resto lo accendi o lo spegni qui.</p>
+    <div class="funz-lista">${FUNZIONI_APP.map(([k, ico, tit, sotto]) => `<div class="pers-funz"><div><b><i>${ico}</i>${tit}</b><small>${sotto}</small></div><button class="levetta${funzioneAttiva(k) ? " on" : ""}" role="switch" aria-checked="${funzioneAttiva(k)}" aria-label="${esc(tit)}" data-funz="${k}|${funzioneAttiva(k) ? "no" : "si"}"><i></i></button></div>`).join("")}</div>
+    ${funzioneAttiva("allenamenti") ? `<button class="btn-link" data-funz-sport>🏋️ Scegli i tuoi sport e la settimana tipo ›</button>` : ""}`);
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest) return;
+  if (e.target.closest("[data-funz-indietro]")) { closeModal(true); apriMenu(); segnaTab("altro"); return; }
+  if (e.target.closest("[data-funz-sport]")) { closeModal(true); apriProfilo("sport"); return; }
+  const b = e.target.closest("[data-funz]"); if (!b) return;
+  const [k, v] = b.dataset.funz.split("|"), prima = funzioneAttiva(k), pf = leggiProfilo();
+  pf.funzioni = Object.assign(Object.fromEntries(FUNZIONI_APP.map(([x]) => [x, funzioneAttiva(x)])), pf.funzioni || {}, { [k]: v === "si" });
+  salvaProfilo(pf);
+  if (typeof renderOggi === "function") renderOggi();
+  const f = FUNZIONI_APP.find(x => x[0] === k);
+  if (k === "allenamenti" && v === "si" && !prima) { closeModal(true); apriProfilo("sport"); avviso("🏋️ Allenamenti accesi: scegli i tuoi sport e i giorni"); return; }   // accesi adesso: subito sport e giorni
+  apriFunzioni();   // la levetta mostra già se è accesa: niente avviso sopra la lista
+});
 function apriMenu() {
   editCtx = null;
   const nAlim = Object.keys(alimentiTuoi()).length;
@@ -2403,6 +2427,7 @@ function apriMenu() {
     <h3 class="modal-title">Profilo</h3>
     <div class="menu-lista">
       ${voce("profilo", "👤", "I miei dati", datiInBreve() || "età, peso, obiettivo")}
+      ${voce("funzioni", "🧩", "Funzionalità dell'app", funzioniInBreve())}
       ${funzioneAttiva("spesa") ? voce("vai-spesa", "🛒", "La mia lista della spesa", spesaInBreve()) : ""}
       ${funzioneAttiva("ricette") ? voce("vai-ricette", "📖", "Le mie ricette", `${contaRicetteUniche()} ricette`) : ""}
       ${voce("miei-alimenti", "🥫", "I miei alimenti", nAlim ? `${nAlim} ${nAlim === 1 ? "alimento" : "alimenti"}` : "ancora nessuno")}
@@ -2603,9 +2628,6 @@ function apriProfilo(scheda) {
     <p class="campo-nota">Su iPhone anche l'icona della schermata Home prende questo colore e il nome dell'app. Se l'hai già aggiunta, toglila e aggiungila di nuovo da Safari (Condividi → Aggiungi alla schermata Home): i tuoi dati restano.</p>
     <label class="wiz-l">Tema</label>
     <div class="chips">${[["scuro", "🌙 Scuro"], ["chiaro", "☀️ Chiaro"]].map(([k, l]) => `<button class="chip ${(pf.tema || "scuro") === k ? "attivo" : ""}" data-pers-tema="${k}">${l}</button>`).join("")}</div>
-    <label class="wiz-l">Funzioni</label>
-    ${FUNZIONI_APP.map(([k, ico, tit, sotto]) => `<div class="pers-funz"><div><b><i>${ico}</i>${tit}</b><small>${sotto}</small></div><div class="chips">${[["si", "Sì"], ["no", "No"]].map(([v, l]) => `<button class="chip ${(funzioneAttiva(k) ? "si" : "no") === v ? "attivo" : ""}" data-pers-funz="${k}|${v}">${l}</button>`).join("")}</div></div>`).join("")}
-    <p class="campo-nota">Registrare i pasti, i consigli furbi, la Settimana e l'Andamento ci sono sempre.</p>
     <label class="wiz-l">Vibrazione</label>
     <div class="chips">${[["si", "📳 Sì"], ["no", "🔕 No"]].map(([k, l]) => `<button class="chip ${(pf.vibrazione === false ? "no" : "si") === k ? "attivo" : ""}" data-pers-vibra="${k}">${l}</button>`).join("")}</div>
     <p class="campo-nota">Una piccola vibrazione quando tocchi «✓ Aggiungi» o «✓ Salva». Su iPhone è leggera e c'è solo sui modelli recenti.</p>
@@ -2628,7 +2650,7 @@ function esclusioniHTML(pf) {
   const scritte = (gr) => (e[gr] || []).map((w, i) => `<button class="chip attivo" data-escl-togli="${gr}|${i}" aria-label="Togli ${esc(w)}">✍️ ${esc(w)} ✕</button>`).join("");
   const campo = (gr, ph) => `<div class="escl-altro"><input class="qta-input" id="escl-altro-${gr}" data-escl-campo="${gr}" type="text" maxlength="30" placeholder="${ph}"><button class="btn lib-piu" data-escl-aggiungi="${gr}" aria-label="Aggiungi">＋</button></div>`;
   return `<p class="hint">Che alimentazione segui? <em>(facoltativo · tocca di nuovo per togliere)</em></p><div class="chips chips-capo">${[["vegetariana", "Vegetariana", "🥕"], ["vegana", "Vegana", "🌱"]].map(([k, l, ic]) => chip("dieta", k, l, ic, e.dieta === k)).join("")}</div>
-    ${e.dieta ? "" : `<p class="hint">Ti proponiamo anche piatti vegani? <em>(con tofu, tempeh, seitan, yogurt di soia)</em></p><div class="chips chips-capo">${[["si", "Sì", "👍"], ["no", "No", "🙅"]].map(([k, l, ic]) => chip("senzaVeg", k, l, ic, (e.senzaVeg ? "no" : "si") === k)).join("")}</div>`}
+    ${e.dieta ? "" : `<p class="hint">Ti proponiamo anche piatti vegani? <em>(con tofu, tempeh, seitan, yogurt di soia)</em></p><div class="chips chips-capo">${[["si", "Sì", "👍"], ["no", "No", "🙅"]].map(([k, l, ic]) => chip("senzaVeg", k, l, ic, (e.conVeg ? "si" : "no") === k)).join("")}</div>`}
     <p class="hint">Allergie o intolleranze</p><div class="chips chips-capo">${ALLERGIE.map(([k, l, ic]) => chip("allergie", k, l, ic, (e.allergie || []).includes(k))).join("")}${scritte("allergieAltre")}</div>
     ${campo("allergieAltre", "Altra allergia (es. sedano)")}
     <p class="hint">Cibi che non mangi</p><div class="chips chips-capo">${NON_MANGIO.map(([k, l, ic]) => chip("nonMangio", k, l, ic, (e.nonMangio || []).includes(k))).join("")}${scritte("altri")}</div>
@@ -2656,7 +2678,7 @@ document.addEventListener("click", (e) => {
   if (es) {
     const [gr, k] = es.dataset.escl.split("|"), x = pf.esclusioni = Object.assign({ allergie: [], nonMangio: [] }, pf.esclusioni || {});
     if (gr === "dieta") { if (x.dieta === k) delete x.dieta; else x.dieta = k; }   // un secondo tocco la toglie
-    else if (gr === "senzaVeg") { if (k === "no") x.senzaVeg = true; else delete x.senzaVeg; }
+    else if (gr === "senzaVeg") { delete x.senzaVeg; if (k === "si") x.conVeg = true; else delete x.conVeg; }   // di base no: si propongono solo se li chiedi
     else { const l = x[gr] = (x[gr] || []).slice(), p = l.indexOf(k); if (p > -1) l.splice(p, 1); else l.push(k); }
   }
   if (ic) pf.iconaApp = ic.dataset.persIcona;
@@ -3245,6 +3267,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (az.dataset.azione === "importa") { const f = document.getElementById("file-csv"); f.value = ""; f.click(); closeModal(); }
       else if (az.dataset.azione === "nuova") apriWizard();
       else if (az.dataset.azione === "profilo") apriProfilo("io");
+      else if (az.dataset.azione === "funzioni") apriFunzioni();
       else if (az.dataset.azione === "miei-alimenti") apriMieiAlimenti();
       else if (az.dataset.azione === "spesa-aggiungi") aggiungiVoceSpesa();
       else if (az.dataset.azione === "spesa-nuova") { salvaPresi(new Set()); renderSpesa(); }

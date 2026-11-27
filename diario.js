@@ -1345,10 +1345,11 @@ function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = ()
   };
   // il primo abbinamento (a rotazione) che sta dentro i limiti; se nessuno ci sta, quello che sfora meno
   const n0 = (hashStr(data + pasto) + giro) % lista.length;
+  const abit = alimentiAbituali(), conosco = abit.giorni >= 3;   // con qualche giorno scritto: prima gli abbinamenti con i cibi che mangi di solito
   // un piatto già usato in settimana pesa come uno che sfora un po': così si alternano (es. legumi diversi a pranzo)
   let migliore = null;
   for (let k = 0; k < lista.length; k++) {
-    const c = costruisci(lista[(n0 + k) % lista.length]);
+    const t = lista[(n0 + k) % lista.length], c = costruisci(t);
     if (!c) continue;
     // proteine che il piatto lascia mancare rispetto al suo obiettivo: a parità, meglio quello che le porta (es. yogurt di soia invece di sola frutta)
     const u = usi(c.base);   // già usato in settimana: dalla terza volta solo se non c'è proprio altro
@@ -1357,6 +1358,7 @@ function piattoComposto(data, pasto, T, scarta = () => false, giro = 0, usi = ()
     const piccolo = T.kcal > 0 ? Math.max(0, T.kcal * 0.85 - c.tot.kcal) / T.kcal * 4 : 0;   // sotto l'85% della quota: «chia e bevanda di riso» non è una colazione
     const saleC = typeof extraDa === "function" ? extraDa(c.piatto.ingredienti).sale : 0, qT = targetData(data).kcal > 0 ? T.kcal / targetData(data).kcal : 0.3;
     c.voto = c.sopra + rip + piccolo + (T.proteine > 0 ? Math.max(0, T.proteine - c.tot.proteine) / T.proteine * 1.2 : 0) + Math.max(0, saleC - LIMITI_EXTRA.sale * qT) * 3;   // bresaola, salumi: il sale conta anche qui
+    if (conosco) c.voto -= 0.25 * [t.P, t.C, t.V && t.V[0]].filter(n => n && (abit.set.has(n) || abit.set.has(n.toLowerCase()))).length;
     if (c.voto <= 0.3) return c;
     if (!migliore || c.voto < migliore.voto) migliore = c;
   }
@@ -1619,7 +1621,7 @@ function pianificaSettimanaVera(dataRif, soloData, opz = {}) {   // soloData: co
       const Tp = targetPastoDiario(d, s), rem = mancaData(d);
       const saleGiorno = extraDa(gOggi.flatMap(x => x.ingredienti || [])).sale;   // sale già nella giornata (salumi, formaggi, salse…)
       if (Tp.kcal < 80) return;
-      const cand = ricetteConsigliate(d, s, 30).filter(x => !x.esagerata && !ricettaEsclusa(x.r) && !(opz.escludi && opz.escludi.has(x.r.nome)) && ricettaCi(x.tot, Tp, rem, opz.stretto))
+      const cand = !funzioneAttiva("ricette") ? [] : ricetteConsigliate(d, s, 30).filter(x => !x.esagerata && !ricettaEsclusa(x.r) && !(opz.escludi && opz.escludi.has(x.r.nome)) && ricettaCi(x.tot, Tp, rem, opz.stretto))
         .filter(x => { const u = usate[x.r.nome] || []; return !u.includes(i) && u.length < 2; });   // mai due volte lo stesso giorno, al massimo 2 volte a settimana: se non resta nulla, un piatto composto
       const scelta = cand.map(x => {
         const o = x.r._orig || x.r, c = rilevaBaseCarbo(o), pr = rilevaBaseProt(o), ing = o.ingredienti.filter(g => g.unita !== "q.b.");
@@ -2183,7 +2185,7 @@ function renderOggi() {
       ${avvisoOggi || (giornataPronta(data) && mancaGiornata(data).ok ? `<p class="nota ok">✅ Giornata in linea</p>` : !prox && !giornataPronta(data) ? notaFineGiornataHTML(data) : "")}
       <div class="oggi-azioni">
         ${(() => {   // un solo comando alla volta: se c'è qualcosa da riempire "Compila", altrimenti "Cambia menu" (anche se i pasti li hai scritti tu)
-          if (data < oggiISO() || !funzioneAttiva("ricette")) return "";   // «Compila» e «Cambia menu» usano le ricette
+          if (data < oggiISO()) return "";   // «Compila» e «Cambia menu» ci sono per tutti: senza ricettario compongono i pasti con alimenti singoli
           // un pasto vuoto, ma solo se resta abbastanza da riempirlo (con la giornata già in linea «Compila» non farebbe niente)
           const vuoto = momentiGiorno(data).some(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s)) && (!g.pasti.length || mancaData(data).kcal >= 80);
           if (vuoto)   // solo la scritta, sottolineata a puntini (niente pulsante pieno né spiegazione)

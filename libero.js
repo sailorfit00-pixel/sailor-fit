@@ -312,7 +312,9 @@ function cercaRicetteTesto(q, n = 5) {
     .sort((a, b) => (a.no - b.no) || (b.q - a.q) || (a.k - b.k)).slice(0, n);   // quelle con ingredienti che hai escluso in fondo
 }
 function ricetteTestoHTML(q, attr) {
-  const lista = cercaRicetteTesto(q);
+  // senza ricettario: tra i suggerimenti solo le ricette che hai creato tu
+  const mie = funzioneAttiva("ricette") ? null : new Set(leggiCustom().map(r => r.nome));
+  const lista = cercaRicetteTesto(q).filter(x => !mie || mie.has(x.r.nome));
   if (!lista.length) return "";
   return `<div class="autoc-titolo">📖 Ricette</div>` + lista.map(({ r, ps, no }) =>
     `<button class="autoc-voce autoc-ricetta" ${attr}="${esc(r.nome)}"><b>${esc(r.nome)}</b>${no ? avvisoEsclusoHTML(((r._orig || r).ingredienti || []).map(i => i.nome).find(alimentoEscluso)) : ""}${macroStileHTML(ps.tot)}</button>`).join("");
@@ -345,7 +347,7 @@ function mostraAutocompleta(testo) {
   const trovati = cercaAlimenti(q);   // anche quelli già nel pasto: si vedono con «già nel pasto» e, toccandoli, si chiede se sommare
   // prima quelli che iniziano per quello che hai scritto
   // prima quelli adatti a te (gli esclusi in fondo, con l'avviso), poi quelli che iniziano per quello che hai scritto
-  const escl = (n) => typeof alimentoEscluso === "function" && alimentoEscluso(n);
+  const escl = (n) => typeof motivoEscluso === "function" && !!motivoEscluso(n);   // tofu & co. non proposti ma cercabili: non vanno in fondo
   trovati.sort((a, b) => (escl(a) - escl(b)) || (norm(b).startsWith(nq) - norm(a).startsWith(nq)));
   const ricetteHTML = String(testo || "").includes(",") ? "" : ricetteTestoHTML(q, "data-autoc-ricetta");
   const conQta = !(ultima.match(AUTOC_LEAD) || [""])[0].trim();   // hai già scritto una quantità ("200 pol…")? allora niente dose suggerita
@@ -388,7 +390,7 @@ function mostraSostituzioni(inp) {
       + (n > 3 ? `<button class="autoc-voce sost-altri" data-sost-altri="${k}" aria-label="Altri sostituti">↻</button>` : "");
     return;
   }
-  const escl = (n) => typeof alimentoEscluso === "function" && alimentoEscluso(n);
+  const escl = (n) => typeof motivoEscluso === "function" && !!motivoEscluso(n);
   const trovati = cercaAlimenti(q).filter(n => n !== c.items[k].nome).sort((a, b) => escl(a) - escl(b)).slice(0, 6);
   if (!box) { box = document.createElement("div"); box.id = "lib-sost"; box.className = "lib-sost-lista"; cont.appendChild(box); }
   const riga = inp.closest(".sw") || inp.closest(".lib-riga");

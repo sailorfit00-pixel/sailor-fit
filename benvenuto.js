@@ -53,13 +53,13 @@ const QZ = [
   { k: "eta", t: "n", e: "🎂", q: "Quanti anni hai?", un: "anni", ph: "34", min: 10, max: 100 },
   { k: "altezza", t: "n", e: "📏", q: "Quanto sei alta/o?", un: "cm", ph: "168", min: 100, max: 230 },
   { k: "peso", t: "n", e: "⚖️", q: "Quanto pesi?", un: "kg", ph: "65", min: 25, max: 300, dec: 1 },
-  // cosa vuoi nell'app oltre a registrare i pasti: quello che non scegli non compare (si accende dopo in Profilo → I miei dati → App)
-  { k: "funzioni", t: "m", e: "🧩", q: "Cosa vuoi nella tua app?", req: 1, excl: QZ_NESSUNO, o: [["Ricette e idee per i pasti", "📖", "ricette"], ["Lista della spesa", "🛒", "spesa"], ["Niente, solo registrare i pasti", "✍️", QZ_NESSUNO]],   // obbligatoria: è importante sapere cosa vuole
-    nota: "Registrare i pasti, i consigli furbi, la Settimana e l'Andamento ci sono sempre. Il resto lo puoi attivare anche dopo, dal Profilo." },
+  // cosa vuoi nell'app oltre a registrare i pasti: quello che non scegli non compare (si accende dopo in Profilo → Funzionalità dell'app)
+  { k: "funzioni", t: "levette", e: "🧩", q: "Cosa vuoi nella tua app?", o: [["Ricette e idee per i pasti", "📖", "ricette", "il ricettario e le idee di piatti nei pasti"], ["Lista della spesa", "🛒", "spesa", "si riempie da sola con quello che mangi"], ["Allenamenti", "🏋️", "allenamenti", "lo sport del giorno: quando ti alleni, più calorie"]],   // levette tutte spente: si accende quello che serve (tutto spento = solo registrare i pasti)
+    nota: "Registrare i pasti, «Compila i pasti», i consigli furbi, la Settimana e l'Andamento ci sono sempre. Puoi cambiare tutto quando vuoi in Profilo → Funzionalità dell'app." },
   { k: "obiettivo", t: "m", e: "✨", q: "Qual è il tuo obiettivo?", o: QZ_OBIETTIVI, req: 1, altro: "obiettivoAltro", altroPh: "Altro, scrivilo tu (es. più energia, una gara)",
     nota: "Il primo che tocchi decide le calorie: gli altri restano come tuoi obiettivi." },
   { k: "lavoro", t: "u", e: "💼", q: "Com'è la tua giornata?", o: QZ_LAVORO, nota: "Senza contare lo sport: serve a stimare quanto consumi ogni giorno." },
-  { k: "sport", t: "m", e: "🏃‍♀️", q: "Che sport fai?", o: QZ_SPORT, excl: QZ_NESSUNO, req: 1 },
+  { k: "sport", t: "m", e: "🏃‍♀️", q: "Che sport fai?", o: QZ_SPORT, excl: QZ_NESSUNO, req: 1, salta: (R) => !(R.funzioni || []).includes("allenamenti") },   // allenamenti spenti: niente domande sugli sport
   { k: "giorni", t: "m", e: "📅", q: "In quali giorni ti alleni di solito?", o: QZ_GIORNI.map(([l, , v]) => [l, "", v]), salta: senzaSport, nota: "Quale sport fare ogni giorno lo scegli dopo, nella Settimana." },
   // per ora non si chiede: gli allenamenti si distribuiscono poi nella settimana (Settimana / I miei dati). Il codice resta per quando tornerà
   { k: "settimana", t: "settimana", e: "🗓️", q: "Cosa fai ogni giorno?", salta: () => true,
@@ -113,8 +113,8 @@ function qzRisposteAttuali() {
     pasti: Array.isArray(pf.pasti) && pf.pasti.length ? pf.pasti.slice() : ORDINE_BASE.slice(),
     pastoAltro: (pf.pasti || []).includes("sera") ? String(pf.nomeSera || "Spuntino serale") : "",
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, o[p]])),
-    dieta: e.dieta || "", piattiVeg: e.senzaVeg ? "no" : "si", nonMangioAltri: (e.altri || []).join(", "), allergieAltri: (e.allergieAltre || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
-    funzioni: (() => { const f = ["ricette", "spesa"].filter(x => !pf.funzioni || pf.funzioni[x] !== false); return f.length ? f : [QZ_NESSUNO]; })(),
+    dieta: e.dieta || "", piattiVeg: e.conVeg ? "si" : "no", nonMangioAltri: (e.altri || []).join(", "), allergieAltri: (e.allergieAltre || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
+    funzioni: ["ricette", "spesa", "allenamenti"].filter(x => !pf.funzioni || pf.funzioni[x] !== false),
     colore: pf.colore || "lilla", iconaApp: pf.iconaApp || "🌙", nomeApp: pf.nomeApp || "Sailor Fit",
   };
 }
@@ -217,6 +217,9 @@ function qzRender() {
   } else if (q.t === "t" || q.t === "n") {
     h += `<div class="qz-u"><input class="qz-inp" id="qz-inp" ${q.t === "n" ? (q.dec ? `type="text" inputmode="decimal" autocomplete="off"` : `type="number" inputmode="numeric" step="1"`) : `type="text" autocomplete="given-name"`}
       placeholder="${esc(q.ph || "")}" value="${esc(v ?? "")}">${q.un ? `<b>${q.un}</b>` : ""}</div>`;
+  } else if (q.t === "levette") {
+    const on = R[q.k] || [];
+    h += `<p class="qz-pic qz-lev-sotto">Accendi quello che ti serve.</p><div class="qz-levette">${q.o.map(([l, e, k, sotto]) => `<div class="pers-funz"><div><b><i>${e}</i>${esc(l)}</b><small>${esc(sotto)}</small></div><button class="levetta${on.includes(k) ? " on" : ""}" role="switch" aria-checked="${on.includes(k)}" aria-label="${esc(l)}" data-qz-lev="${k}"><i></i></button></div>`).join("")}</div>`;
   } else if (q.t === "u" || q.t === "m") {
     const sel = q.t === "m" ? (v || []) : (v ? [v] : []);
     h += `<div class="qz-sc ${q.k === "giorni" ? "qz-giorni" : ""}">${q.o.map((o, i) => `<button class="qz-b ${sel.includes(o[2]) ? "on" : ""}" data-qz-o="${i}">${o[1] ? `<span class="qz-e">${o[1]}</span>` : ""}<span>${esc(o[0])}${q.k === "obiettivo" && sel.length > 1 && sel[0] === o[2] ? `<small class="qz-sub">decide le calorie</small>` : ""}</span></button>`).join("")}</div>`;
@@ -334,6 +337,8 @@ document.addEventListener("click", (e) => {
   const q = QZ[qz.step];
   if (e.target.closest("[data-qz-ind]")) { const i = qzProssimo(qz.step, -1); if (i >= 0 && QZ[i].t !== "intro") { qz.step = i; qzSalva(); qzRender(); } return; }
   if (e.target.closest("#qz-avanti")) { qzAvanti(); return; }
+  const lv = e.target.closest("[data-qz-lev]");
+  if (lv) { const k = lv.dataset.qzLev, cur = (qz.R[q.k] || []).filter(x => x !== QZ_NESSUNO && x !== "compila"); qz.R[q.k] = cur.includes(k) ? cur.filter(x => x !== k) : cur.concat(k); qzSalva(); qzRender(); return; }
   if (e.target.closest("#qz-salta-tutto")) { if (qzValido(q)) qzFine(); return; }   // il resto si completa dopo nel Profilo
   const ob = e.target.closest("[data-qz-o]");
   if (ob) {
@@ -391,7 +396,7 @@ function qzFine() {
     fattoreAttivita: (QZ_LAVORO.find(x => x[2] === R.lavoro) || QZ_LAVORO[0])[3],
     pasti: (R.pasti || []).length ? ORDINE_TEMPO.filter(p => (R.pasti || []).includes(p) && (p !== "sera" || String(R.pastoAltro || "").trim())) : ORDINE_BASE.slice(),   // saltato: i pasti di base
     nomeSera: String(R.pastoAltro || "").trim(),
-    funzioni: Object.assign(Object.fromEntries(["ricette", "spesa"].map(x => [x, (R.funzioni || []).includes(x)])), { allenamenti: !senzaSport(R) }),   // nessuno sport scelto (o saltato): niente «Riposo» né allenamenti, si accendono dal Profilo   // quello che non ha scelto non compare
+    funzioni: Object.assign(Object.fromEntries(["ricette", "spesa"].map(x => [x, (R.funzioni || []).includes(x)])), { allenamenti: (R.funzioni || []).includes("allenamenti") && !senzaSport(R) }),   // nessuno sport scelto (o saltato): niente «Riposo» né allenamenti, si accendono dal Profilo   // quello che non ha scelto non compare
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, typeof R.orari[p] === "number" ? R.orari[p] : ORARI_DEFAULT[p]])),
     esclusioni: { allergie: (R.allergie || []).filter(x => x !== QZ_NESSUNO), nonMangio: (R.nonMangio || []).filter(x => x !== QZ_NESSUNO),
       altri: String(R.nonMangioAltri || "").split(/[,;\n]/).map(x => x.trim()).filter(x => normCibo(x).length >= 3),
@@ -402,7 +407,7 @@ function qzFine() {
     obiettivoNota: String(R.obiettivoAltro || "").trim(),
   });
   if (R.dieta) pf.esclusioni.dieta = R.dieta;
-  else if (R.piattiVeg === "no") pf.esclusioni.senzaVeg = true;   // niente tofu, seitan, bevande vegetali… (chi è vegetariano o vegano li vuole)
+  else if (R.piattiVeg === "si") { pf.esclusioni.conVeg = true; delete pf.esclusioni.senzaVeg; }   // tofu, tempeh, seitan… solo se li chiede (o se è vegetariano/vegano)
   // alimentazione scritta a mano («senza zucchero», «niente pane»): il cibo va tra quelli che non mangi; i nomi di diete (chetogenica…) no, non sono cibi
   String(R.dietaAltri || "").split(/[,;\n]|\be\b/).map(x => x.trim().replace(/^(senza|niente|no|zero|poco|poca|pochi|poche)\s+/i, "").trim())
     .filter(x => normCibo(x).length >= 3 && !QZ_DIETE_NOTE.test(normCibo(x)))
