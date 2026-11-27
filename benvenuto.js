@@ -227,7 +227,7 @@ function qzRender() {
     h += `<div class="qz-orari">${scelti.map(([l, e, k]) => `<label class="qz-ora"><span>${e} ${l}</span><input type="time" step="900" data-qz-ora="${k}" value="${fmtOra(R.orari[k]).padStart(5, "0")}"></label>`).join("")}</div>`;
     if (!qzValido(q)) h += `<p class="qz-pic qz-err">Gli orari devono essere in ordine, dal primo all'ultimo pasto.</p>`;
   } else if (q.t === "colore") {
-    h += `<div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c]) => `<button class="qz-col ${R.colore === k ? "on" : ""}" data-qz-colore="${k}" style="--c:${c}"><i></i><span>${l}</span></button>`).join("")}</div>`;
+    h += `<div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c, , , cc]) => `<button class="qz-col ${R.colore === k ? "on" : ""}" data-qz-colore="${k}" style="--c:${document.documentElement.getAttribute("data-tema") === "chiaro" ? cc : c}"><i></i><span>${l}</span></button>`).join("")}</div>`;
   } else if (q.t === "nomeApp") {
     h += `<div class="qz-icone">${ICONE_APP.map(i => `<button class="qz-ico ${R.iconaApp === i ? "on" : ""}" data-qz-icona="${i}">${i}</button>`).join("")}</div>
       <input class="qz-inp" id="qz-nome-app" type="text" maxlength="24" placeholder="Sailor Fit" value="${esc(R.nomeApp || "")}">

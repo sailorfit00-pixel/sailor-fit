@@ -2606,16 +2606,21 @@ function apriComandiVocali() {
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
     <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla: vedi l'onda e la frase mentre parli; lascia per finire. (Con un tocco breve resta in ascolto: ritocca 🎤 per finire.) Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
-    <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es], k) => `<details class="cv-sez"${k === 0 ? " open" : ""}>
+    <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es]) => `<details class="cv-sez">
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
       <ul class="cv-es">${es.map(x => `<li>«${esc(x)}»</li>`).join("")}</ul></details>`).join("")}</div>
-    <h4>Giorni e pasti</h4>
-    <p class="cv-nota"><b>Giorni:</b> oggi, ieri, l'altro ieri, domani, dopodomani, stamattina e stasera (= oggi; «stasera» senza un pasto è la cena), lunedì…domenica, anche con «prossimo» o «scorso». Se non lo dici vale il giorno aperto in Oggi.</p>
-    <p class="cv-nota"><b>Pasti:</b> colazione · spuntino di metà mattina (o «spuntino mattutino») · pranzo · merenda (anche «spuntino di pomeriggio», «spuntino pomeridiano», «pre-workout») · cena · dopo cena (anche «spuntino serale»). «Spuntino» da solo: se ne hai uno solo è quello, altrimenti quello del momento.</p>
-    <p class="cv-nota"><b>Sport:</b> CrossFit, pesi/palestra, funzionale, corsa, camminata, bici, nuoto, yoga/pilates, padel/tennis, ballo, equitazione, calcio/pallavolo/basket e quelli che hai aggiunto tu (per nome).</p>
-    <p class="cv-nota">Se il microfono dell'app non funziona, Detta apre un campo: lì usa il 🎤 della tastiera, le frasi sono le stesse.</p>
-    ${(() => { let c = ""; try { c = localStorage.getItem("mp_detta_codice") || ""; } catch (e) {} return c ? `<p class="cv-nota"><small class="detta-diag">Ultimo dettato: ${esc(c)}</small></p>` : ""; })()}`);
+    <h4>Parole che capisco</h4>
+    <div class="cv-parole">
+      <div class="cv-riga"><b><i>📅</i>Giorni</b><span>oggi, ieri, domani, dopodomani, stamattina, stasera, lunedì…domenica (anche «prossimo» / «scorso»)</span></div>
+      <div class="cv-riga"><b><i>🍽️</i>Pasti</b><span>colazione, spuntino, pranzo, merenda, cena, dopo cena</span></div>
+      <div class="cv-riga"><b><i>🏋️</i>Sport</b><span>i tuoi sport del Profilo, per nome</span></div>
+    </div>
+    <p class="cv-nota cv-piede">Senza giorno vale quello aperto in Oggi · «stasera» senza pasto = cena. Se il microfono non va, Detta apre un campo: usa il 🎤 della tastiera.</p>
+    ${(() => { let c = ""; try { c = localStorage.getItem("mp_detta_codice") || ""; } catch (e) {} // su una riga sola (data corta); toccandola si vede tutta, per mandarla in caso di problemi
+      c = c.replace(/^(\d{1,2})\/(\d{1,2})\/\d{4},?\s+(\d{1,2}:\d{2}):\d{2}/, "$1/$2 $3");
+      return c ? `<p class="cv-nota"><small class="detta-diag cv-diag" title="Tocca per vederlo tutto">Ultimo dettato: ${esc(c)}</small></p>` : ""; })()}`);
+  const dg = document.querySelector(".cv-diag"); if (dg) dg.addEventListener("click", () => dg.classList.toggle("tutto"));
   const b = document.querySelector("[data-cv-altro]"); if (b) b.addEventListener("click", () => { closeModal(true); apriMenu(); segnaTab("altro"); });
 }
 // telefono senza riconoscimento vocale (o microfono non permesso): il campo dove scrivere (o dettare con la tastiera)

@@ -15,18 +15,19 @@
   <link rel="stylesheet" href="styles.css">
   <script>
     // Colore e nome scelti nel Profilo: si applicano subito, prima che la pagina si disegni (niente lampo di lilla)
-    // [chiave, nome, colore, r,g,b, colore scuro (pulsanti pieni)]
+    // [chiave, nome, colore, r,g,b, colore scuro (pulsanti pieni), colore per il tema chiaro (pieno, non pastello: si legge sul bianco)]
     window.COLORI_APP = [
-      ["lilla", "Lilla", "#b79cf5", "183,156,245", "#6d5bd0"], ["rosa", "Rosa", "#f29cc4", "242,156,196", "#c24f86"],
-      ["pesca", "Pesca", "#f7b07c", "247,176,124", "#c46a2b"], ["corallo", "Corallo", "#f58f86", "245,143,134", "#c4473e"],
-      ["giallo", "Giallo", "#f2d067", "242,208,103", "#a88414"], ["menta", "Menta", "#7fdcb0", "127,220,176", "#2f9a6a"],
-      ["turchese", "Turchese", "#6fd3d8", "111,211,216", "#22959b"], ["azzurro", "Azzurro", "#8fbaf5", "143,186,245", "#3f72c4"]
+      ["lilla", "Lilla", "#b79cf5", "183,156,245", "#6d5bd0", "#6a35e8"], ["rosa", "Rosa", "#f29cc4", "242,156,196", "#c24f86", "#d6247a"],
+      ["pesca", "Pesca", "#f7b07c", "247,176,124", "#c46a2b", "#e0670f"], ["corallo", "Corallo", "#f58f86", "245,143,134", "#c4473e", "#e23c2e"],
+      ["giallo", "Giallo", "#f2d067", "242,208,103", "#a88414", "#c29200"], ["menta", "Menta", "#7fdcb0", "127,220,176", "#2f9a6a", "#0fa36a"],
+      ["turchese", "Turchese", "#6fd3d8", "111,211,216", "#22959b", "#00a0a8"], ["azzurro", "Azzurro", "#8fbaf5", "143,186,245", "#3f72c4", "#1f6fe0"]
     ];
     window.applicaColore = function (chiave) {
       var c = window.COLORI_APP.filter(function (x) { return x[0] === chiave; })[0] || window.COLORI_APP[0], s = document.documentElement.style;
-      // tema chiaro: il colore scelto si usa nella versione scura (il lilla chiaro su bianco non si leggerebbe)
-      var chiaro = document.documentElement.getAttribute("data-tema") === "chiaro";
-      s.setProperty("--lilla", chiaro ? c[4] : c[2]); s.setProperty("--lilla-rgb", c[3]); s.setProperty("--lilla-scuro", c[4]); s.setProperty("--lilla-bg", "rgba(" + c[3] + (chiaro ? ",.18)" : ",.12)"));
+      // tema chiaro: il colore scelto nella versione piena e vivace (il pastello sul bianco non si legge)
+      var chiaro = document.documentElement.getAttribute("data-tema") === "chiaro", h = c[5].replace("#", "");
+      var rgb = chiaro ? [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16); }).join(",") : c[3];
+      s.setProperty("--lilla", chiaro ? c[5] : c[2]); s.setProperty("--lilla-rgb", rgb); s.setProperty("--lilla-scuro", c[4]); s.setProperty("--lilla-bg", "rgba(" + rgb + (chiaro ? ",.12)" : ",.12)"));
       window.applicaIconaHome(c);
     };
     // L'immagine della schermata Home (la figura sulla luna) nel colore scelto: l'iPhone la prende quando fai «Aggiungi alla schermata Home».
@@ -63,7 +64,7 @@
     window.applicaTema = function (tema) {
       var chiaro = tema === "chiaro", m = document.querySelector('meta[name="theme-color"]');
       if (chiaro) document.documentElement.setAttribute("data-tema", "chiaro"); else document.documentElement.removeAttribute("data-tema");
-      if (m) m.setAttribute("content", chiaro ? "#f3f5f7" : "#0f1417");
+      if (m) m.setAttribute("content", chiaro ? "#ffffff" : "#0f1417");
     };
     try { var pfT = JSON.parse(localStorage.getItem("mp_profilo") || "{}"); window.applicaTema(pfT.tema); window.applicaColore(pfT.colore || "lilla");
       var mtT = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (mtT && pfT.nomeApp) mtT.setAttribute("content", pfT.nomeApp);   // il nome sotto l'icona della schermata Home

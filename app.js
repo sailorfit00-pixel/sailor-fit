@@ -2583,7 +2583,7 @@ function apriProfilo(scheda) {
     <label class="wiz-l">Come ti chiami? <em>(facoltativo)</em></label>
     <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Per salutarti in alto" data-pers="nome" value="${esc(pf.nome || "")}">
     <label class="wiz-l">Colore</label>
-    <div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c]) => `<button class="qz-col ${(pf.colore || "lilla") === k ? "on" : ""}" data-pers-colore="${k}" style="--c:${c}"><i></i><span>${l}</span></button>`).join("")}</div>
+    <div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c, , , cc]) => `<button class="qz-col ${(pf.colore || "lilla") === k ? "on" : ""}" data-pers-colore="${k}" style="--c:${document.documentElement.getAttribute("data-tema") === "chiaro" ? cc : c}"><i></i><span>${l}</span></button>`).join("")}</div>
     <p class="campo-nota">Su iPhone anche l'icona della schermata Home prende questo colore e il nome dell'app. Se l'hai già aggiunta, toglila e aggiungila di nuovo da Safari (Condividi → Aggiungi alla schermata Home): i tuoi dati restano.</p>
     <label class="wiz-l">Tema</label>
     <div class="chips">${[["scuro", "🌙 Scuro"], ["chiaro", "☀️ Chiaro"]].map(([k, l]) => `<button class="chip ${(pf.tema || "scuro") === k ? "attivo" : ""}" data-pers-tema="${k}">${l}</button>`).join("")}</div>

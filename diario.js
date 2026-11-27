@@ -2013,7 +2013,7 @@ function macroCompattoHTML(nome, k, val, tot, pct) {
   const sopra = Math.round(val) > tot;                    // contorno bianco e "+N" appena superi l'obiettivo, anche di poco
   const piu = sopra ? Math.round(val) - tot : 0;
   return `<div class="mc">
-    <div class="mc-top"><span><i class="dot-${k}"></i>${nome === "Carboidrati" ? `<span class="mc-lungo">Carboidrati</span><span class="mc-corto">Carbo</span>` : nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b>${Math.round(val)}</b>/${tot}<span class="mc-u"> g</span></span></div>
+    <div class="mc-top"><span><i class="dot-${k}"></i>${nome}</span><span>${piu ? `<em class="mc-piu">+${piu}</em> ` : ""}<b>${Math.round(val)}</b>/${tot}<span class="mc-u"> g</span></span></div>
     <div class="mc-bar"><span class="mb-${k}${sopra ? " sopra" : ""}" style="width:${w}%"></span></div>
   </div>`;
 }

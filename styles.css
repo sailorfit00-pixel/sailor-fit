@@ -2060,13 +2060,15 @@ html, body, * { scrollbar-width: none; -ms-overflow-style: none; }
 /* ===== Tema chiaro (Profilo → Personalizza → Tema). Di base l'app è scura ===== */
 html[data-tema="chiaro"] {
   color-scheme: light;
-  --bg: #f3f5f7; --card: #ffffff; --card2: #eef1f4; --text: #172026; --muted: #5f6f7a;
+  --bg: #ffffff; --card: #ffffff; --card2: #eef1f4; --text: #172026; --muted: #5f6f7a;
   --accent: #1f9e5f; --accent-d: #198a52; --ok: #1f9e5f; --warn: #b7860f; --bad: #d04a3a;
-  --mc: #c99a1e; --neutro: #9aa8b2;
+  --mp: #1f74e0; --mc: #e0a100; --mg: #f0573c; --neutro: #9aa8b2;
   --ink-rgb: 15,20,23; --barra-rgb: 255,255,255;
   --k-26323b: #e4e9ed; --k-232f38: #e9edf0; --k-2a3640: #e1e6ea; --k-2b373f: #dfe5e9; --k-2f3d47: #d3dbe0; --k-33444f: #cdd6dc; --k-3a4a55: #c3cdd4; --k-3a4852: #c3cdd4; --k-3a4750: #c3cdd4; --k-1a1426: #ffffff;
 }
 html[data-tema="chiaro"] .oggi-card, html[data-tema="chiaro"] .pasto-riga, html[data-tema="chiaro"] .gs-card, html[data-tema="chiaro"] .modal-sheet { box-shadow: 0 1px 2px rgba(15,20,23,.05); }
+/* sfondo bianco pieno: il riepilogo con il tondo delle calorie ha un velo del colore scelto per l'app (tinta unita, niente sfumature) */
+html[data-tema="chiaro"] .oggi-card.riepilogo { background: rgba(var(--lilla-rgb), .08); border-color: rgba(var(--lilla-rgb), .22); box-shadow: none; }
 html[data-tema="chiaro"] .modal-backdrop { background: rgba(15,20,23,.35); }
 /* alimento già nel pasto: scritta sotto il nome nei suggerimenti e riquadro «Sommo a quello presente?» */
 .autoc-gia { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-top: 2px; }
@@ -2426,12 +2428,15 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 /* calorie di un giorno: i due pulsanti alti uguali */
 .bsp-azioni { align-items: stretch; }
 .bsp-azioni > * { margin: 0; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.25; }
-/* Oggi, macro: «Carboidrati» intero anche sui telefoni stretti */
-.mc-corto { display: none; }
+/* Oggi, macro: «Carboidrati» sempre per intero (sui telefoni stretti un po' più piccolo) */
 @container (max-width: 175px) {
   .mc-top i { margin-right: 4px; }
-  .mc-lungo { display: none; }
-  .mc-corto { display: inline; }
+}
+/* telefoni molto stretti (es. iPhone SE): il nome intero su una riga e i numeri sotto, niente «Carboi…» */
+@container (max-width: 155px) {
+  .mc-top { flex-wrap: wrap; row-gap: 1px; }
+  .mc-top > span:first-child { flex: 0 0 100%; overflow: visible; }
+  .mc-top > span:last-child { margin-left: 12px; }
 }
 /* (le kcal ora stanno sotto il nome: una colonna in meno, il nome ha spazio) */
 .sport-riga:not(.nuovo) { grid-template-columns: 26px minmax(0, 1fr) 50px 28px 36px; column-gap: 6px; }
@@ -2465,3 +2470,18 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 #oggi .oggi-azioni { margin-bottom: 12px; }
 #oggi .oggi-pasti { margin-bottom: 0; }
 .allen-riga .ora-step .nav-btn { background: var(--card); border: 1px solid var(--line2); color: var(--text); }
+
+/* Comandi vocali: «Parole che capisco», una tabellina corta */
+.cv-parole { margin-top: 4px; }
+.cv-riga { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line2); }
+.cv-riga b { flex: 0 0 78px; color: var(--text); font-size: 15px; }
+.cv-riga b i { font-style: normal; margin-right: 7px; }
+.cv-riga span { color: var(--muted); font-size: 15px; line-height: 1.45; }
+.cv-diag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; cursor: pointer; }
+.cv-diag.tutto { white-space: normal; word-break: break-all; }
+.cv-piede { border-top: 1px solid var(--line2); padding-top: 12px; }
+
+/* tema chiaro: sul bianco i bordi dei pasti e le spunte da toccare erano quasi invisibili, un po' più marcati */
+html[data-tema="chiaro"] .pasto-riga { border-width: 1.5px !important; }
+html[data-tema="chiaro"] .pasto-gruppo:not(.passato) .pr-check { box-shadow: inset 0 0 0 1.5px rgba(110,128,140,.8); color: rgba(110,128,140,.9); }
+html[data-tema="chiaro"] .pasto-riga .pr-check svg path { stroke-width: 2.2; }
