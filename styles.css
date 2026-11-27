@@ -2538,3 +2538,6 @@ html[data-tema="chiaro"] .levetta:not(.on) { background: #d9dde1; }
 #spesa .spesa-del-posto { display: none; }
 #spesa .sw { border-radius: 0; }   /* con gli angoli tondi la linea sotto le voci aggiunte a mano era più corta */
 #spesa .lib-del[hidden] { display: none !important; }   /* serve solo allo swipe a sinistra */
+
+/* «Mancano N kcal: colazione e pranzo sono vuoti»: i nomi dei pasti si toccano per aprirli */
+.nota .nota-pasto { display: inline; padding: 0; margin: 0; min-height: 0; height: auto; border: 0; background: none; font: inherit; line-height: inherit; vertical-align: baseline; color: var(--lilla); font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }

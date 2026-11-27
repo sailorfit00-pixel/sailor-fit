@@ -1977,12 +1977,25 @@ function applicaMossaCosa(data, key) {
   scriviGiorno(data, g);
   return prima;
 }
+// Calorie che mancano per pasti già passati e lasciati vuoti (es. «Compila» alle 17: colazione e pranzo non si riempiono):
+// lo si dice, con i nomi dei pasti da toccare per segnarli (forse li hai mangiati e non li hai scritti)
+function pastiVuotiPassatiHTML(data) {
+  const g = giornoDiario(data);
+  const vuoti = momentiGiorno(data).filter(p => !g.pasti.some(x => x.pasto === p) && pastoPassato(data, p));
+  if (!vuoti.length) return "";
+  const link = (p) => `<button class="nota-pasto" data-oggi-momento="${p}">${esc(nomePasto(p, data).toLowerCase())}</button>`;
+  if (vuoti.length === 1) {
+    const f = /^(colazione|merenda|cena)$/i.test(nomePasto(vuoti[0], data)) ? "a" : "o";
+    return `: ${link(vuoti[0])} è vuot${f}. Se l'hai mangiat${f}, toccal${f} e segnal${f}.`;
+  }
+  return `: ${vuoti.slice(0, -1).map(link).join(", ")} e ${link(vuoti[vuoti.length - 1])} sono vuoti. Se li hai mangiati, toccali e segnali.`;
+}
 function notaFineGiornataHTML(data) {
   const T = targetData(data);
   const manca = mancaData(data);
   const sm = situazioneMacro(data);
   if (sm && (sm.sopraC || sm.sopraG || sm.indietroP || sm.finitiC || sm.raggiunti) && !sopraKcal(manca)) { // i macro li dicono già gli avvisi: qui solo le calorie
-    return manca.kcal > T.kcal * 0.05 ? `<p class="nota">Mancano <b>${manca.kcal} kcal</b></p>` : "";
+    return manca.kcal > T.kcal * 0.05 ? `<p class="nota">Mancano <b>${manca.kcal} kcal</b>${pastiVuotiPassatiHTML(data)}</p>` : "";
   }
   if (sopraKcal(manca))
     return "";   // l'avviso «Sopra di X kcal ›» di Oggi apre già i rimedi
@@ -1992,6 +2005,8 @@ function notaFineGiornataHTML(data) {
   // calorie finite ma un macro che manca: non si aggiunge niente (sforeresti), si scambia un alimento della cena
   if (sg && manca.kcal < 60 && !sopraKcal(manca))
     return `<p class="nota">Calorie finite · mancano ~${sg.manca} g di ${NOMI_MACRO[sg.macro]}</p>`;
+  const vuoti = manca.kcal > T.kcal * 0.05 ? pastiVuotiPassatiHTML(data) : "";
+  if (vuoti) return `<p class="nota">Mancano <b>${manca.kcal} kcal</b>${vuoti}</p>`;
   return `<p class="nota">${manca.kcal > 0 ? `Mancano <b>${manca.kcal} kcal</b>` : "Calorie ok"}${sg ? ` · ~${sg.manca} g di ${NOMI_MACRO[sg.macro]}` : ""}</p>`;
 }
 
