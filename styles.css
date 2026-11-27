@@ -2079,7 +2079,8 @@ html[data-tema="chiaro"] .modal-backdrop { background: rgba(15,20,23,.35); }
 .lib-autoc .rec-lista { gap: 6px; }
 /* Pannello del pasto: sempre alto quanto può (come le app di diario alimentare). Se cambia una quantità,
    un consiglio o compare «Salva», il bordo in alto non si muove e le righe non saltano sotto il dito */
-.modal-sheet.foglio-pieno { height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--tabbar-h) - 76px); height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--tabbar-h) - 76px); }
+/* il pannello del pasto lascia vedere in alto un pezzo della schermata sotto (circa un terzo) */
+.modal-sheet.foglio-pieno { height: max(380px, calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--tabbar-h) - 220px)); height: max(380px, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--tabbar-h) - 220px)); }
 body.tastiera .modal-sheet.foglio-pieno { height: calc(var(--vv-h, 100vh) - 8px); }
 /* con poco dentro, la barra «Salva» sta comunque in fondo al pannello (non a metà) */
 .modal-sheet.foglio-pieno #modal-content { min-height: calc(100% - 22px); display: flex; flex-direction: column; }

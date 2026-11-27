@@ -47,7 +47,7 @@ function vpQuestionario(t) {
 
 // ---------- 2) Spostarsi nell'app: «apri la lista della spesa», «vai al profilo», «apri il pranzo» ----------
 function vpNaviga(t) {
-  const m = t.match(/^\s*(?:apri|aprimi|mostra|mostrami|fammi vedere|vai|andiamo|portami|torna)\s+(?:(?:a|al|alla|alle|allo|agli|ai|in|nel|nella|nelle|sul|sulla|su)\s+)?(?:(?:il|la|lo|le|i|gli|l'|mio|mia|miei|mie)\s+)*(.+?)\s*$/);
+  const m = t.match(/^\s*(?:apri|aprimi|mostra|mostrami|fammi vedere|vai|andiamo|portami|torna)\s+(?:(?:a|al|alla|alle|allo|agli|ai|in|nel|nella|nelle|sul|sulla|su)\s+|(?:all|nell|sull)')?(?:(?:il|la|lo|le|i|gli|mio|mia|miei|mie)\s+|l')*(.+?)\s*$/);
   if (!m) return false;
   const x = m[1].replace(/[.!?]/g, "").trim(), tab = (id) => { closeModal(true); const b = document.getElementById(id); if (b) b.click(); };
   const dest = [

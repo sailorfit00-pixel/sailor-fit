@@ -1887,7 +1887,8 @@ function openModal(html) {
 let _chiusoAlle = 0;
 document.addEventListener("click", (e) => {
   // (la scelta di un file, es. "Ripristina da un backup", parte subito dopo la chiusura del pannello e non va bloccata)
-  if (Date.now() - _chiusoAlle < 500 && !e.target.closest("#modal") && !(e.target.type === "file")) { e.preventDefault(); e.stopPropagation(); }
+  // solo i tocchi veri: i comandi vocali («apri l'andamento», «vai alla settimana») aprono la sezione subito dopo aver chiuso il pannello
+  if (e.isTrusted && Date.now() - _chiusoAlle < 500 && !e.target.closest("#modal") && !(e.target.type === "file")) { e.preventDefault(); e.stopPropagation(); }
 }, true);
 // sezione evidenziata nella barra in basso
 function segnaTab(nome) { document.body.dataset.tab = nome || ""; }

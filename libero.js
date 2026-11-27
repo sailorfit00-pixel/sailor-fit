@@ -169,10 +169,10 @@ function qtaPezziInteri(nome, u, qta) { const gu = grammiPerUnita(nome, u); if (
 // prossimo valore dopo un tocco su − / ＋: il multiplo del passo successivo (0,6 pz con passo 1 → 1, non 2)
 const prossimoMultiplo = (att, d, passo) => Math.max(passo, (d > 0 ? Math.floor(att / passo + 1e-9) + 1 : Math.ceil(att / passo - 1e-9) - 1) * passo);
 // grammi dopo un tocco su − / ＋ (senza unità a pezzi/cucchiai): di 10 in 10 (sotto i 10 di 1 in 1);
-// gli alimenti che si usano a piccole dosi (olio, burro, frutta secca, semi, parmigiano…) di 1 in 1 (10 → 11 → 12 g): per i salti grandi ci sono le pillole sotto il contatore
+// gli alimenti che si usano a piccole dosi (olio, burro, frutta secca, semi, parmigiano…) di 5 in 5 (10 → 15 → 20 g; sotto i 5 di 1 in 1)
 function grammiDopoStep(nome, att, d, minimo) {
   let piccolo = false; try { piccolo = !!(window.ALIMENTI || {})[nome] && profiloBase(nome).tip <= 25; } catch (e) {}
-  if (piccolo) return Math.max(minimo, d > 0 ? Math.floor(att + 1e-9) + 1 : Math.ceil(att - 1e-9) - 1);
+  if (piccolo) return Math.max(minimo, d > 0 ? (att < 5 ? Math.floor(att) + 1 : Math.floor(att / 5 + 1e-9) * 5 + 5) : (att <= 5 ? Math.ceil(att) - 1 : Math.ceil(att / 5 - 1e-9) * 5 - 5));
   return Math.max(minimo, d > 0 ? (att < 10 ? Math.floor(att) + 1 : Math.floor(att / 10) * 10 + 10) : (att <= 10 ? Math.ceil(att) - 1 : Math.ceil(att / 10) * 10 - 10));
 }
 function passoQuantita(it) {
@@ -1281,20 +1281,8 @@ function liberoHTML() {
     </div>`;
   };
   // pulsanti rapidi della quantità: ½·1·2 pezzi, ½·1·2·3 cucchiai, oppure metà / solita / una volta e mezza / doppia in grammi
-  const presetHTML = (k) => {
-    const it = c.items[k], u = unitaDi(it), gu = grammiPerUnita(it.nome, u);
-    let vals, suff;
-    if (gu) {
-      const n = u === "pz" ? (passoQuantita(it).passo === 1 ? [1, 2, 3, 4] : [0.5, 1, 1.5, 2]) : [0.5, 1, 2, 3];
-      vals = n.map(x => [Math.round(x * gu * 10) / 10, fmtQta(x)]); suff = sigleUnita(u);
-    } else {
-      const b = porzioneSolita(it.nome) || 100, r = (g) => g >= 100 ? Math.round(g / 10) * 10 : Math.max(5, Math.round(g / 5) * 5);
-      // olio, frutta secca…: il contatore va di 1 g, le pillole fanno i salti
-      let piccolo = false; try { piccolo = !!(window.ALIMENTI || {})[it.nome] && profiloBase(it.nome).tip <= 25; } catch (e) {}
-      vals = (piccolo ? [5, 10, 15, 20, 30] : [...new Set([0.5, 1, 1.5, 2].map(f => r(b * f)))]).map(g => [g, String(g)]); suff = UNITA_LIQUIDI.test(it.nome) ? "ml" : "g";
-    }
-    return `<div class="lib-preset" role="group" aria-label="Quantità rapida">${vals.map(([g, t]) => `<button class="lib-preset-b${Math.abs(g - it.qta) < 0.6 ? " on" : ""}" data-lib-preset="${k}|${g}">${t}<small> ${suff}</small></button>`).join("")}</div>`;
-  };
+  // niente più pillole delle quantità sotto gli alimenti (si toccavano per sbaglio): restano − / ＋ e il numero da scrivere
+  const presetHTML = () => "";
   const voceHTML = (k) => {   // ingrediente singolo = scheda come la ricetta: ✓ nome, − N porzione +, P/C/G, kcal
     const it = c.items[k], m = macroDa([it]);
     const u = unitaDi(it), gu = grammiPerUnita(it.nome, u), conta = gu ? it.qta / gu : 0;
@@ -2531,7 +2519,9 @@ function inviaDettato(testo) {
   const t0 = fraseDetta(testo), giorni = giorniNellaFrase(t0);
   const data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta();
   if (giorni.length) testo = togliGiorni(t0, giorni) || testo;
-  const { pasto, resto } = pastoDaFrase(testo, data);
+  let { pasto, resto } = pastoDaFrase(testo, data);
+  // «stasera ho mangiato una pizza»: senza un pasto detto, «stasera» è la cena
+  if (!pasto && /\bstasera\b/.test(t0) && momentiGiorno(data).includes("cena")) pasto = "cena";
   if (pasto && resto) { apriPastoConDettato(pasto, resto, data); return; }
   // né un comando né un cibo che conosco («che tempo fa», «accendi la luce»): lo si dice, invece di chiedere in quale pasto scriverlo
   if (!righeDaParlato(resto || testo).some(x => x.r)) { nonCapitoDetta(testo, () => sceltaPastoDettato(testo, resto, data, giorni.length)); return; }
@@ -2621,7 +2611,7 @@ function apriComandiVocali() {
       <p class="cv-nota">${esc(nota)}</p>
       <ul class="cv-es">${es.map(x => `<li>«${esc(x)}»</li>`).join("")}</ul></details>`).join("")}</div>
     <h4>Giorni e pasti</h4>
-    <p class="cv-nota"><b>Giorni:</b> oggi, ieri, l'altro ieri, domani, dopodomani, stamattina e stasera (= oggi), lunedì…domenica, anche con «prossimo» o «scorso». Se non lo dici vale il giorno aperto in Oggi.</p>
+    <p class="cv-nota"><b>Giorni:</b> oggi, ieri, l'altro ieri, domani, dopodomani, stamattina e stasera (= oggi; «stasera» senza un pasto è la cena), lunedì…domenica, anche con «prossimo» o «scorso». Se non lo dici vale il giorno aperto in Oggi.</p>
     <p class="cv-nota"><b>Pasti:</b> colazione · spuntino di metà mattina (o «spuntino mattutino») · pranzo · merenda (anche «spuntino di pomeriggio», «spuntino pomeridiano», «pre-workout») · cena · dopo cena (anche «spuntino serale»). «Spuntino» da solo: se ne hai uno solo è quello, altrimenti quello del momento.</p>
     <p class="cv-nota"><b>Sport:</b> CrossFit, pesi/palestra, funzionale, corsa, camminata, bici, nuoto, yoga/pilates, padel/tennis, ballo, equitazione, calcio/pallavolo/basket e quelli che hai aggiunto tu (per nome).</p>
     <p class="cv-nota">Se il microfono dell'app non funziona, Detta apre un campo: lì usa il 🎤 della tastiera, le frasi sono le stesse.</p>
