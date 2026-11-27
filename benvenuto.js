@@ -48,7 +48,7 @@ const senzaSport = (R) => !(R.sport || []).length || (R.sport || []).includes(QZ
 const QZ = [
   // la prima schermata per chi apre l'app per la prima volta: benvenuto, «Iniziamo» e il ripristino del backup (rifacendo il questionario dal Profilo non c'è)
   { k: "intro", t: "intro", e: "🌙", q: "Benvenuta/o!", salta: () => !!(qz && qz.rifai) },
-  { k: "nome", t: "t", e: "👋", q: "Come ti chiami?", ph: "Il tuo nome", opz: 1, nota: "Serve solo per salutarti nell'app." },
+  { k: "nome", t: "t", e: "👋", q: "Come ti chiami?", ph: "Il tuo nome", opz: 1, nota: "Facoltativo." },
   { k: "sesso", t: "u", e: "🙋", q: "Sei…", o: [["Donna", "👩", "donna"], ["Uomo", "👨", "uomo"]] },
   { k: "eta", t: "n", e: "🎂", q: "Quanti anni hai?", un: "anni", ph: "34", min: 10, max: 100 },
   { k: "altezza", t: "n", e: "📏", q: "Quanto sei alta/o?", un: "cm", ph: "168", min: 100, max: 230 },

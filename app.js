@@ -228,10 +228,7 @@ function applicaPersonalizzazione() {
   document.title = nome;
   const mt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (mt) mt.setAttribute("content", nome);   // il nome sotto l'icona della schermata Home (iPhone)
   const s = document.getElementById("saluto");
-  if (s) {
-    const h = new Date().getHours(), ciao = h < 5 ? "Buonanotte" : h < 13 ? "Buongiorno" : h < 18 ? "Buon pomeriggio" : "Buonasera";
-    s.textContent = pf.nome ? `${ciao}, ${pf.nome}` : ""; s.hidden = !pf.nome;
-  }
+  if (s) { s.textContent = ""; s.hidden = true; }   // niente saluto in alto a destra (richiesta 27/11)
 }
 document.addEventListener("DOMContentLoaded", () => applicaPersonalizzazione());
 // all'apertura l'app parte sempre dall'inizio della pagina (dopo un aggiornamento l'iPhone rimetteva la pagina scorsa in basso, col riepilogo nascosto)
@@ -2622,7 +2619,7 @@ function apriProfilo(scheda) {
     <input class="qta-input wiz-full" type="text" maxlength="24" placeholder="Sailor Fit" data-pers="nomeApp" value="${esc(pf.nomeApp || "")}">
     <p class="campo-nota">Compare in alto nell'app.</p>
     <label class="wiz-l">Come ti chiami? <em>(facoltativo)</em></label>
-    <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Per salutarti in alto" data-pers="nome" value="${esc(pf.nome || "")}">
+    <input class="qta-input wiz-full" type="text" maxlength="30" placeholder="Il tuo nome" data-pers="nome" value="${esc(pf.nome || "")}">
     <label class="wiz-l">Colore</label>
     <div class="qz-colori">${(window.COLORI_APP || []).map(([k, l, c, , , cc]) => `<button class="qz-col ${(pf.colore || "lilla") === k ? "on" : ""}" data-pers-colore="${k}" style="--c:${document.documentElement.getAttribute("data-tema") === "chiaro" ? cc : c}"><i></i><span>${l}</span></button>`).join("")}</div>
     <p class="campo-nota">Su iPhone anche l'icona della schermata Home prende questo colore e il nome dell'app. Se l'hai già aggiunta, toglila e aggiungila di nuovo da Safari (Condividi → Aggiungi alla schermata Home): i tuoi dati restano.</p>
