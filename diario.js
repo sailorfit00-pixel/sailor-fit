@@ -416,6 +416,7 @@ function migraNomiRicette() {
 // Elenco di idee (ricette per il pasto), massimo tre alla volta. Prima le ricette che scegli più spesso (dal diario), poi ciò che hai in casa e le migliori per il pasto, poi i dolci. ↻ mostra le tre successive.
 // escludiIdx: pasto già segnato che si sta modificando (il suo obiettivo è quello di quel pasto, e la sua ricetta non si ripropone)
 function ideeBloccoHTML(c, titolo, escludiIdx = null) {
+  if (!funzioneAttiva("ricette")) return "";   // senza ricette niente idee di piatti
   const data = c.data, esistente = escludiIdx !== null && escludiIdx !== undefined;
   const restaIdee = Math.round(mancaData(data).kcal);   // kcal che restano oggi: le idee che le superano si segnano e vanno in fondo
   if (!c._idee || c._ideePasto !== c.pasto || c._ideeResta !== restaIdee) {
@@ -1814,6 +1815,7 @@ function mosseSingole(data, p, m, scritto) {
 }
 // Pasto vuoto e nessuna ricetta che ci stia nelle kcal che restano: si propongono singoli alimenti (quello che manca, nei limiti del pasto)
 function alimentiIdeaHTML(c) {
+  if (!funzioneAttiva("consigli")) return "";   // gli alimenti singoli «per arrivare alle calorie» sono consigli
   try {
     if (pastoPassato(c.data, c.pasto)) return "";
     const m0 = mancaData(c.data), T = targetPastoDiario(c.data, c.pasto);
@@ -2181,7 +2183,7 @@ function renderOggi() {
       ${avvisoOggi || (giornataPronta(data) && mancaGiornata(data).ok ? `<p class="nota ok">✅ Giornata in linea</p>` : !prox && !giornataPronta(data) ? notaFineGiornataHTML(data) : "")}
       <div class="oggi-azioni">
         ${(() => {   // un solo comando alla volta: se c'è qualcosa da riempire "Compila", altrimenti "Cambia menu" (anche se i pasti li hai scritti tu)
-          if (data < oggiISO()) return "";
+          if (data < oggiISO() || !funzioneAttiva("ricette")) return "";   // «Compila» e «Cambia menu» usano le ricette
           // un pasto vuoto, ma solo se resta abbastanza da riempirlo (con la giornata già in linea «Compila» non farebbe niente)
           const vuoto = momentiGiorno(data).some(s => !g.pasti.some(x => x.pasto === s) && !pastoPassato(data, s)) && (!g.pasti.length || mancaData(data).kcal >= 80);
           if (vuoto)   // solo la scritta, sottolineata a puntini (niente pulsante pieno né spiegazione)

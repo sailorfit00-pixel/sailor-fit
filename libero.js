@@ -808,6 +808,7 @@ const FIT_SCAMBI = {
 const SEMPRE_MEGLIO = new Set(["Pasta>Pasta integrale", "Pasta cotta>Pasta integrale", "Farina 00>Farina integrale", "Pancarrè>Pane integrale", "Pane bianco>Pane integrale", "Riso bianco cotto>Riso integrale cotto", "Olio di semi>Olio EVO", "Cioccolato al latte>Cioccolato fondente"]);   // stesse calorie, più sani
 const DOLCIFICANTI = /^(Miele|Zucchero|Zucchero di canna|Sciroppo d'acero|Marmellata|Sciroppo)/;
 function mosseFit(c) {
+  if (!funzioneAttiva("consigli")) return [];
   const A = window.ALIMENTI || {}, X = window.NUTRIENTI_EXTRA || {}, out = [];
   const items = (c.items || []).map((it, k) => ({ nome: it.nome, qta: it.qta, k })).filter(r => A[r.nome] && r.qta > 0 && !MAI_CONSIGLIATI.test(r.nome));
   const dentro = new Set(items.map(r => r.nome));
@@ -837,6 +838,7 @@ function mosseFit(c) {
 }
 // «Consigli furbi» di un pasto: cosa cambiare per stare nelle kcal e nei macro (fitMosse: eventuali consigli «più fit» da mettere in testa)
 function consiglioFurboHTML(c, m, fitMosse = []) {
+  if (!funzioneAttiva("consigli")) return "";
   if (c && c.vivo && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto)) return "";   // sui pasti passati niente consigli: solo su quelli ancora da venire
   const e = elencoConsigli(c, m);
   const giaFit = new Set(fitMosse.map(a => a.tipo === "cambia" ? `cambia|${a.r.nome}|${a.a}` : `porta|${a.r.nome}|${a.nuova}`));
@@ -1023,6 +1025,7 @@ function pastoModificato(c) {
 // «Altre idee» per un pasto già scritto (es. compilato dall'app): fino a 3 ricette simili che stanno nelle calorie e nei macro
 // che restano nella giornata (contando gli altri pasti, non questo). ↻ ne mostra altre 3; toccandone una sostituisce il pasto.
 function altreIdeeHTML(c) {
+  if (!funzioneAttiva("ricette")) return "";
   if (!c || !c.vivo || c.bozza || !c.items.length || typeof ricetteConsigliate !== "function") return "";
   // con alimenti «Da aggiungere» non ancora confermati niente idee: le idee non li contano e proporrebbero un pasto intero. Tornano dopo ✓ Aggiungi
   if (c.items.some(it => it.nuovo) || (c.piattiNuovi || []).length) return "";
@@ -1373,7 +1376,7 @@ function liberoHTML() {
       ${pastoPassatoC(c) ? "" : furboBlocco}
       ${bloccato ? "" : altreIdeeHTML(c)}
     ` : c.idee()}
-    ${c.bozza ? "" : bloccato ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
+    ${c.bozza || bloccato || !funzioneAttiva("ricette") ? "" : `<button class="btn-link link-ricette" data-azione="ricette-da-pasto">📖 Ricette ›</button>`}
     ${c.bozza ? `<div class="barra-salva"><button class="btn block lib-conferma" data-lib="conferma-bozza">✓ Salva pasto</button></div>` : !bloccato && daAggiungere ? `<div class="barra-salva due"><button class="btn-sec danger" data-lib="annulla-nuovi">Annulla</button><button class="btn lib-conferma" data-lib="aggiungi-nuovi">✓ Aggiungi</button></div>` : !bloccato && pastoModificato(c) ? `<div class="barra-salva due"><button class="btn-sec danger" data-lib="annulla-modifiche">Annulla</button><button class="btn lib-conferma" data-lib="salva-modifiche">✓ Salva</button></div>` : ""}
   `;
 }
@@ -2105,6 +2108,7 @@ function vocePerSpesa(x) {
 let _vociSpesaDetta = [];
 // «aggiungi … alla spesa»: prima di scrivere in lista si controlla qui (nome e quantità, con − e ＋); poi si apre la lista con le voci nuove in evidenza
 function apriConfermaSpesa(testo) {
+  if (!funzioneAttiva("spesa")) { funzioneSpenta("spesa"); return; }
   _vociSpesaDetta = vociSpesaDaFrase(testo);
   if (!_vociSpesaDetta.length) { avviso("Non ho capito cosa aggiungere alla spesa: riprova"); return true; }
   // senza quantità detta: quella suggerita (quanto ne mangi di solito, o una confezione), che puoi cambiare
@@ -2258,7 +2262,7 @@ function comandoDomanda(testo) {
   vaiAlGiornoDetta(data);
   if (idee && !(manca && /\bquant/.test(t))) {   // idee: il pasto nominato (con le sue idee e i consigli furbi), altrimenti «cosa aggiungere» della giornata
     const p = pasti.length && momentiGiorno(data).includes(pasti[0].p) ? pasti[0].p : null;
-    if (p) apriPastoDiario(data, null, p); else apriCosaAggiungere();
+    if (p) apriPastoDiario(data, null, p); else if (funzioneAttiva("consigli")) apriCosaAggiungere(); else funzioneSpenta("consigli");
     return true;
   }
   const m = mancaData(data), T = targetData(data);
@@ -2636,7 +2640,7 @@ function apriComandiVocali() {
   openModal(`<button class="btn-link modal-indietro" data-cv-altro>‹ Profilo</button>
     <h3 class="modal-title">🎤 Comandi vocali</h3>
     <p class="hint">Tieni premuto <b>🎤 Detta</b> (in basso) e parla: vedi l'onda e la frase mentre parli; lascia per finire. (Con un tocco breve resta in ascolto: ritocca 🎤 per finire.) Prima di salvare ti mostro sempre cosa farò: niente cambia senza il tuo tocco. Un comando per volta.</p>
-    <div class="cv-lista">${COMANDI_VOCALI.map(([ico, tit, nota, es]) => `<details class="cv-sez">
+    <div class="cv-lista">${COMANDI_VOCALI.filter(([, tit]) => !(tit === "Lista della spesa" && !funzioneAttiva("spesa")) && !(tit === "Idee e consigli" && !funzioneAttiva("ricette") && !funzioneAttiva("consigli"))).map(([ico, tit, nota, es]) => `<details class="cv-sez">
       <summary><span class="cv-ico">${ico}</span><b>${esc(tit)}</b></summary>
       <p class="cv-nota">${esc(nota)}</p>
       <ul class="cv-es">${es.map(x => `<li>«${esc(x)}»</li>`).join("")}</ul></details>`).join("")}</div>
