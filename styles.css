@@ -2244,6 +2244,8 @@ body.qz-primo .tabbar { display: none; }
 .modal.qz-primo .modal-backdrop { background: var(--card); }
 .modal.qz-primo .modal-sheet { max-width: 640px; height: 100%; max-height: none; min-height: 0; border-radius: 0; padding-top: calc(env(safe-area-inset-top) + 14px); animation: none; }
 .modal.qz-primo .modal-close, .modal.qz-primo .modal-grip { display: none; }
+/* senza la ✕ la fascia in alto non deve vedersi: scorrendo i passi lunghi (sport, allergie) compariva una linea grigia */
+.modal.qz-primo .modal-testa.scorre { box-shadow: none; }
 .modal.qz-primo .qz-top { margin-right: 0; }
 /* questionario aperto (anche rifatto dal Profilo): la barra in basso non c'è, il pannello arriva fino in fondo */
 body.qz-aperto .tabbar { display: none; }
