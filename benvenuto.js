@@ -52,7 +52,7 @@ const QZ = [
   { k: "altezza", t: "n", e: "📏", q: "Quanto sei alta/o?", un: "cm", ph: "168", min: 100, max: 230 },
   { k: "peso", t: "n", e: "⚖️", q: "Quanto pesi?", un: "kg", ph: "65", min: 25, max: 300, dec: 1 },
   // cosa vuoi nell'app oltre a registrare i pasti: quello che non scegli non compare (si accende dopo in Profilo → I miei dati → App)
-  { k: "funzioni", t: "m", e: "🧩", q: "Cosa vuoi nella tua app?", opz: 1, o: [["Ricette e idee per i pasti", "📖", "ricette"], ["Lista della spesa", "🛒", "spesa"]],
+  { k: "funzioni", t: "m", e: "🧩", q: "Cosa vuoi nella tua app?", req: 1, excl: QZ_NESSUNO, o: [["Ricette e idee per i pasti", "📖", "ricette"], ["Lista della spesa", "🛒", "spesa"], ["Niente, solo registrare i pasti", "✍️", QZ_NESSUNO]],   // obbligatoria: è importante sapere cosa vuole
     nota: "Registrare i pasti, i consigli furbi, la Settimana e l'Andamento ci sono sempre. Il resto lo puoi attivare anche dopo, dal Profilo." },
   { k: "obiettivo", t: "u", e: "✨", q: "Qual è il tuo obiettivo?", o: QZ_OBIETTIVI },
   { k: "lavoro", t: "u", e: "💼", q: "Com'è la tua giornata?", o: QZ_LAVORO, nota: "Senza contare lo sport: serve a stimare quanto consumi ogni giorno." },
@@ -111,7 +111,7 @@ function qzRisposteAttuali() {
     pastoAltro: (pf.pasti || []).includes("sera") ? String(pf.nomeSera || "Spuntino serale") : "",
     orari: Object.fromEntries(ORDINE_TEMPO.map(p => [p, o[p]])),
     dieta: e.dieta || "", piattiVeg: e.senzaVeg ? "no" : "si", nonMangioAltri: (e.altri || []).join(", "), allergieAltri: (e.allergieAltre || []).join(", "), allergie: (e.allergie || []).length ? e.allergie.slice() : [QZ_NESSUNO], nonMangio: (e.nonMangio || []).length ? e.nonMangio.slice() : [QZ_NESSUNO],
-    funzioni: ["ricette", "spesa"].filter(x => !pf.funzioni || pf.funzioni[x] !== false),
+    funzioni: (() => { const f = ["ricette", "spesa"].filter(x => !pf.funzioni || pf.funzioni[x] !== false); return f.length ? f : [QZ_NESSUNO]; })(),
     colore: pf.colore || "lilla", iconaApp: pf.iconaApp || "🌙", nomeApp: pf.nomeApp || "Sailor Fit",
   };
 }
