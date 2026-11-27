@@ -329,14 +329,15 @@ const tipoSportHTML = (t) => `<span class="tipo-sport">${t.sport && t.sport.leng
 // Compatibilità: TIPI_GIORNATA[chiave] restituisce le info di qualsiasi combinazione di sport;
 // l'elenco (Object.entries) contiene riposo, ogni sport da solo e le combinazioni della settimana tipo.
 const TIPI_GIORNATA = new Proxy({}, {
-  get: (_, chiave) => typeof chiave === "string" ? tipoInfo(chiave) : undefined,
+  // allenamenti spenti: ogni giorno vale come riposo (niente calorie dello sport anche se la settimana tipo ne ha)
+  get: (_, chiave) => typeof chiave === "string" ? tipoInfo(funzioneAttiva("allenamenti") ? chiave : "riposo") : undefined,
   has: () => true,
   ownKeys: () => {
     const chiavi = ["riposo", ...leggiSport().map(sp => sp.id)];
     try { (JSON.parse(localStorage.getItem("mp_tipi")) || []).forEach(t => { const k = VECCHI_TIPI[t] || t; if (!chiavi.includes(k)) chiavi.push(k); }); } catch (e) {}
     return chiavi;
   },
-  getOwnPropertyDescriptor: (_, chiave) => ({ enumerable: true, configurable: true, value: tipoInfo(chiave) }),
+  getOwnPropertyDescriptor: (_, chiave) => ({ enumerable: true, configurable: true, value: tipoInfo(funzioneAttiva("allenamenti") ? chiave : "riposo") }),
 });
 function calcolaTarget() { _cacheChiaveProfilo = ""; } // gli obiettivi si ricalcolano al prossimo uso
 // Versione degli obiettivi: se cambia, il piano salvato viene rigenerato
@@ -1885,8 +1886,10 @@ function openModal(html) {
 // Funzioni facoltative scelte nel questionario («Cosa vuoi nella tua app?»): ricette e idee, lista della spesa. (I consigli furbi ci sono sempre.)
 // Chi usava già l'app prima di questa domanda (profilo senza «funzioni») le ha tutte. Si cambiano in Profilo → Funzionalità dell'app.
 const FUNZIONI_APP = [["ricette", "📖", "Ricette e idee per i pasti", "il ricettario e le idee di piatti nei pasti"], ["spesa", "🛒", "Lista della spesa", "nel Profilo e con Detta («aggiungi … alla spesa»)"], ["allenamenti", "🏋️", "Allenamenti", "lo sport del giorno in Oggi e in Settimana: quando ti alleni, più calorie"]];
+let _funzCache = { raw: undefined, f: null };   // si chiede spesso (anche per ogni giorno della settimana): si rilegge solo se il profilo è cambiato
 function funzioneAttiva(nome) { if (nome === "consigli" || nome === "compila") return true;   // consigli furbi e «Compila i pasti» ci sono per tutti
-  try { const f = leggiProfilo().funzioni; return !f || f[nome] !== false; } catch (e) { return true; } }
+  try { const raw = localStorage.getItem("mp_profilo"); if (raw !== _funzCache.raw) { let f = null; try { f = (JSON.parse(raw || "{}") || {}).funzioni || null; } catch (e) {} _funzCache = { raw, f }; }
+    const f = _funzCache.f; return !f || f[nome] !== false; } catch (e) { return true; } }
 function funzioneSpenta(nome) {   // chi la chiede (con Detta o un collegamento) sa dove accenderla
   const f = FUNZIONI_APP.find(x => x[0] === nome);
   avviso(`${f ? f[2] : "Questa funzione"}: funzione spenta. La accendi in Profilo → Funzionalità dell'app`);
@@ -2541,7 +2544,7 @@ function perditaSettimanale() {
 // Riassunto degli obiettivi: una riga (media della settimana tipo e kg a settimana) e una tabellina
 // con i soli tipi di giornata della settimana tipo (+ Riposo), non una scheda per ogni sport
 function anteprimaProfiloHTML() {
-  const tipi = leggiTipi().map(t => VECCHI_TIPI[t] || t || "riposo");
+  const tipi = leggiTipi().map(t => funzioneAttiva("allenamenti") ? (VECCHI_TIPI[t] || t || "riposo") : "riposo");   // allenamenti spenti: una sola riga «Riposo ×7»
   const media = Math.round(tipi.reduce((s, t) => s + TIPI_GIORNATA[t].target.kcal, 0) / tipi.length / 10) * 10;
   const kg = perditaSettimanale(), kgTxt = `${kg >= 0 ? "−" : "+"}${Math.abs(kg).toFixed(2).replace(".", ",")} kg a settimana`;
   const chiavi = [...new Set(tipi)]; if (!chiavi.includes("riposo")) chiavi.push("riposo");
