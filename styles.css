@@ -2406,8 +2406,31 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 .detta-barre { height: 44px; }
 .detta-diag { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); opacity: .8; word-break: break-all; }
 /* 🎤 Detta più facile da prendere: intorno al cerchio una zona invisibile che fa parte del pulsante (toccando vicino al cerchio
-   non si apre la cena che sta dietro); in fondo alla pagina più spazio, così l'ultimo pasto si ferma sopra il pulsante */
+   non si apre la cena che sta dietro) */
 .tabbar .tab-detta { position: relative; }
 .tabbar .detta-ico { position: relative; }
 .tabbar .detta-ico::after { content: ""; position: absolute; inset: -16px -22px -6px; border-radius: 28px; }
-body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 56px); }
+
+/* ===== Schermi stretti (iPhone da 375 punti): niente parole spezzate o testi che vanno a capo ===== */
+/* avviso di recupero: la seconda riga sempre su una riga sola */
+.recupero p span { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Profilo → Sport: il nome su una riga (con «…» se lungo), mai spezzato a metà parola */
+.sport-lista .sport-riga .sr-nome { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.sport-lista .sport-riga .sr-kcal-sotto { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+/* pannello del pasto: «Già mangiato 🔒» e «360 kcal / 371 kcal» su una riga */
+.pm-tot { gap: 8px; }
+.pm-tot > span { white-space: nowrap; }
+.pm-tot .pm-kcal { white-space: nowrap; flex: 0 0 auto; }
+.pm-tot .pm-kcal em { font-size: 12px; }
+/* calorie di un giorno: i due pulsanti alti uguali */
+.bsp-azioni { align-items: stretch; }
+.bsp-azioni > * { margin: 0; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.25; }
+/* Oggi, macro: «Carboidrati» intero anche sui telefoni stretti */
+.mc-corto { display: none; }
+@container (max-width: 175px) {
+  .mc-top i { margin-right: 4px; }
+  .mc-lungo { display: none; }
+  .mc-corto { display: inline; }
+}
+/* (le kcal ora stanno sotto il nome: una colonna in meno, il nome ha spazio) */
+.sport-riga:not(.nuovo) { grid-template-columns: 26px minmax(0, 1fr) 50px 28px 36px; column-gap: 6px; }

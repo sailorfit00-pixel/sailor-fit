@@ -2102,8 +2102,8 @@ function apriConfermaSpesa(testo) {
     const c = document.getElementById("detta-spesa"); if (!c) return;
     c.innerHTML = _vociSpesaDetta.map((v, i) => `<li class="voce detta-spesa-v">
       <div class="detta-spesa-r"><input class="qta-input detta-spesa-nome" data-detta-spesa-nome="${i}" value="${esc(v.nome)}" aria-label="Nome" autocomplete="off"><button class="lib-del" data-detta-spesa-del="${i}" aria-label="Togli ${esc(v.nome)}">${ICONA_CESTINO}</button></div>
-      <div class="spesa-mod-r"><span class="detta-spesa-l">Quantità</span><button class="spesa-step" data-detta-spesa-step="${i}|-1" aria-label="Meno">−</button>
-      <input class="qta-input" data-detta-spesa-qta="${i}" value="${esc(v.qta)}" placeholder="es. 2 confezioni" autocomplete="off"><button class="spesa-step" data-detta-spesa-step="${i}|1" aria-label="Più">＋</button></div></li>`).join("") || `<li class="hint">Niente da aggiungere</li>`;
+      <div class="spesa-mod-r"><button class="spesa-step" data-detta-spesa-step="${i}|-1" aria-label="Meno">−</button>
+      <input class="qta-input" data-detta-spesa-qta="${i}" value="${esc(v.qta)}" placeholder="quantità, es. 2 confezioni" aria-label="Quantità" autocomplete="off"><button class="spesa-step" data-detta-spesa-step="${i}|1" aria-label="Più">＋</button></div></li>`).join("") || `<li class="hint">Niente da aggiungere</li>`;
     const b = document.getElementById("detta-spesa-ok"); if (b) b.disabled = !_vociSpesaDetta.length;
   };
   openModal(`<h3 class="modal-title">🛒 Aggiungo alla lista della spesa</h3>
@@ -2192,7 +2192,7 @@ function vaiAlGiornoDetta(data) {
     dataDiario = data; if (typeof vistaHome !== "undefined") vistaHome = "oggi";
     _dataDaVoce = data === oggiISO() ? null : data;
     if (typeof renderOggi === "function") renderOggi();
-    window.scrollTo(0, 0);
+    if (typeof paginaInCima === "function") paginaInCima(); else window.scrollTo(0, 0);
   }
   return true;
 }

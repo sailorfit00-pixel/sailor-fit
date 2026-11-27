@@ -234,6 +234,10 @@ function applicaPersonalizzazione() {
   }
 }
 document.addEventListener("DOMContentLoaded", () => applicaPersonalizzazione());
+// all'apertura l'app parte sempre dall'inizio della pagina (dopo un aggiornamento l'iPhone rimetteva la pagina scorsa in basso, col riepilogo nascosto)
+try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch (e) {}
+window.addEventListener("pageshow", (e) => { if (!e.persisted) window.scrollTo(0, 0); });
+window.addEventListener("load", () => { window.scrollTo(0, 0); setTimeout(() => { if (document.getElementById("modal").hidden) window.scrollTo(0, 0); }, 150); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") applicaPersonalizzazione(); });   // il saluto segue l'ora
 // basale calcolato dall'app (bmrAuto): segue il peso; se lo scrivi tu a mano resta quello
 const basaleDelProfilo = (p) => basaleMifflin({ uomo: p.sesso === "uomo", eta: p.eta, cm: p.altezza, kg: p.peso });
@@ -1863,6 +1867,10 @@ function apriListaRicetteCome() {
   const sh = document.querySelector(".modal-sheet"); if (sh) sh.scrollTop = _statoLista.sc || 0;
 }
 let _scrollSotto = 0;   // dov'era la pagina quando si è aperto il pannello
+// porta la pagina in cima anche se c'è un pannello aperto (la pagina sotto è ferma: si cambia il punto a cui torna quando lo chiudi)
+function paginaInCima() {
+  if (document.body.classList.contains("no-scroll")) { _scrollSotto = 0; document.body.style.top = "0px"; } else window.scrollTo(0, 0);
+}
 function openModal(html) {
   _ricettaDaLista = false;
   document.getElementById("modal-content").innerHTML = html;
@@ -2527,8 +2535,8 @@ function apriProfilo(scheda) {
     <div ${sk("sport")}>
     <h4>I tuoi sport</h4>
     <div class="sport-lista">${pf.sport.filter(sp => !sp.nascosto).map(sp => `<div class="sport-riga">
-        <span class="sr-ico">${sp.icona}</span><span class="sr-nome">${esc(sp.nome)}</span>
-        <input class="qta-input sr-dur" type="text" inputmode="decimal" autocomplete="off" data-sport-dur="${sp.id}" value="${sp.perKm ? fmtKm(sp.km || 5) : (sp.min || 60)}"><em>${sp.perKm ? "km" : "min"}</em><em class="sr-kcal">≈ ${kcalSport(sp, 0, pf)} kcal</em>
+        <span class="sr-ico">${sp.icona}</span><span class="sr-nome">${esc(sp.nome)}<small class="sr-kcal-sotto">≈ ${kcalSport(sp, 0, pf)} kcal</small></span>
+        <input class="qta-input sr-dur" type="text" inputmode="decimal" autocomplete="off" data-sport-dur="${sp.id}" value="${sp.perKm ? fmtKm(sp.km || 5) : (sp.min || 60)}"><em>${sp.perKm ? "km" : "min"}</em>
         <button class="lib-del" data-sport-del="${sp.id}" aria-label="Togli ${esc(sp.nome)}">${ICONA_CESTINO}</button></div>`).join("")}
       <div class="sport-riga nuovo">
         <select class="qta-input sr-ico-sel" id="nuovo-sport-icona" aria-label="Icona">${ICONE_SPORT.map(i => `<option>${i}</option>`).join("")}</select>
