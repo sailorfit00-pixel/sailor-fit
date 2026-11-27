@@ -2397,6 +2397,14 @@ function apriMenu() {
     </div>
   `);
 }
+// L'ora di uno sport con − e ＋ (mezz'ora alla volta): niente rotella dell'iPhone, che si chiudeva da sola appena la pagina si ridisegnava
+const ORA_PASSO = 0.5, ORA_MIN = 5, ORA_MAX = 23.5;
+function oraStepHTML(dove, id, h) {
+  return `<div class="ora-step" role="group" aria-label="Ora"><button class="nav-btn" data-ora-step="${dove}|${id}|-1" aria-label="Mezz'ora prima">−</button>
+    <span class="ora-val${h === null ? " vuota" : ""}">${h === null ? "—:—" : fmtOra(h)}</span>
+    <button class="nav-btn" data-ora-step="${dove}|${id}|1" aria-label="Mezz'ora dopo">＋</button></div>`;
+}
+const passoOra = (h, dir) => h === null ? 18 : Math.min(ORA_MAX, Math.max(ORA_MIN, Math.round((h + dir * ORA_PASSO) * 2) / 2));
 // Profilo: a che ora ti alleni, sport per sport (un'ora indicativa). Sotto ogni sport: quale pasto viene prima e quale dopo.
 function orariSportHTML(pf) {
   const usati = [...new Set(leggiTipi().flatMap(t => sportDelTipo(t)))], sport = pf.sport.filter(sp => usati.includes(sp.id) && sp.id !== "camminata");
@@ -2408,13 +2416,20 @@ function orariSportHTML(pf) {
   const riga = (sp) => { const h = oraDi(sp); let t = "";
     if (h !== null) { const pre = spuntinoPreDa(scelti, o, h), dopo = scelti.find(p => o[p] >= h);
       t = `${pre ? `Prima ${art[pre]} (pre-workout, più leggera)` : "Nessuno spuntino subito prima"}, ${dopo && dopo !== pre ? `dopo ${art[dopo]}.` : "dopo non ci sono altri pasti."}`; }
-    return `<div class="pf-ora-sport"><span>${sp.icona} ${esc(sp.nome)}</span><input class="qta-input" type="time" step="900" data-sport-ora="${sp.id}" value="${h !== null ? fmtOra(h).padStart(5, "0") : ""}">${t ? `<small>${t}</small>` : ""}</div>`; };
+    return `<div class="pf-ora-sport"><span>${sp.icona} ${esc(sp.nome)}</span>${oraStepHTML("profilo", sp.id, h)}${t ? `<small>${t}</small>` : ""}</div>`; };
   const qualcuno = sport.some(sp => oraDi(sp) !== null);
   return `<label class="wiz-l">A che ora ti alleni, di solito</label>
     <p class="campo-nota">Basta un'ora indicativa per ogni sport: serve a capire quale pasto viene prima (più leggero) e quale dopo (per recuperare). Se un giorno cambia, lo cambi in Oggi toccando lo sport del giorno.</p>
     ${sport.map(riga).join("")}
     ${qualcuno ? `<button class="btn-link" data-allen-ora-togli>✕ Nessun orario</button>` : `<p class="hint">Senza orario l'app considera l'allenamento di sera (il sabato di mattina).</p>`}`;
 }
+document.addEventListener("click", (e) => {   // Profilo: l'ora di uno sport con − e ＋
+  const b = e.target.closest && e.target.closest('[data-ora-step^="profilo|"]'); if (!b) return;
+  const [, id, dir] = b.dataset.oraStep.split("|"), pf = leggiProfilo(), sp = pf.sport.find(x => x.id === id); if (!sp) return;
+  const h0 = typeof sp.ora === "number" ? sp.ora : typeof pf.allenOra === "number" ? pf.allenOra : null;
+  sp.ora = passoOra(h0, +dir);
+  salvaProfilo(pf); riapriProfilo(); if (typeof renderOggi === "function") renderOggi();
+});
 document.addEventListener("change", (e) => {   // Profilo: l'ora di uno sport
   if (!e.target.matches || !e.target.matches("[data-sport-ora]")) return;
   const pf = leggiProfilo(), sp = pf.sport.find(x => x.id === e.target.dataset.sportOra), h = oraDa(e.target.value); if (!sp) return;

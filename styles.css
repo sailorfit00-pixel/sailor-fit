@@ -2434,3 +2434,33 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 }
 /* (le kcal ora stanno sotto il nome: una colonna in meno, il nome ha spazio) */
 .sport-riga:not(.nuovo) { grid-template-columns: 26px minmax(0, 1fr) 50px 28px 36px; column-gap: 6px; }
+
+/* ===== Ora di uno sport: − 18:30 ＋ (mezz'ora alla volta) ===== */
+.ora-step { display: inline-flex; align-items: center; gap: 6px; }
+.ora-step .nav-btn { width: 36px; height: 36px; font-size: 18px; }
+.ora-val { min-width: 54px; text-align: center; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.ora-val.vuota { color: var(--muted); font-weight: 400; }
+.pf-ora-sport input { width: auto; }
+/* Oggi → sport del giorno: il nome sopra, sotto «Durata» e «Ora» con la loro scritta */
+.allen-riga { display: block; margin: 10px 0; padding: 10px 12px; border-radius: 14px; background: var(--card2); }
+.allen-riga .allen-nome { display: block; font-weight: 700; margin-bottom: 8px; }
+.allen-campi { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: nowrap; }
+.allen-dur, .allen-ora { display: flex; align-items: center; gap: 6px; }
+.allen-campi small { color: var(--muted); font-size: 12.5px; }
+.allen-dur input { width: 56px; height: 36px; text-align: center; margin: 0; }
+/* avviso di recupero compatto: testo a sinistra (due righe piccole), «No» / «Sì» piccoli a destra */
+.recupero { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
+.recupero p { flex: 1; min-width: 0; margin: 0; font-size: 14px; line-height: 1.3; }
+.recupero p b { display: block; }
+.recupero p span { display: block; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recupero-btn { display: flex; gap: 6px; flex: 0 0 auto; }
+.recupero-btn button { width: auto; min-height: 34px; padding: 0 14px; margin: 0; font-size: 14px; border-radius: 12px; }
+/* calorie di un giorno: pulsanti normali, non giganti */
+.bsp-azioni > * { min-height: 42px; padding: 0 10px; font-size: 14.5px; white-space: nowrap; }
+/* schermi molto stretti: «Ora» va sotto «Durata» invece di uscire a destra */
+.allen-campi { flex-wrap: wrap; row-gap: 8px; }
+.allen-ora .ora-step .nav-btn { width: 34px; height: 34px; }
+/* Oggi: in fondo solo lo spazio che serve per non finire sotto 🎤 (prima tre margini sommati: ~100 punti vuoti sotto «Cambia menu del giorno») */
+#oggi .oggi-azioni { margin-bottom: 12px; }
+#oggi .oggi-pasti { margin-bottom: 0; }
+.allen-riga .ora-step .nav-btn { background: var(--card); border: 1px solid var(--line2); color: var(--text); }
