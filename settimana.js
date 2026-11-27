@@ -26,7 +26,11 @@ function limitiGiorno(base) { return [Math.round(leggiProfilo().bmr), Math.round
 function limitiAuto(base) { return [Math.max(leggiProfilo().bmr, Math.round(base * 0.8)), Math.round(base * 1.2)]; }
 // -------- Obiettivo della settimana scelto da te --------
 // { sempre: { kcal, da: lunedì } | null, settimane: { lunedì: kcal } }: una settimana sola, oppure da quel lunedì in poi
-function leggiBudgetSett() { try { const b = JSON.parse(localStorage.getItem("mp_budget_sett")) || {}; return { sempre: b.sempre || null, settimane: b.settimane || {} }; } catch (e) { return { sempre: null, settimane: {} }; } }
+// aggiunte: { lunedì: kcal } = calorie in più (o in meno) sul totale di quella settimana, date a un giorno con «Cambia il totale»: gli altri giorni restano com'erano
+function leggiBudgetSett() { try { const b = JSON.parse(localStorage.getItem("mp_budget_sett")) || {}; return { sempre: b.sempre || null, settimane: b.settimane || {}, aggiunte: b.aggiunte || {} }; } catch (e) { return { sempre: null, settimane: {}, aggiunte: {} }; } }
+// «Cambia il totale» su un giorno: il totale sale (o scende) solo di quella differenza. Prima si salvava un nuovo totale, che però si ridistribuiva
+// in proporzione su tutti i giorni (anche quelli già passati) e spostava di qualche decina di kcal anche gli altri
+function aggiungiAlTotale(lun, d) { const b = leggiBudgetSett(); b.aggiunte[lun] = Math.round((b.aggiunte[lun] || 0) + d); if (!b.aggiunte[lun]) delete b.aggiunte[lun]; salvaBudgetSett(b); }
 function salvaBudgetSett(b) { localStorage.setItem("mp_budget_sett", JSON.stringify(b)); }
 function budgetScelto(lun) {
   const b = leggiBudgetSett();
@@ -80,7 +84,8 @@ function pianoSettimanaCalc(data, totaleProva) {
   const scelto = totaleProva > 0 ? totaleProva : budgetScelto(date[0]);
   const bmr = Math.round(leggiProfilo().bmr);
   const base = scelto ? distribuisciTotale(naturale0, scelto, bmr) : naturale0;
-  const budget = base.reduce((a, b) => a + b, 0);
+  const aggiunta = totaleProva > 0 ? 0 : (leggiBudgetSett().aggiunte[date[0]] || 0);   // da «Cambia il totale»: va al giorno toccato, gli altri non si scalano
+  const budget = base.reduce((a, b) => a + b, 0) + aggiunta;
   // un giorno scelto da te: { kcal } = proprio quelle calorie (anche se poi cambi sport o profilo); un numero = la differenza dal previsto (salvati prima)
   const fisso = date.map((d, i) => sp[d] && typeof sp[d] === "object" ? limita(sp[d].kcal, limitiGiorno(base[i])) : sp[d] ? limita(base[i] + sp[d], limitiGiorno(base[i])) : null);
   const g = date.map(d => giornoDiario(d));
@@ -100,7 +105,7 @@ function pianoSettimanaCalc(data, totaleProva) {
     resto -= recupera ? mangiato[i] : target[i];
   });
   const finoAOggi = date.reduce((a, d, i) => a + (d <= oggi ? mangiato[i] : 0), 0);
-  return { date, base, fisso, target, budget, mangiato, completo, finoAOggi, scarto: Math.round(-resto), naturale, scelto };
+  return { date, base, fisso, target, budget, mangiato, completo, finoAOggi, scarto: Math.round(-resto), naturale, scelto: scelto || (aggiunta ? budget : null) };
 }
 
 // Obiettivo del giorno (kcal e macro) tenendo conto del budget settimanale
@@ -279,8 +284,8 @@ function salvaBudgetDa(lun, modo) {
   const v = numDa((document.getElementById("bs-input") || {}).value), bmr = Math.round(leggiProfilo().bmr);
   if (v < bmr * 7) { avviso(`Troppo poco: almeno ${kIt(bmr * 7)} kcal (il tuo metabolismo basale × 7)`); return; }
   const b = leggiBudgetSett();
-  if (modo === "sempre") { b.sempre = { kcal: v, da: lun }; Object.keys(b.settimane).forEach(l => { if (l >= lun) delete b.settimane[l]; }); }
-  else b.settimane[lun] = v;
+  if (modo === "sempre") { b.sempre = { kcal: v, da: lun }; Object.keys(b.settimane).forEach(l => { if (l >= lun) delete b.settimane[l]; }); Object.keys(b.aggiunte).forEach(l => { if (l >= lun) delete b.aggiunte[l]; }); }
+  else { b.settimane[lun] = v; delete b.aggiunte[lun]; }   // il totale scritto da te è quello: niente aggiunte sopra
   salvaBudgetSett(b); closeModal(); aggiornaSettimana();
   avviso(`✓ Obiettivo settimana: ${kIt(v)} kcal${modo === "sempre" ? " da ora in poi" : ""}`);
 }
@@ -314,7 +319,7 @@ function salvaGiorno(modo) {
   const data = inp.dataset.data, v = limita(numDa(inp.value), [+inp.dataset.lo, +inp.dataset.hi]);
   const p = pianoSettimana(data), i = p.date.indexOf(data), d = v - p.target[i];
   if (modo === "totale" && d) {   // il giorno cambia e la settimana con lui: gli altri giorni restano come sono
-    const b = leggiBudgetSett(); b.settimane[p.date[0]] = p.budget + d; salvaBudgetSett(b);
+    aggiungiAlTotale(p.date[0], d);
   }
   const p2 = pianoSettimana(data);
   impostaSpostamento(data, v - p2.base[p2.date.indexOf(data)]);
@@ -339,7 +344,7 @@ function clickSettimana(e) {
   if (br) {
     const lun = br.dataset.bsReset;
     chiediConferma("Tornare al calcolato?", "L'obiettivo della settimana torna quello calcolato dal tuo profilo, da questa settimana in poi", "Sì, torna", () => {
-      const b = leggiBudgetSett(); Object.keys(b.settimane).forEach(l => { if (l >= lun) delete b.settimane[l]; });
+      const b = leggiBudgetSett(); Object.keys(b.settimane).forEach(l => { if (l >= lun) delete b.settimane[l]; }); Object.keys(b.aggiunte).forEach(l => { if (l >= lun) delete b.aggiunte[l]; });
       if (b.sempre) b.sempre = null;
       salvaBudgetSett(b); closeModal(); aggiornaSettimana(); avviso("✓ Obiettivo calcolato dal profilo");
     });
@@ -381,6 +386,7 @@ function clickSettimana(e) {
     chiediConferma("Azzerare le modifiche?", "Le calorie dei giorni tornano a quelle di partenza", "Azzera", () => {
       const sp = leggiSpostamenti();
       dateSettimanaDi(lunedi).forEach(d => { if (d >= oggiISO()) delete sp[d]; });
+      { const b = leggiBudgetSett(); if (b.aggiunte[lunedi]) { delete b.aggiunte[lunedi]; salvaBudgetSett(b); } }   // anche le kcal aggiunte al totale con «Cambia il totale»
       salvaSpostamenti(sp); giornoSelSett = null; aggiornaSettimana();
     });
     return true;

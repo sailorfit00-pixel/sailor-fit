@@ -78,13 +78,13 @@ function vpBudgetSettimana(t) {
   const lun = /\bprossima\b/.test(t) ? addGiorniISO(lunOggi, 7) : (document.body.dataset.tab === "settimana" && typeof offsetSettHome !== "undefined" ? addGiorniISO(lunOggi, offsetSettHome * 7) : lunOggi);
   const prima = pianoSettimana(lun).budget;
   if (/\b(?:togli|azzera|cancella|elimina|automatico|come prima)\b/.test(t)) {
-    return vpConferma("🔥 Obiettivo della settimana", [["Settimana", `${kIt(prima)} kcal`, "calcolato dall'app"]], () => { const b = leggiBudgetSett(); delete b.settimane[lun]; if (b.sempre && b.sempre.da <= lun) b.sempre = null; salvaBudgetSett(b); }, { fatto: "✓ Obiettivo della settimana automatico" });
+    return vpConferma("🔥 Obiettivo della settimana", [["Settimana", `${kIt(prima)} kcal`, "calcolato dall'app"]], () => { const b = leggiBudgetSett(); delete b.settimane[lun]; delete b.aggiunte[lun]; if (b.sempre && b.sempre.da <= lun) b.sempre = null; salvaBudgetSett(b); }, { fatto: "✓ Obiettivo della settimana automatico" });
   }
   const m = t.match(/\b(\d{1,2}[.\s]?\d{3})\b/); if (!m) return false;
   const v = parseInt(m[1].replace(/[.\s]/g, ""), 10); if (!(v >= 5000 && v <= 40000)) return false;
   const sempre = /\b(?:sempre|tutte le settimane|ogni settimana|d'ora in poi|da ora|da adesso)\b/.test(t);
   return vpConferma("🔥 Obiettivo della settimana", [[sempre ? "Ogni settimana, da questa" : `Settimana dal ${fmtData(lun)}`, `${kIt(prima)} kcal`, `${kIt(v)} kcal`], ["In media al giorno", "", `≈ ${kIt(v / 7)} kcal`]],
-    () => { const b = leggiBudgetSett(); if (sempre) b.sempre = { kcal: v, da: lun }; else b.settimane[lun] = v; salvaBudgetSett(b); },
+    () => { const b = leggiBudgetSett(); if (sempre) b.sempre = { kcal: v, da: lun }; else b.settimane[lun] = v; delete b.aggiunte[lun]; salvaBudgetSett(b); },
     { nota: "I giorni si dividono il totale in proporzione (allenamento più di riposo), mai sotto il metabolismo basale.", fatto: `✓ Settimana a ${kIt(v)} kcal` });
 }
 
