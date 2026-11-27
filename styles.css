@@ -2406,8 +2406,7 @@ html[data-tema="chiaro"] .tabbar .tab-detta.avvio .detta-ico, html[data-tema="ch
 .detta-barre { height: 44px; }
 .detta-diag { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); opacity: .8; word-break: break-all; }
 /* 🎤 Detta più facile da prendere: intorno al cerchio una zona invisibile che fa parte del pulsante (toccando vicino al cerchio
-   non si apre la cena che sta dietro); in fondo alla pagina più spazio, così l'ultimo pasto si ferma sopra il pulsante */
+   non si apre la cena che sta dietro) */
 .tabbar .tab-detta { position: relative; }
 .tabbar .detta-ico { position: relative; }
 .tabbar .detta-ico::after { content: ""; position: absolute; inset: -16px -22px -6px; border-radius: 28px; }
-body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 56px); }

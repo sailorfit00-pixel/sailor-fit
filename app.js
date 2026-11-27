@@ -234,6 +234,10 @@ function applicaPersonalizzazione() {
   }
 }
 document.addEventListener("DOMContentLoaded", () => applicaPersonalizzazione());
+// all'apertura l'app parte sempre dall'inizio della pagina (dopo un aggiornamento l'iPhone rimetteva la pagina scorsa in basso, col riepilogo nascosto)
+try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch (e) {}
+window.addEventListener("pageshow", (e) => { if (!e.persisted) window.scrollTo(0, 0); });
+window.addEventListener("load", () => { window.scrollTo(0, 0); setTimeout(() => { if (document.getElementById("modal").hidden) window.scrollTo(0, 0); }, 150); });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") applicaPersonalizzazione(); });   // il saluto segue l'ora
 // basale calcolato dall'app (bmrAuto): segue il peso; se lo scrivi tu a mano resta quello
 const basaleDelProfilo = (p) => basaleMifflin({ uomo: p.sesso === "uomo", eta: p.eta, cm: p.altezza, kg: p.peso });
