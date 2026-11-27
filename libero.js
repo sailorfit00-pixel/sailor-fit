@@ -31,7 +31,7 @@ const PREFERITI = {
   aperitivo: "Aperitivo condiviso (tagliere)", tagliere: "Aperitivo condiviso (tagliere)", "tagliere salumi e formaggi": "Aperitivo condiviso (tagliere)",
   salumi: "Salumi misti", formaggi: "Formaggi misti", vino: "Vino rosso", hamburger: "Panino hamburger", panino: "Panino con prosciutto", patatine: "Patatine fritte", caffe: "Caffè", cola: "Coca cola", "coca": "Coca cola", aperol: "Spritz", "aperol spritz": "Spritz",
   farina: "Farina 00", zucchero: "Zucchero", lievito: "Lievito per dolci", sciroppo: "Sciroppo d'acero",
-  albumi: "Albume", uova: "Uova",
+  albumi: "Albume", uova: "Uova", gelato: "Gelato alla crema", gelati: "Gelato alla crema", "gelato al cioccolato": "Gelato alla crema",
   "latte di avena": "Bevanda di avena", "latte di soia": "Bevanda di soia", "latte di mandorla": "Bevanda di mandorla",
   "olio di girasole": "Olio di semi", "olio di avocado": "Olio di semi", "farina di grano integrale": "Farina integrale",
   "cioccolato fondente": "Cioccolato fondente", "cocco": "Cocco grattugiato",
@@ -913,7 +913,7 @@ function ricettaATeglia(c) {
 function campoAggiungiHTML(c) {
   return `<div class="lib-add">
       <input id="lib-input" class="qta-input wiz-full" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="${c.items.length ? "Aggiungi altro…" : "Cerca un alimento"}">
-      <button class="btn-sec lib-scan" data-lib="scan" aria-label="Leggi il codice a barre">📷</button>
+      <button class="btn-sec lib-scan" data-lib="scan" aria-label="Leggi il codice a barre"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 7V4a2 2 0 0 1 2-2h3M17 2h3a2 2 0 0 1 2 2v3M22 17v3a2 2 0 0 1-2 2h-3M7 22H4a2 2 0 0 1-2-2v-3"/><path d="M7 7v10M10 7v10M13 7v10M17 7v10" stroke-width="1.4"/><path d="M8.5 7v10M15 7v10" stroke-width=".8"/></svg></button>
       <button class="btn lib-piu" data-lib="aggiungi" aria-label="Aggiungi ingrediente">＋</button>
     </div>
     <div id="lib-autoc" class="lib-autoc">${doppioneHTML(c)}</div>
@@ -972,7 +972,8 @@ const pastiSbloccati = new Set();
 const chiavePastoSbl = (c) => c.data + "|" + c.pasto;
 // Il lucchetto vale solo quando RIAPRI un pasto passato: mentre lo stai componendo (bozza) o subito dopo averlo salvato resta modificabile
 // (_creatoOra: il pasto era vuoto quando hai aperto il pannello, quindi lo stai scrivendo adesso)
-const pastoBloccato = (c) => !!(c && c.vivo && c.items && c.items.length && !c.bozza && !c._creatoOra && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto) && !pastiSbloccati.has(chiavePastoSbl(c)));
+// con qualcosa da aggiungere (dettato, copiato, «C'è già… sommo?») il lucchetto non si chiude: altrimenti mancherebbe ✓ Aggiungi
+const pastoBloccato = (c) => !!(c && c.vivo && c.items && c.items.length && !c.bozza && !c._creatoOra && !c.doppione && !c.items.some(i => i.nuovo) && typeof pastoPassato === "function" && pastoPassato(c.data, c.pasto) && !pastiSbloccati.has(chiavePastoSbl(c)));
 function ribloccaPasti() { pastiSbloccati.clear(); }
 // Annulla di un ingrediente tolto: lo rimette direttamente nel diario (anche se il pannello è chiuso)
 // - riga libera: nel piatto libero del pasto (si crea se non c'è più)
@@ -1735,7 +1736,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       else if (a === "salva-modifiche") { if (typeof vibra === "function") vibra(); if (typeof fotoPasto === "function") fotoPasto(c); closeModal(true); avviso("✓ Modifiche salvate"); }
       else if (a === "annulla-nuovi") { c.items = c.items.filter(x => !x.nuovo); c.piattiNuovi = []; c.ignoti = []; ricalcolaLibero(); rirenderLibero(); }   // via quello scelto e non aggiunto
-      else if (a === "aggiungi-nuovi") { if (typeof vibra === "function") vibra(); confermaNuovi(c); avviso("✓ Aggiunto"); document.getElementById("toast")?.classList.add("ok"); }
+      else if (a === "aggiungi-nuovi") {   // aggiunto: si torna a Oggi (con altre modifiche non salvate arriva prima la domanda «Salvare?»)
+        if (typeof vibra === "function") vibra(); confermaNuovi(c);
+        closeModal(); if (typeof renderOggi === "function") renderOggi();
+        avviso("✓ Aggiunto"); document.getElementById("toast")?.classList.add("ok");
+      }
       else if (a === "conferma-bozza") { c._conferma = true; c.bozza = false; try { rirenderLibero(); } finally { c._conferma = false; } if (liberoCtx === c) rirenderLibero(); avviso("✓ Pasto salvato"); document.getElementById("toast")?.classList.add("ok"); }   // ora il pasto è nel diario: si vede il riepilogo
       else if (a === "al-modifica") { c.modificaAl = b.dataset.nome; c.ignotoNuovo = true; c.ignoto = null; c.ignotoCodice = null; rirenderLibero(); }
       else if (a === "ignoto-annulla") { if (c._ignotaTorna && c.ignoto === c._ignotaTorna) c.ignoti = [c._ignotaTorna, ...(c.ignoti || [])]; c._ignotaTorna = null;   // tornando al pasto senza sceglierlo, resta nella lista dei «❓»
@@ -2286,6 +2291,8 @@ const ARTICOLI_DETTA = /^(?:(?:il|lo|la|i|gli|le|un|uno|una|del|dello|della|dei|
 function comandoSostituisci(testo) {
   let t = fraseDetta(testo), x = null, y = null, m;
   if (!/\b(?:sostituisci|sostituire|sostituiscimi|cambia|cambiami|cambiare|scambia|rimpiazza|al posto|invece)\b/.test(t)) return false;
+  // «stasera sostituisci…» = a cena, «stamattina…» = a colazione (come per i cibi detti)
+  t = t.replace(/\bieri sera\b/g, "ieri a cena").replace(/\bstasera\b/g, "a cena").replace(/\bieri mattina\b/g, "ieri a colazione").replace(/\b(?:stamattina|stamani)\b/g, "a colazione");
   const giorni = giorniNellaFrase(t), pasti = pastiNellaFrase(t);
   const data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta(), pasto = pasti.length ? pasti[0].p : null;
   // via giorni e pasti (con le parole che li introducono), restano solo i due alimenti
@@ -2498,8 +2505,19 @@ function ingredientiDetti(x, data, pasto) {
 }
 function comandoTogliPorta(testo) {
   let t = fraseDetta(testo), m, tipo = null, x = null, nuovaQ = 0;
+  // «a cena togli le zucchine», «stasera togli il pane», «ieri a pranzo porta il riso a 80 g»: il pasto detto prima del verbo va in fondo
+  const mp = t.match(/^\s*(.{3,40}?)\s*,?\s+((?:togli|toglimi|rimuovi|elimina|cancella|leva|levami|porta|porti|metti|aumenta|diminuisci|riduci|cambia)\s+.+)$/);
+  if (mp) {
+    const pre = (" " + mp[1] + " ").replace(/\b(?:stasera|ieri sera)\b/g, m0 => m0.startsWith("ieri") ? " ieri a cena " : " a cena ").replace(/\b(?:stamattina|stamani|ieri mattina)\b/g, m0 => m0.startsWith("ieri") ? " ieri a colazione " : " a colazione ");
+    let resto = togliGiorni(pre, giorniNellaFrase(pre));
+    const ps = pastiNellaFrase(" " + resto + " ", dataDetta());
+    ps.slice().sort((a, b) => b.i - a.i).forEach(p => { resto = (" " + resto + " ").slice(0, p.i) + " " + (" " + resto + " ").slice(p.i + p.l); });
+    if (ps.length && !resto.replace(/\b(?:a|al|alla|allo|dal|dalla|dallo|nel|nella|per|di|del|della|oggi|e|poi|ok|allora)\b/g, " ").trim()) t = mp[2] + " " + pre.replace(/\s+/g, " ").trim();
+  }
   if ((m = t.match(/^\s*(?:togli|toglimi|rimuovi|elimina|cancella|leva|levami)\s+(.+)$/))) { tipo = "togli"; x = m[1]; }
   else if ((m = t.match(/^\s*(?:porta|porti|metti|aumenta|diminuisci|riduci|cambia)\s+(.+?)\s+(?:a|da\s+\d+\s+a)\s+(\d{1,4}(?:[.,]\d)?)\s*(?:g|grammi|gr|ml|millilitri)\b(.*)$/))) { tipo = "porta"; x = m[1] + " " + m[3]; nuovaQ = Math.round(parseFloat(m[2].replace(",", "."))); }
+  // «porta il pollo a 120» senza «grammi»: vale da 20 in su (sotto potrebbero essere pezzi)
+  else if ((m = t.match(/^\s*(?:porta|porti|metti|aumenta|diminuisci|riduci|cambia)\s+(.+?)\s+(?:a|da\s+\d+\s+a)\s+(\d{2,4})(\s+(?:a|al|alla|per|di|del|della|nel|nella|dal|dalla|in)\s+.+)?\s*$/)) && +m[2] >= 20) { tipo = "porta"; x = m[1] + " " + (m[3] || ""); nuovaQ = +m[2]; }
   if (!tipo) return false;
   const giorni = giorniNellaFrase(t), data = giorni.length ? dataDelGiorno(giorni[0], 1) : dataDetta();
   let s = togliGiorni(" " + x + " ", giorniNellaFrase(" " + x + " "));
@@ -2508,6 +2526,23 @@ function comandoTogliPorta(testo) {
   s = s.replace(/\b(?:dal|dalla|dallo|dai|dalle|del|della|dello|di|nel|nella|in|a|al|alla)\s*$/, "").replace(/\s+(?:dal|dalla|dallo|dai|dalle|del|della|nel|nella|in)\s*$/, "").replace(/[.,!?]/g, " ").trim().replace(ARTICOLI_DETTA, "").trim();
   if (normCibo(s).length < 3) return false;
   const trovati = ingredientiDetti(s, data, pasto);
+  // «togli il pollo e il riso dalla cena»: più cose insieme (ognuna deve essere una sola)
+  if (!trovati.length && tipo === "togli" && /\s(?:e|ed)\s/.test(" " + s + " ")) {
+    const parti = s.split(/\s+(?:e|ed)\s+/).map(z => z.replace(ARTICOLI_DETTA, "").trim()).filter(z => normCibo(z).length >= 3);
+    const scelti = parti.map(z => { const tr = ingredientiDetti(z, data, pasto); return tr.length === 1 ? tr[0] : null; });
+    const unici = new Set(scelti.filter(Boolean).map(v => v.pi + "-" + v.ii));
+    if (parti.length >= 2 && scelti.every(Boolean) && unici.size === scelti.length) {
+      editCtx = null; liberoCtx = null; vaiAlGiornoDetta(data);
+      chiediConferma(`${sicuraDetta()} di voler eliminare ${scelti.map(v => cosaDetta(v.nome, v.qta)).join(" e ")}?`, "", "Togli", () => {
+        const g = giornoDiario(data), prima = {};
+        scelti.slice().sort((a, b) => b.pi - a.pi || b.ii - a.ii).forEach(v => { const p = g.pasti[v.pi]; if (!p) return; if (!prima[v.pi]) prima[v.pi] = clone(p.ingredienti); p.ingredienti.splice(v.ii, 1); });
+        Object.keys(prima).map(Number).sort((a, b) => b - a).forEach(pi => { const p = g.pasti[pi]; if (!p.ingredienti.length) g.pasti.splice(pi, 1); else { delete p.auto; rinominaLibero(p, prima[pi]); aggiornaMacro(p); } });
+        scriviGiorno(data, g); closeModal(true); if (typeof renderOggi === "function") renderOggi();
+        avviso(`Tolto: ${scelti.map(v => v.nome.toLowerCase()).join(", ")}`);
+      });
+      return true;
+    }
+  }
   if (!trovati.length) {
     if (tipo === "togli" && !pasto && !giorni.length) return false;   // non è nei pasti: forse è altro (si prova con gli altri comandi)
     avviso(`Non trovo «${s}» ${dovePastoDetta(pasto, data)}`); return true;
@@ -2698,6 +2733,7 @@ function modificaPastoAVoce(c, testo) {
   let m, tipo = null, x = null, y = null, q = 0;
   if ((m = t.match(/^\s*(?:togli|toglimi|rimuovi|elimina|cancella|leva|levami)\s+(.+)$/))) { tipo = "togli"; x = m[1]; }
   else if ((m = t.match(/^\s*(?:porta|porti|metti|aumenta|diminuisci|riduci|cambia)\s+(.+?)\s+(?:a|da\s+\d+\s+a)\s+(\d{1,4}(?:[.,]\d)?)\s*(?:g|grammi|gr|ml|millilitri)\b/))) { tipo = "porta"; x = m[1]; q = Math.round(parseFloat(m[2].replace(",", "."))); }
+  else if ((m = t.match(/^\s*(?:porta|porti|metti|aumenta|diminuisci|riduci|cambia)\s+(.+?)\s+(?:a|da\s+\d+\s+a)\s+(\d{2,4})(\s+(?:a|al|alla|per|di|del|della|nel|nella|dal|dalla|in)\s+.+)?\s*$/)) && +m[2] >= 20) { tipo = "porta"; x = m[1] + " " + (m[3] || ""); q = +m[2]; }   // «porta il pollo a 120» senza «grammi»
   else if ((m = t.match(/^\s*(?:sostituisci|sostituire|sostituiscimi|cambia|cambiami|scambia|rimpiazza)\s+(.+?)\s+(?:con|in)\s+(.+)$/))) { tipo = "sost"; x = m[1]; y = m[2]; }
   else if ((m = t.match(/^\s*(?:metti|mettimi|usa)\s+(.+?)\s+al posto\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { tipo = "sost"; y = m[1]; x = m[2]; }
   else if ((m = t.match(/^\s*(?:metti|mettimi|usa)?\s*(.+?)\s+invece\s+(?:del|della|dello|dei|degli|delle|di|dell')\s*(.+)$/))) { tipo = "sost"; y = m[1]; x = m[2]; }
@@ -2709,7 +2745,16 @@ function modificaPastoAVoce(c, testo) {
   x = pulisci(x);
   const parole = normCibo(x).split(" ").filter(w => w.length > 2).map(w => w.replace(/[ie]$/, ""));
   if (!parole.length) return false;
-  const k = c.items.findIndex(it => it.grp == null && parole.every(w => (normCibo(it.nome) + " " + normCibo(it.cercato || "")).includes(w)));
+  const trovaK = (pp) => c.items.findIndex(it => it.grp == null && pp.every(w => (normCibo(it.nome) + " " + normCibo(it.cercato || "")).includes(w)));
+  const k = trovaK(parole);
+  // «togli il pollo e il riso»: più cose del pannello insieme
+  if (k < 0 && tipo === "togli" && /\s(?:e|ed)\s/.test(" " + x + " ")) {
+    const ks = x.split(/\s+(?:e|ed)\s+/).map(z => trovaK(normCibo(z.replace(ARTICOLI_DETTA, "")).split(" ").filter(w => w.length > 2).map(w => w.replace(/[ie]$/, ""))));
+    if (ks.length < 2 || ks.some(n => n < 0) || new Set(ks).size !== ks.length) return false;
+    const nomi = ks.map(n => String(c.items[n].nome).toLowerCase());
+    ks.sort((a, b) => b - a).forEach(n => c.items.splice(n, 1));
+    ricalcolaLibero(); avviso(`Tolto: ${nomi.join(", ")}`); rirenderLibero(); return true;
+  }
   if (k < 0) return false;
   const it = c.items[k];
   if (tipo === "porta") {
@@ -2741,7 +2786,7 @@ function micTesto(modo, testo) {
   const t = fraseDetta(testo), domanda = DOMANDA_MANCA.test(t) || DOMANDA_IDEE.test(t);
   if (modo === "pasto" && liberoCtx) {   // dentro un pasto si resta in quel pasto: «a cena…» detto nel pranzo va nel pranzo
     if (modificaPastoAVoce(liberoCtx, testo)) return;   // «togli il pane», «porta il riso a 100 g», «sostituisci…»
-    if (!domanda && SPESA_COMANDO.test(t)) { esciPoiDettato(() => apriConfermaSpesa(testo)); return; }   // «aggiungi albumi alla spesa» anche da dentro un pasto
+    if (!domanda && SPESA_COMANDO.test(t)) { esciPoiDettato(() => inviaDettato(testo)); return; }   // «aggiungi albumi alla spesa» anche da dentro un pasto (passa da inviaDettato: «apri la lista della spesa» resta un comando per aprirla)
     if (domanda || COMANDO_FUORI_PASTO.test(t)) { esciPoiDettato(() => inviaDettato(testo)); return; }   // «quanto mi manca?», «peso 61,4», «apri l'andamento»…
     aggiungiDaParlato(pastoDaFrase(testo).resto || testo); rirenderLibero(); return;
   }

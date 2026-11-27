@@ -156,7 +156,7 @@ function vpObiettivo(t) {
   } else return false;
   if (!(d >= -25 && d <= 30)) { avviso("Il deficit va da −20% (massa) a 30%"); return true; }
   const ob = k ? (OB.find(o => o[2] === k) || [])[0] : null;
-  return vpConferma("✨ Obiettivo", [["Obiettivo", obPrima, ob || (d > 0 ? "Deficit" : d < 0 ? "Surplus" : "Mantenere")], ["Deficit", `${pf.deficit}%`, `${d}%`]],
+  return vpConferma("✨ Obiettivo", [["Obiettivo", obPrima, ob || (Math.sign(d) === Math.sign(pf.deficit || 0) ? obPrima : d > 0 ? "Dimagrire" : d < 0 ? "Mettere massa" : "Mantenere il peso")], ["Deficit", `${pf.deficit}%`, `${d}%`]],
     vpSalvaProfilo(p => { p.deficit = d; if (k) p.obiettivo = k; }),
     { nota: pf.kcalMan > 0 ? "Hai le calorie scritte a mano nel Profilo: finché ci sono, il deficit non si usa (di' «calcolo automatico» per toglierle)." : "Le calorie di ogni giorno si ricalcolano; proteine e grassi restano quelli di adesso." });
 }

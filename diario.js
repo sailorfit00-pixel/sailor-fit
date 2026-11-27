@@ -2109,6 +2109,8 @@ function vaiA(dove, data) {
   if (typeof giornoSelSett !== "undefined") giornoSelSett = null;
   renderOggi(); paginaInCima();
 }
+// quanti giorni (fino a oggi) hanno almeno un pasto registrato: sotto i 3 Settimana e Andamento mostrano un benvenuto
+function giorniRegistratiN() { const oggi = oggiISO(), d = leggiDiarioSolaLettura(); return Object.keys(d).filter(k => k <= oggi && d[k] && (d[k].pasti || []).length).length; }
 function renderSettimanaHome(cont) {
   const oggi = oggiISO();
   const lun = addGiorniISO(addGiorniISO(oggi, -indiceSettimana(oggi)), offsetSettHome * 7);
@@ -2121,7 +2123,7 @@ function renderSettimanaHome(cont) {
       <div class="oggi-data"><b>${titolo}</b><span>${fmtData(p.date[0])} – ${fmtData(p.date[6])}</span></div>
       <button class="nav-btn" data-sett-home="1" aria-label="Settimana successiva" ${offsetSettHome >= 1 ? "disabled" : ""}>›</button>
     </div>
-    <div class="oggi-card">${budgetSettimanaHTML(lun)}</div>
+    <div class="oggi-card">${budgetSettimanaHTML(lun, giorniRegistratiN() < 3)}</div>
     <div class="gs-lista">${giorniSettimanaHTML(lun)}</div>`;
 }
 

@@ -349,6 +349,16 @@ function giornoHTML(g) {
     <button class="btn-sec block" data-and-apri-diario="${g.data}">Apri questo giorno nel diario</button>`;
 }
 
+// Chi ha registrato meno di 3 giorni: al posto di medie, grafici vuoti e trattini, un messaggio e i giorni segnati con le loro kcal
+function giorniRegistratiTutti() {
+  const oggi = oggiISO(), d = leggiDiario();
+  return Object.keys(d).filter(k => k <= oggi && d[k] && (d[k].pasti || []).length).sort();
+}
+function benvenutoAndHTML(regs) {
+  const righe = regs.map(k => `<li><span>${esc(fmtGiornoLungo(k))}</span><b>${Math.round(sommaMacro(giornoDiario(k).pasti).kcal)} kcal</b><span></span></li>`).join("");
+  return `<section class="and-sez"><ul class="insight"><li class="ins-info"><span>👋</span><p><b>Qui vedrai come stai andando.</b> Dopo 3 giorni registrati compaiono medie, grafici e consigli.${regs.length ? " Per ora ecco cosa hai segnato:" : " Inizia segnando i pasti di oggi."}</p></li></ul>${righe ? `<ul class="lista-pesi and-benv">${righe}</ul>` : ""}</section>`;
+}
+
 function andamentoHTML() {
   const date = datePeriodo();
   const giorni = datiGiorni(date);
@@ -376,7 +386,8 @@ function andamentoHTML() {
       <button class="nav-btn" data-and-off="1" aria-label="Periodo successivo" ${offsetAnd >= maxOffsetAnd() ? "disabled" : ""}>›</button>
     </div>
     ${periodoAnd === "giorno" ? giornoHTML(giorni[0]) : `
-
+    ${(() => { const regs = giorniRegistratiTutti(); return regs.length < 3 ? benvenutoAndHTML(regs) : ""; })()}
+    ${giorniRegistratiTutti().length < 3 ? "" : `
     <div class="and-stat">
       <div><span>Media al giorno</span><b>${kcalM ?? "—"}</b><small>${targM ? `obiettivo ${targM} kcal` : "kcal"}</small></div>
       ${kcalManuali() ? (() => { const sc = kcalM !== null && targM ? kcalM - targM : null;   // obiettivo scritto da te: quanto sei lontana dall'obiettivo, non una stima di grasso
@@ -403,6 +414,7 @@ function andamentoHTML() {
     ${compl.length ? `<section class="and-sez">${extraHTML({ zuccheri: media(compl.map(g => g.ex.zuccheri)), aggiunti: media(compl.map(g => g.ex.aggiunti)), fibre: media(compl.map(g => g.ex.fibre)), sale: media(compl.map(g => g.ex.sale)) },
       compl.flatMap(g => g.pasti), `Zuccheri, fibre e sale <span class="hint-inline">— media al giorno</span>`)
       + (() => { const n = compl.filter(g => g.ex.aggiunti > LIMITI_EXTRA.aggiunti).length; return `<p class="ex-fonti">Giorni sopra i ${LIMITI_EXTRA.aggiunti} g di zuccheri aggiunti: <b>${n} su ${compl.length}</b></p>`; })()}</section>` : ""}
+    `}
 
 
     <section class="and-sez"><h4>Peso</h4>

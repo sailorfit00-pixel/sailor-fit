@@ -173,7 +173,7 @@ function rigaSettimanaHTML(data) {
 }
 
 // -------- Andamento → Settimana: budget e striscia dei 7 giorni --------
-function budgetSettimanaHTML(dataRif) {
+function budgetSettimanaHTML(dataRif, benvenuto) {
   const p = pianoSettimana(dataRif);
   const oggi = oggiISO();
   const nomi = ["L", "M", "M", "G", "V", "S", "D"];
@@ -201,6 +201,11 @@ function budgetSettimanaHTML(dataRif) {
   // una riga sola: quanto resta (o come è andata) e, solo se non basta il margine, ⚠ con di quanto
   const riga = finita ? `${k(p.finoAOggi)} / ${k(p.budget)} kcal` : `Restano <b>${k(restano)} kcal</b> · ${giorniRestanti} ${giorniRestanti === 1 ? "giorno" : "giorni"}`;
   const tot = `<button class="bs-totale" data-sett-budget="${p.date[0]}" aria-label="Cambia l'obiettivo della settimana"><span>🎯 Settimana <b>${k(p.budget)} kcal</b>${p.scelto ? ` <em class="bs-scelto">scelto da te</em>` : ""}</span><span class="bs-matita">✏️</span></button>`;
+  // chi ha registrato meno di 3 giorni (solo nella schermata Settimana): l'obiettivo della settimana e un messaggio, senza «Restano» e barrette
+  if (benvenuto) return `<div class="budget-sett">
+    ${finita ? "" : tot}
+    <ul class="insight bs-benv"><li class="ins-info"><span>👋</span><p><b>Qui organizzi la settimana.</b> Dopo 3 giorni registrati vedrai quante kcal ti restano e come si distribuiscono.</p></li></ul>
+  </div>`;
   return `<div class="budget-sett">
     ${finita ? "" : tot}
     <div class="bs-top"><span>${riga}</span>${!finita && p.scarto > 20 ? `<span class="bs-warn" aria-label="L'obiettivo della settimana non basta">⚠️ +${p.scarto}</span>` : ""}</div>

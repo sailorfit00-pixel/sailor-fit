@@ -770,7 +770,7 @@ input, select, textarea, .qta-input { font-size: 16px !important; }
 .oggi-azioni { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
 
 /* ---- Codice a barre ---- */
-.lib-add .lib-scan { flex: 0 0 auto; width: 52px; min-height: 0; padding: 0; font-size: 20px; margin: 0; }
+.lib-add .lib-scan { flex: 0 0 auto; width: 52px; min-height: 0; padding: 0; font-size: 20px; margin: 0; display: flex; align-items: center; justify-content: center; }
 .scan-video { position: relative; border-radius: var(--r-m); overflow: hidden; background: #000; aspect-ratio: 1 / 1; }
 .scan-video video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .scan-mirino { position: absolute; left: 10%; right: 10%; top: 10%; bottom: 10%; border: 2px solid var(--accent); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,.35); }
@@ -2527,3 +2527,14 @@ html[data-tema="chiaro"] .levetta:not(.on) { background: #d9dde1; }
 #spesa .sw > li.voce { border-bottom: 1px solid var(--k-232f38); }
 #spesa .sw > li.voce.in-mod { border-bottom: none; }
 #spesa ul > .sw:last-child > li.voce { border-bottom: none; }
+
+/* Andamento per chi ha meno di 3 giorni registrati: giorni segnati sotto il messaggio */
+.and-benv { margin-top: 10px; }
+.budget-sett .bs-benv { margin: 10px 0 0; }
+
+/* Lista della spesa: il nome si legge sempre per intero (va a capo), niente cestino, quantità fino al bordo destro */
+#spesa .spesa-riga .spesa-nome { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.3; }
+#spesa .spesa-riga { align-items: center; }
+#spesa .spesa-del-posto { display: none; }
+#spesa .sw { border-radius: 0; }   /* con gli angoli tondi la linea sotto le voci aggiunte a mano era più corta */
+#spesa .lib-del[hidden] { display: none !important; }   /* serve solo allo swipe a sinistra */
